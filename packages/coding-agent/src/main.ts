@@ -1575,24 +1575,47 @@ export async function runRootCommand(
 
 			stopStartupWatchdog();
 			logger.endTiming();
-			await runInteractiveMode(
-				session,
-				VERSION,
-				changelogMarkdown,
-				notifs,
-				versionCheckPromise,
-				initialArgs.messages,
-				setToolUIContext,
-				lspServers,
-				mcpManager,
-				Boolean(parsedArgs.continue || parsedArgs.resume || parsedArgs.fork),
-				deps.forceSetupWizard === true,
-				showStartupSplash,
-				eventBus,
-				initialMessage,
-				initialImages,
-				parsedArgs.join,
-			);
+			// Cadillac: Hermes brain under InteractiveMode coat (prompt/subscribe/abort).
+			// Escape: MESHINA_TUI_OMP_BRAIN=1 keeps OMP AgentSession loop for coat dogfood.
+			let disposeHermesBrain: (() => void) | undefined
+			try {
+				const { isHermesBrainEnabled, installHermesBrain } = await import("./modes/hermes-brain-install.ts")
+				if (isHermesBrainEnabled()) {
+					const handle = await logger.time("installHermesBrain", installHermesBrain, session)
+					disposeHermesBrain = handle.dispose
+					logger.info("hermes-brain installed under InteractiveMode", {
+						sessionId: handle.brain.sessionId,
+						model: handle.brain.sessionInfo.model,
+					})
+				}
+			} catch (err) {
+				logger.error("hermes-brain install failed — falling back to OMP AgentSession loop", {
+					error: err instanceof Error ? err.message : String(err),
+				})
+				// Fail open to coat-only so operator is not locked out; status is logged.
+			}
+			try {
+				await runInteractiveMode(
+					session,
+					VERSION,
+					changelogMarkdown,
+					notifs,
+					versionCheckPromise,
+					initialArgs.messages,
+					setToolUIContext,
+					lspServers,
+					mcpManager,
+					Boolean(parsedArgs.continue || parsedArgs.resume || parsedArgs.fork),
+					deps.forceSetupWizard === true,
+					showStartupSplash,
+					eventBus,
+					initialMessage,
+					initialImages,
+					parsedArgs.join,
+				)
+			} finally {
+				disposeHermesBrain?.()
+			}
 		} else {
 			// Branch-only single-shot runner: keep print-mode code out of normal interactive startup.
 			stopStartupWatchdog();

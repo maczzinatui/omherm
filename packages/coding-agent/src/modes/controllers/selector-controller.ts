@@ -84,6 +84,7 @@ import {
 	defaultHermesModelPick,
 	HermesModelPickerComponent,
 } from "../components/hermes-model-picker";
+import { HermesPortListComponent } from "../components/hermes-port-list";
 import { isHermesProductSettings } from "../../config/settings-product-manifest";
 import { OAuthSelectorComponent } from "../components/oauth-selector";
 import { PluginSelectorComponent } from "../components/plugin-selector";
@@ -182,6 +183,7 @@ export class SelectorController {
 				{
 					onChange: (id, value) => this.handleSettingChange(id, value),
 					onOpenModelSelector: () => this.showModelSelector(),
+					onOpenHermesPort: (port) => this.showHermesPortList(port),
 					onThemePreview: async themeName => {
 						const result = await previewTheme(themeName);
 						if (result.success) {
@@ -647,6 +649,28 @@ export class SelectorController {
 			return;
 		}
 		this.#showModelHub({});
+	}
+
+	/** Settings → Tasks port inventory (Kanban / Cron / Profiles). */
+	showHermesPortList(kind: "kanban" | "cron" | "profiles"): void {
+		let overlayHandle: OverlayHandle | undefined;
+		let closed = false;
+		const done = () => {
+			if (closed) return;
+			closed = true;
+			overlayHandle?.hide();
+			this.focusActiveEditorArea();
+			this.ctx.ui.requestRender();
+		};
+		const panel = new HermesPortListComponent(this.ctx.ui, kind, done);
+		overlayHandle = this.ctx.ui.showOverlay(panel, {
+			anchor: "bottom-center",
+			width: "100%",
+			maxHeight: "80%",
+			margin: 0,
+		});
+		this.ctx.ui.setFocus(panel);
+		this.ctx.ui.requestRender();
 	}
 
 	/**

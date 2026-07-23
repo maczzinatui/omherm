@@ -47,3 +47,24 @@ export {
   HERMES_BUILTIN_SLASH,
   type HermesSlashEntry,
 } from "./hermes-slash-catalog.ts"
+export {
+  HermesBrain,
+  isHermesBrainEnabled,
+  type HermesBrainEvent,
+  type HermesBrainListener,
+  type HermesBrainOptions,
+} from "./hermes-brain.ts"
+export {
+  createKanbanPort,
+  kanbanPort,
+  parseKanbanListOutput,
+  type KanbanPort,
+  type KanbanTask,
+} from "./kanban-port.ts"
+export {
+  createCronPort,
+  cronPort,
+  parseCronListOutput,
+  type CronPort,
+  type CronJob,
+} from "./cron-port.ts"

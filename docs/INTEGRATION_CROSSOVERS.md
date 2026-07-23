@@ -44,8 +44,9 @@
 
 ## Next slice order
 
-1. Edge mapper: UiEvent/GatewayEvent → AgentSessionEvent subset EventController needs for one turn
-2. Hermes-backed stub session for prompt/subscribe/interrupt only
-3. Default mtui stays full InteractiveMode; flip brain when mapper green
-4. Settings → Kanban
-5. Optional research pass on grok-build TUI scrollback + plan review (steal, don't merge)
+1. ~~Edge mapper: UiEvent/GatewayEvent → AgentSessionEvent subset EventController needs for one turn~~
+2. ~~Hermes-backed stub session for prompt/subscribe/interrupt only~~ (`HermesBrain` + install)
+3. ~~Default mtui stays full InteractiveMode; flip brain when mapper green~~ (default ON; `MESHINA_TUI_OMP_BRAIN=1` escape)
+4. Operator dogfood one real Hermes turn under full chrome (`docs/HERMES_BRAIN.md`)
+5. Settings → Kanban/Cron/Profiles inventory landed; editors next
+6. Optional research pass on grok-build TUI scrollback + plan review (steal, don't merge)

@@ -13,9 +13,22 @@ import type { SettingDef } from "./settings-defs";
 
 /** Synthetic action row — opens OMP ModelHub from Settings → Model */
 export const HERMES_OPEN_MODEL_HUB_PATH = "hermes:action.open_model_hub" as SettingPath;
+export const HERMES_OPEN_KANBAN_PATH = "hermes:action.open_kanban" as SettingPath;
+export const HERMES_OPEN_CRON_PATH = "hermes:action.open_cron" as SettingPath;
+export const HERMES_OPEN_PROFILES_PATH = "hermes:action.open_profiles" as SettingPath;
+
+export type HermesPortAction = "kanban" | "cron" | "profiles" | "model_hub";
+
+export function hermesPortActionFromPath(path: string): HermesPortAction | null {
+	if (path === HERMES_OPEN_MODEL_HUB_PATH) return "model_hub";
+	if (path === HERMES_OPEN_KANBAN_PATH) return "kanban";
+	if (path === HERMES_OPEN_CRON_PATH) return "cron";
+	if (path === HERMES_OPEN_PROFILES_PATH) return "profiles";
+	return null;
+}
 
 export function isHermesSettingsPath(path: string): boolean {
-	if (path === HERMES_OPEN_MODEL_HUB_PATH) return true;
+	if (hermesPortActionFromPath(path)) return true;
 	return path.startsWith("hermes:") || hermesConfigPort().isHermesKey(path.replace(/^hermes:/, ""));
 }
 
@@ -63,16 +76,51 @@ function modelHubLauncherDef(): SettingDef {
 	};
 }
 
+function portLauncherDefs(): SettingDef[] {
+	return [
+		{
+			path: HERMES_OPEN_KANBAN_PATH,
+			label: "Open Kanban board…",
+			description: "Hermes kanban via KanbanPort (CLI). Settings hub — not a top tab bar.",
+			tab: "tasks",
+			group: "Kanban",
+			type: "enum",
+			values: ["open"],
+		},
+		{
+			path: HERMES_OPEN_CRON_PATH,
+			label: "Open Cron jobs…",
+			description: "Hermes cron via CronPort (CLI / cron.manage later).",
+			tab: "tasks",
+			group: "Cron",
+			type: "enum",
+			values: ["open"],
+		},
+		{
+			path: HERMES_OPEN_PROFILES_PATH,
+			label: "Open Profiles…",
+			description: "Hermes profiles via ProfilePort (FS + hermes profile CLI).",
+			tab: "tasks",
+			group: "Profiles",
+			type: "enum",
+			values: ["open"],
+		},
+	];
+}
+
 export function getHermesSettingDefsForTab(tab: SettingTab): SettingDef[] {
 	const defs = HERMES_CONFIG_FIELDS.filter((f) => f.tab === tab).map(fieldToDef);
 	if (tab === "model") {
 		return [modelHubLauncherDef(), ...defs];
 	}
+	if (tab === "tasks") {
+		return [...portLauncherDefs(), ...defs];
+	}
 	return defs;
 }
 
 export function getHermesCurrentValue(uiPath: string): unknown {
-	if (uiPath === HERMES_OPEN_MODEL_HUB_PATH) return "open";
+	if (hermesPortActionFromPath(uiPath)) return "open";
 	const key = hermesConfigKeyFromUiPath(uiPath);
 	const port = hermesConfigPort();
 	const field = HERMES_CONFIG_FIELDS.find((f) => f.key === key);
@@ -82,7 +130,7 @@ export function getHermesCurrentValue(uiPath: string): unknown {
 }
 
 export function getHermesDefaultValue(uiPath: string): unknown {
-	if (uiPath === HERMES_OPEN_MODEL_HUB_PATH) return "open";
+	if (hermesPortActionFromPath(uiPath)) return "open";
 	const key = hermesConfigKeyFromUiPath(uiPath);
 	return HERMES_CONFIG_FIELDS.find((f) => f.key === key)?.fallback;
 }

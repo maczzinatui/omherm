@@ -50,10 +50,12 @@ import {
 	getHermesCurrentValue,
 	getHermesDefaultValue,
 	HERMES_OPEN_MODEL_HUB_PATH,
+	hermesPortActionFromPath,
 	isHermesActionPath,
 	isHermesSettingsPath,
 	refreshHermesSettingsCache,
 	setHermesSetting,
+	type HermesPortAction,
 } from "./hermes-settings-fields";
 import { getCurrentThemeName, getSelectListTheme, getSettingsListTheme, theme } from "../../modes/theme/theme";
 import { AUTO_THINKING, type ConfiguredThinkingLevel } from "../../thinking";
@@ -540,6 +542,8 @@ export interface SettingsCallbacks {
 	onChange: (path: SettingPath, newValue: unknown) => void;
 	/** Product path: open OMP ModelHub from Settings → Model */
 	onOpenModelSelector?: () => void;
+	/** Hermes ports under Settings → Tasks (Kanban / Cron / Profiles). */
+	onOpenHermesPort?: (port: Exclude<HermesPortAction, "model_hub">) => void;
 	/** Called for theme preview while browsing */
 	onThemePreview?: (theme: string) => void | Promise<void>;
 	/** Called for status line preview while configuring */
@@ -1318,10 +1322,15 @@ export class SettingsSelectorComponent implements Component {
 
 				if (isHermesSettingsPath(path)) {
 					if (path === HERMES_OPEN_MODEL_HUB_PATH || isHermesActionPath(path)) {
-						// Close settings then open model hub
+						const action = hermesPortActionFromPath(path);
 						this.callbacks.onCancel();
-						// Defer so overlay teardown finishes first
-						queueMicrotask(() => this.callbacks.onOpenModelSelector?.());
+						queueMicrotask(() => {
+							if (!action || action === "model_hub") {
+								this.callbacks.onOpenModelSelector?.();
+								return;
+							}
+							this.callbacks.onOpenHermesPort?.(action);
+						});
 						return;
 					}
 					void setHermesSetting(path, def.type === "boolean" ? newValue === "true" : newValue)

@@ -95,8 +95,9 @@ Map gateway events → existing UI event controller shapes in
 ### P2 — InteractiveMode on bridge
 - [x] New entry: `src/mtui.ts` — default full InteractiveMode; `--bridge` experimental
 - [x] Bridge shell uses OMP ToolExecution + Markdown (not LineBox) + model•effort footer
-- [ ] Prefer fork InteractiveMode and delete AgentSession calls in slices
-- [ ] First dogfood: one real Hermes turn with full OMP InteractiveMode chrome
+- [x] Edge mapper + HermesBrain install (`docs/HERMES_BRAIN.md`) — product default Hermes loop under IM
+- [ ] Prefer fork InteractiveMode and delete AgentSession coat-only surface over time
+- [ ] First dogfood: one real Hermes turn with full OMP InteractiveMode chrome (operator)
 
 ### P2.5 — Crossovers (perf / memory / methods)
 See `docs/INTEGRATION_CROSSOVERS.md` — paint coalesce, native scrollback seal, Hermes compaction UI, Grok Build method-steal only, approvals/steer, no dual brain.
