@@ -150,7 +150,9 @@ export class WelcomeComponent implements Component {
 	// Render cache: the welcome box is the first transcript-area component, so
 	// returning a stable array reference keeps the whole frame prefix stable.
 	// Bypassed while the intro animation runs (every frame differs).
+	// Hermes splash also keys on terminal rows so fullscreen reflow works.
 	#cachedWidth = -1;
+	#cachedRows = -1;
 	#cachedLines: string[] | undefined;
 
 	constructor(
@@ -176,6 +178,7 @@ export class WelcomeComponent implements Component {
 
 	invalidate(): void {
 		this.#cachedWidth = -1;
+		this.#cachedRows = -1;
 		this.#cachedLines = undefined;
 	}
 
@@ -225,24 +228,32 @@ export class WelcomeComponent implements Component {
 
 	render(termWidth: number): readonly string[] {
 		const animating = this.#animStart != null;
-		if (!animating && this.#cachedLines && this.#cachedWidth === termWidth) {
+		const termRows = TERMINAL.rows || Number(process.env.LINES) || 24;
+		if (
+			!animating &&
+			this.#cachedLines &&
+			this.#cachedWidth === termWidth &&
+			this.#cachedRows === termRows
+		) {
 			return this.#cachedLines;
 		}
-		const lines = this.#renderLines(termWidth);
+		const lines = this.#renderLines(termWidth, termRows);
 		if (animating) {
 			this.#cachedLines = undefined;
 			this.#cachedWidth = -1;
+			this.#cachedRows = -1;
 		} else {
 			this.#cachedLines = lines;
 			this.#cachedWidth = termWidth;
+			this.#cachedRows = termRows;
 		}
 		return lines;
 	}
 
-	#renderLines(termWidth: number): string[] {
+	#renderLines(termWidth: number, termRows = 24): string[] {
 		// Hermes product: Herm-fork braille splash panel (OMP theme colors).
 		if (isHermesProduct()) {
-			return this.#renderHermesSplash(termWidth);
+			return this.#renderHermesSplash(termWidth, termRows);
 		}
 
 		// Box dimensions - responsive with max width and small-terminal support
@@ -465,11 +476,20 @@ export class WelcomeComponent implements Component {
 	/**
 	 * Hermes welcome: Herm braille 9-patch frame + wordmark/model, colored with
 	 * the active OMP theme (theme picker / light-dark still apply).
+	 * Scales with terminal width AND height on resize/fullscreen.
 	 */
-	#renderHermesSplash(termWidth: number): string[] {
-		const maxWidth = Math.min(100, Math.max(0, termWidth - 2));
-		// Frame chrome is 8+8 rows (top/bottom 9-patch). Need ~10+ inner rows for wordmark.
-		const height = Math.min(28, Math.max(26, 26));
+	#renderHermesSplash(termWidth: number, termRows = 24): string[] {
+		// Use nearly full width (leave 1 col margin each side for TUI padding).
+		const maxWidth = Math.max(0, termWidth - 2);
+		// Frame chrome = 16 rows (8+8). Prefer ≥10 inner rows when the terminal is tall enough.
+		const frameChrome = 16;
+		const minInner = 10;
+		const ideal = frameChrome + minInner; // 26
+		const available = Math.max(18, termRows - 8); // leave ~editor/footer
+		const height =
+			termRows >= ideal + 6
+				? Math.min(available, Math.max(ideal, Math.floor(termRows * 0.6)))
+				: available;
 		if (maxWidth < 40) {
 			// Too narrow for full frame — compact themed fallback
 			const mark = pickWordmark(maxWidth);
@@ -542,13 +562,11 @@ export class WelcomeComponent implements Component {
 						inner.w,
 					)
 				: " ".repeat(inner.w);
-			// centerText may exceed with ANSI — fit mid region width of plain spaces base
 			const midFitted = this.#fitToWidth(midPlain, inner.w);
 			out.push(frameColor(left) + midFitted + frameColor(right));
 		}
 
 		out.push(...this.#renderTip(maxWidth));
-		// Quiet tips strip for LSP noise on splash
 		if (this.lspServers.length > 0) {
 			out.push(dim(` LSP: ${this.lspServers.map((s) => s.name).slice(0, 4).join(", ")}`));
 		}

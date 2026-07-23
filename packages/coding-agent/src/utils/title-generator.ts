@@ -20,7 +20,8 @@ import { tinyTitleClient } from "../tiny/title-client";
 const TITLE_SYSTEM_PROMPT = prompt.render(titleSystemPrompt);
 const TITLE_MARKER_INSTRUCTION = prompt.render(titleMarkerInstruction);
 
-const DEFAULT_TERMINAL_TITLE = "π";
+const DEFAULT_TERMINAL_TITLE =
+	process.env.MESHINA_TUI_BRAND === "hermes" || process.env.MESHINA_TUI_BRAND === "1" ? "hermes" : "π";
 const TERMINAL_TITLE_CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f]/g;
 
 // Cover the "backend ignores `disableReasoning`" case unconditionally: the
@@ -407,7 +408,7 @@ export function setExtensionTerminalTitle(title: string): void {
 
 export type TerminalTitleState = "idle" | "working" | "attention";
 
-/** Separator glyphs carrying the run state between the `π` brand and the session
+/** Separator glyphs carrying the run state between the brand mark and the session
  *  label — the brand itself stays bare (no prefix glyph). Spinner frames animate
  *  the separator while working; they are self-contained (not the theme's symbol
  *  set) to avoid a utils→modes import cycle; OSC titles render in tab/window bars
@@ -442,15 +443,17 @@ const terminalTitleRuntime: {
 };
 
 /**
- * Compose the terminal title from the `π` brand, a state-carrying SEPARATOR, and
+ * Compose the terminal title from the brand mark, a state-carrying SEPARATOR, and
  * the session label. The brand never gains a prefix glyph — the separator slot
  * expresses the run state instead. Pure (no I/O) so the state→separator contract
  * is unit-testable:
- *   - `idle` (user's turn):  `π > label`  — reads like a prompt awaiting input;
- *   - `working`:             `π ⠋ label`  — spinner frames animate the separator;
- *   - `attention`:           `π ! label`  — agent blocked on the user;
- *   - disabled:              `π: label`   — the pre-state layout.
- * Without a label the separator trails the brand (`π >`) so the state stays visible.
+ *   - `idle` (user's turn):  `hermes > label` / `π > label`
+ *   - `working`:             `hermes ⠋ label` — spinner frames animate the separator;
+ *   - `attention`:           `hermes ! label` — agent blocked on the user;
+ *   - disabled:              `hermes: label`  — the pre-state layout.
+ * Without a label the separator trails the brand so the state stays visible.
+ * Hermes product path uses brand `hermes` so Orca workspace icons resolve to
+ * TuiAgent `hermes` (not Pi/OMP via the π synthetic title detector).
  */
 export function buildTerminalTitleWithState(
 	label: string | undefined,

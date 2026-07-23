@@ -36,7 +36,7 @@ if (Bun.semver.order(Bun.version, MIN_BUN_VERSION) < 0) {
 	process.exit(1);
 }
 
-process.title = APP_NAME;
+process.title = APP_NAME === "hermes" ? "hermes" : APP_NAME;
 
 // `Bun.build`-API compiled Windows executables report `import.meta.main ===
 // false`: the standalone loader keys the entry module with native backslashes
