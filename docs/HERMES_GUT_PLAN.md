@@ -89,7 +89,8 @@ Map gateway events → existing UI event controller shapes in
 - [x] Event map: gateway → UiEvent (thinking, tool, text, footer info)
 - [x] session.create / prompt.submit / interrupt
 - [x] refreshInfo via session.usage + config.get (session.info is event-only)
-- [ ] GatewayEvent → AgentSessionEvent edge mapper (for InteractiveMode)
+- [x] GatewayEvent → AgentSessionEvent edge mapper (`GatewayTurnMapper` + `HermesSessionEventSource`)
+- [x] bun test hermes-bridge session-event-map (3 pass)
 
 ### P2 — InteractiveMode on bridge
 - [x] New entry: `src/mtui.ts` — default full InteractiveMode; `--bridge` experimental
