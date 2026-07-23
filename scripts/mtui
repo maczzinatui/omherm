@@ -1,25 +1,14 @@
 #!/usr/bin/env bash
-# meshina-tui launcher — short alias: mtui
-# Full name: meshina-tui
-#
-# Default: spawn Hermes tui_gateway from ~/.hermes/hermes-agent (same as Herm).
-# Remote:  HERMES_TUI_GATEWAY_URL=ws://host:port mtui
-# Override tree: MESHINA_TUI_ROOT=/path mtui
+# mtui — meshina-tui launcher
+# Phase P0: stock OMP interactive UI from this vendor tree (visual reference).
+# Later: Hermes-backed entry (packages/coding-agent hermes entry).
 set -euo pipefail
-
-ROOT="${MESHINA_TUI_ROOT:-$HOME/meshina-tui}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+export MESHINA_TUI_ROOT="${MESHINA_TUI_ROOT:-$ROOT}"
 BUN="${BUN:-$HOME/.bun/bin/bun}"
-if [[ ! -x "$BUN" ]]; then BUN="$(command -v bun || true)"; fi
-if [[ -z "${BUN:-}" ]]; then
-  echo "mtui: bun not found" >&2
-  exit 127
-fi
-if [[ ! -d "$ROOT" ]]; then
-  echo "mtui: tree missing at $ROOT (set MESHINA_TUI_ROOT)" >&2
-  exit 1
-fi
+[[ -x "$BUN" ]] || BUN="$(command -v bun)"
 
-# Prefer the Hermes install venv so tui_gateway imports work (dotenv, etc.)
+# Prefer Hermes env for future bridge; harmless for stock OMP.
 if [[ -z "${HERMES_PYTHON:-}" && -x "$HOME/.hermes/hermes-agent/venv/bin/python" ]]; then
   export HERMES_PYTHON="$HOME/.hermes/hermes-agent/venv/bin/python"
 fi
@@ -27,12 +16,10 @@ if [[ -z "${HERMES_AGENT_ROOT:-}" && -d "$HOME/.hermes/hermes-agent" ]]; then
   export HERMES_AGENT_ROOT="$HOME/.hermes/hermes-agent"
 fi
 
-# Don't inherit a poisoned system PYTHONPATH into the child unless set on purpose.
-# Gateway client rebuilds PYTHONPATH for the agent root.
-
-ENTRY="$ROOT/src/index.ts"
-if [[ -f "$ROOT/dist/index.js" ]]; then
-  ENTRY="$ROOT/dist/index.js"
+cd "$ROOT"
+# Hermès path when present
+if [[ -f "$ROOT/packages/coding-agent/src/mtui.ts" ]]; then
+  exec "$BUN" "$ROOT/packages/coding-agent/src/mtui.ts" "$@"
 fi
-
-exec "$BUN" "$ENTRY" "$@"
+# P0 fallback: stock OMP CLI from workspace
+exec "$BUN" "$ROOT/packages/coding-agent/src/cli.ts" "$@"

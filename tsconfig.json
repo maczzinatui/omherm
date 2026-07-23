@@ -1,17 +1,10 @@
 {
-  "compilerOptions": {
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "lib": ["ESNext"],
-    "strict": true,
-    "skipLibCheck": true,
-    "noEmit": true,
-    "types": ["bun-types"],
-    "esModuleInterop": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "forceConsistentCasingInFileNames": true
-  },
-  "include": ["src/**/*"]
+	"references": [
+		{
+			"path": "./packages/tsconfig.workspace.json"
+		},
+		{
+			"path": "./tsconfig.tools.json"
+		}
+	]
 }
