@@ -1,47 +1,63 @@
 #!/usr/bin/env bun
 /**
- * mtui — Hermes product entry over the OMP vendor tree.
+ * mtui — Hermes Agent cockpit (ONE product launch path).
  *
- * DEFAULT: full InteractiveMode (real OMP trench coat) + Hermes product branding.
- *   Looks like the OMP clone. Brain is still OMP AgentSession until Hermes is
- *   plugged under InteractiveMode without stripping the chrome.
+ * Full OMP InteractiveMode chrome + themes + footer + settings.
+ * Branding = Hermes. Brain = OMP AgentSession until Hermes is plugged under
+ * this coat (bridge work is internal; not a second user-facing app).
  *
- * EXPERIMENTAL: --bridge = thin hermes-interactive-shell (gateway brain, plain
- *   transcript). Visual regression vs OMP — not default dogfood.
+ * Want stock OMP? Run `omp` — not this binary.
+ * Experimental gateway shell: MESHINA_TUI_EXPERIMENTAL_BRIDGE=1 only (not advertised).
  */
 import { applyHermesBrandEnv, PRODUCT_CLI, PRODUCT_VERSION } from "./hermes-brand.ts"
 
 applyHermesBrandEnv()
 
+// Fail loud — silent black screens are unacceptable
+process.on("uncaughtException", (err) => {
+	console.error(`\n${PRODUCT_CLI} crash (uncaughtException):\n`, err)
+	process.exit(1)
+})
+process.on("unhandledRejection", (err) => {
+	console.error(`\n${PRODUCT_CLI} crash (unhandledRejection):\n`, err)
+	process.exit(1)
+})
+
 const rawArgv = process.argv.slice(2)
-const useBridge = rawArgv.includes("--bridge")
+// Legacy flag still accepted but not product path — same as env experimental
+const legacyBridge = rawArgv.includes("--bridge")
+const useBridge =
+	legacyBridge ||
+	process.env.MESHINA_TUI_EXPERIMENTAL_BRIDGE === "1" ||
+	process.env.MESHINA_TUI_EXPERIMENTAL_BRIDGE === "true"
 const args = rawArgv.filter((a) => a !== "--bridge")
 
 if (args.includes("-h") || args.includes("--help")) {
 	process.stdout.write(`${PRODUCT_CLI} — Hermes Agent cockpit
 
 Usage:
-  mtui              Full OMP InteractiveMode chrome + Hermes branding (default)
-  mtui --bridge     Experimental thin Hermes-gateway shell (looks different)
+  mtui              Hermes cockpit (full OMP chrome + themes + footer)
+  mtui --version
 
-Default path is the OMP coat. Hermes brain under that coat is still in progress
-(bridge package exists; not default UI yet).
+Stock Oh-My-Pi: run \`omp\` separately. This binary is Hermes-only.
 
-Env: HERMES_* / MESHINA_TUI_BRAND (launcher sets hermes)
+Themes, status-line footer, settings, keybinds: OMP coat (unchanged).
+Brand mark in footer: Hermes (not π).
 `)
 	process.exit(0)
 }
 if (args.includes("-V") || args.includes("--version")) {
-	process.stdout.write(`hermes/${PRODUCT_VERSION}${useBridge ? " (bridge)" : ""}\n`)
+	process.stdout.write(`hermes/${PRODUCT_VERSION}\n`)
 	process.exit(0)
 }
 
 if (useBridge) {
+	// Internal/dev only — not the product face
 	const { runHermesShell } = await import("./modes/hermes-interactive-shell.ts")
 	await runHermesShell()
 	process.exit(0)
 }
 
-// Full OMP InteractiveMode via existing CLI runner (branded hermes via dirs.ts)
+// Product path: full InteractiveMode (OMP coat, Hermes brand)
 const { runCli } = await import("./cli.ts")
 await runCli(args)

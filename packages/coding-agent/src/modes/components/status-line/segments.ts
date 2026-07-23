@@ -87,7 +87,12 @@ const piSegment: StatusLineSegment = {
 			const icon = theme.icon.ghost ? `${theme.icon.ghost} ` : "";
 			return { content: theme.fg("warning", `${icon}${ctx.focusedAgentId} `), visible: true };
 		}
-		const content = theme.icon.pi ? `${theme.icon.pi} ` : "";
+		// Product brand mark in the OMP footer (themes/layout stay OMP). Hermes ≠ π.
+		const mark =
+			process.env.MESHINA_TUI_BRAND === "hermes" || process.env.MESHINA_TUI_BRAND === "1"
+				? "☿"
+				: theme.icon.pi;
+		const content = mark ? `${mark} ` : "";
 		return { content: theme.fg("accent", content), visible: true };
 	},
 };
