@@ -41,6 +41,20 @@ import type {
 	StatusLineSeparatorStyle,
 } from "../../config/settings-schema";
 import { SETTING_TABS, TAB_METADATA } from "../../config/settings-schema";
+import {
+	getProductSettingTabs,
+	isHermesProductSettings,
+	productSettingsBanner,
+} from "../../config/settings-product-manifest";
+import {
+	getHermesCurrentValue,
+	getHermesDefaultValue,
+	HERMES_OPEN_MODEL_HUB_PATH,
+	isHermesActionPath,
+	isHermesSettingsPath,
+	refreshHermesSettingsCache,
+	setHermesSetting,
+} from "./hermes-settings-fields";
 import { getCurrentThemeName, getSelectListTheme, getSettingsListTheme, theme } from "../../modes/theme/theme";
 import { AUTO_THINKING, type ConfiguredThinkingLevel } from "../../thinking";
 import { getTabBarTheme } from "../shared";
@@ -474,14 +488,17 @@ function settingsSidebarWidth(): number {
 }
 
 function getSettingsTabs(): Tab[] {
-	return [
-		...SETTING_TABS.map(id => {
-			const meta = TAB_METADATA[id];
-			const icon = theme.symbol(meta.icon as Parameters<typeof theme.symbol>[0]);
-			return { id, label: `${icon} ${meta.label}`, short: icon };
-		}),
-		{ id: "plugins", label: `${theme.icon.package} Plugins`, short: theme.icon.package },
-	];
+	const tabs = isHermesProductSettings() ? getProductSettingTabs() : SETTING_TABS;
+	const out: Tab[] = tabs.map(id => {
+		const meta = TAB_METADATA[id];
+		const icon = theme.symbol(meta.icon as Parameters<typeof theme.symbol>[0]);
+		return { id, label: `${icon} ${meta.label}`, short: icon };
+	});
+	// OMP plugin marketplace is not Hermes plugins — hide on product path
+	if (!isHermesProductSettings()) {
+		out.push({ id: "plugins", label: `${theme.icon.package} Plugins`, short: theme.icon.package });
+	}
+	return out;
 }
 
 /**
@@ -521,6 +538,8 @@ export interface StatusLinePreviewSettings {
 export interface SettingsCallbacks {
 	/** Called when any setting value changes */
 	onChange: (path: SettingPath, newValue: unknown) => void;
+	/** Product path: open OMP ModelHub from Settings → Model */
+	onOpenModelSelector?: () => void;
 	/** Called for theme preview while browsing */
 	onThemePreview?: (theme: string) => void | Promise<void>;
 	/** Called for status line preview while configuring */
@@ -580,6 +599,18 @@ export class SettingsSelectorComponent implements Component {
 
 		// Initialize with first tab
 		this.#switchToTab("appearance");
+		if (isHermesProductSettings()) {
+			void refreshHermesSettingsCache()
+				.then(() => {
+					if (this.#currentTabId !== "plugins") {
+						this.#refreshCurrentTabItems(getSettingsForTab(this.#currentTabId));
+					}
+					this.context.requestRender?.();
+				})
+				.catch(() => {
+					/* hermes CLI may be unavailable — coat still works */
+				});
+		}
 	}
 
 	invalidate(): void {
@@ -609,17 +640,18 @@ export class SettingsSelectorComponent implements Component {
 	}
 
 	#footerHintText(): string {
+		const product = isHermesProductSettings() ? `${productSettingsBanner()} · ` : "";
 		if (this.#searchList) {
-			return "Enter to change · Tab to jump tabs · Esc to exit search";
+			return `${product}Enter to change · Tab to jump tabs · Esc to exit search`;
 		}
 		if (this.#currentTabId === "plugins") {
-			return "Tab to switch tabs · Esc to close";
+			return `${product}Tab to switch tabs · Esc to close`;
 		}
 		if (this.#currentList?.sectionFocused) {
-			return "↑/↓ to jump sections · Tab/Enter to settings · ←/→ to switch tabs · Esc to close";
+			return `${product}↑/↓ to jump sections · Tab/Enter to settings · ←/→ to switch tabs · Esc to close`;
 		}
 		const nav = this.#hasSectionJump ? "Tab to jump sections · ←/→ to switch tabs" : "Tab to switch tabs";
-		return `Enter/Space to change · ${nav} · Type to search · Esc to close`;
+		return `${product}Enter/Space to change · ${nav} · Type to search · Esc to close`;
 	}
 
 	/** Single-line search banner: accent icon, editable query with live cursor, right-aligned match count. */
@@ -996,10 +1028,17 @@ export class SettingsSelectorComponent implements Component {
 	 * Get the current value for a setting.
 	 */
 	#getCurrentValue(def: SettingDef): unknown {
+		if (isHermesSettingsPath(def.path)) {
+			return getHermesCurrentValue(def.path);
+		}
 		return settings.get(def.path);
 	}
 
 	#isChanged(def: SettingDef, currentValue: unknown): boolean {
+		if (isHermesSettingsPath(def.path)) {
+			const defaultValue = getHermesDefaultValue(def.path);
+			return !Object.is(currentValue, defaultValue);
+		}
 		const defaultValue: unknown = getDefault(def.path);
 		if (Array.isArray(currentValue) && Array.isArray(defaultValue)) {
 			return (
@@ -1209,6 +1248,22 @@ export class SettingsSelectorComponent implements Component {
 	 * Set a setting value, handling type conversion.
 	 */
 	#setSettingValue(path: SettingPath, value: string): void {
+		if (isHermesSettingsPath(path)) {
+			// Fire-and-forget; refresh redraws when cache updates
+			void setHermesSetting(path, value)
+				.then(() => {
+					this.callbacks.onChange(path, getHermesCurrentValue(path));
+					if (this.#currentTabId !== "plugins") {
+						this.#refreshCurrentTabItems(getSettingsForTab(this.#currentTabId));
+					}
+					this.context.requestRender?.();
+				})
+				.catch((err: unknown) => {
+					const msg = err instanceof Error ? err.message : String(err);
+					console.error(`[mtui] hermes config set failed: ${msg}`);
+				});
+			return;
+		}
 		const currentValue = settings.get(path);
 		const schemaType = getType(path);
 		if (path === "compaction.thresholdPercent" && value === "default") {
@@ -1260,6 +1315,28 @@ export class SettingsSelectorComponent implements Component {
 				if (!def) return;
 
 				const path = def.path;
+
+				if (isHermesSettingsPath(path)) {
+					if (path === HERMES_OPEN_MODEL_HUB_PATH || isHermesActionPath(path)) {
+						// Close settings then open model hub
+						this.callbacks.onCancel();
+						// Defer so overlay teardown finishes first
+						queueMicrotask(() => this.callbacks.onOpenModelSelector?.());
+						return;
+					}
+					void setHermesSetting(path, def.type === "boolean" ? newValue === "true" : newValue)
+						.then(() => {
+							this.callbacks.onChange(path, getHermesCurrentValue(path));
+							this.#refreshCurrentTabItems(defs);
+							this.context.requestRender?.();
+						})
+						.catch((err: unknown) => {
+							console.error(
+								`[mtui] hermes config set failed: ${err instanceof Error ? err.message : String(err)}`,
+							);
+						});
+					return;
+				}
 
 				if (def.type === "boolean") {
 					const boolValue = newValue === "true";

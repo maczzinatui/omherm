@@ -1,6 +1,7 @@
 # Integration crossovers — Hermes + OMP coat (meshina-tui)
 
-**Stamp:** 2026-07-23 · Keep open while gutting. Not dual-brain.
+**Stamp:** 2026-07-23 · Keep open while gutting. Not dual-brain.  
+**Quality bar:** `docs/CADILLAC.md` (whole repo). **Kanban:** `docs/KANBAN_PORT.md`. **Cron:** `docs/CRON_PORT.md`. **Profiles:** `docs/PROFILE_PORT.md`.
 
 ## Already in flight
 
@@ -31,7 +32,7 @@
 ### Efficiency of integration (architecture)
 
 9. **EventController edge adapter** — map gateway → `AgentSessionEvent` at one edge; do not rewrite 4.8k-line InteractiveMode. That is the real P2.
-10. **Kanban / mesh panels via settings** — `shell.exec` / kanban CLI over gateway, not a Herm tab bar and not OMP job board dual.
+10. **Kanban / Cron / Profiles via settings** — ports over gateway/CLI; not a Herm tab bar. Cron: `cron.manage`. Profiles: `ProfilePort` + `hermes profile`.
 11. **Approvals** — Hermes `approval.request` → OMP ask-dialog chrome (one approval UX).
 12. **Interrupt / steer** — Escape → `session.interrupt`; later `session.steer` for mid-turn redirect (Hermes has it; OMP has queue/steer patterns).
 

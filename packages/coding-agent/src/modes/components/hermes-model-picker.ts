@@ -1,0 +1,144 @@
+/**
+ * Hermes model picker — same chrome contract as OMP ModelPickerComponent
+ * (row(content, width)). Kept for optional use; product /model uses OMP hub.
+ */
+import type { Model } from "@oh-my-pi/pi-ai"
+import { buildModel } from "@oh-my-pi/pi-catalog/build"
+import type { Component, TUI } from "@oh-my-pi/pi-tui"
+import {
+  applyHermesModelGlobal,
+  loadHermesModelCatalog,
+  type HermesModelRow,
+} from "@meshina/hermes-bridge"
+import type { Settings } from "../../config/settings"
+import { theme } from "../theme/theme"
+import { ModelBrowser, type ModelBrowserItem } from "./model-browser"
+import { bottomBorder, row, topBorder } from "./overlay-box"
+
+export type HermesModelPickerCallbacks = {
+  onPick: (row: HermesModelRow) => void | Promise<void>
+  onCancel: () => void
+  onError?: (message: string) => void
+}
+
+const CHROME_ROWS = 4
+const BROWSER_FRAME_ROWS = 5
+const MIN_VISIBLE = 5
+const HEIGHT_FRACTION = 0.45
+
+function toModel(row: HermesModelRow): Model {
+  return buildModel({
+    id: row.id,
+    name: row.id,
+    provider: row.provider,
+    api: "openai-completions",
+    baseUrl: "",
+    reasoning: false,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 128_000,
+    maxTokens: 8192,
+  })
+}
+
+function asLine(value: unknown): string {
+  if (typeof value === "string") return value
+  if (value == null) return ""
+  return String(value)
+}
+
+export class HermesModelPickerComponent implements Component {
+  #tui: TUI
+  #browser: ModelBrowser
+  #status = "Loading Hermes models…"
+  #error: string | undefined
+  #rows: HermesModelRow[] = []
+
+  constructor(
+    tui: TUI,
+    settings: Settings,
+    callbacks: HermesModelPickerCallbacks,
+    options: { currentSelector?: string } = {},
+  ) {
+    this.#tui = tui
+    this.#browser = new ModelBrowser(settings, {
+      disableOverContext: false,
+      emptyText: () => (this.#error ? `  ${this.#error}` : "  No Hermes models"),
+    })
+    this.#browser.onActivate = (item) => {
+      const row = this.#rows.find((r) => r.selector === item.selector)
+      if (!row) return
+      void Promise.resolve(callbacks.onPick(row)).catch((e) => {
+        callbacks.onError?.(e instanceof Error ? e.message : String(e))
+      })
+    }
+    this.#browser.onCancel = () => callbacks.onCancel()
+
+    void loadHermesModelCatalog()
+      .then((cat) => {
+        this.#rows = cat.rows
+        this.#status =
+          cat.provider && cat.model
+            ? `Hermes · current ${cat.provider}/${cat.model} · Enter sets global default`
+            : "Hermes model catalog · Enter sets global default (config)"
+        const items: ModelBrowserItem[] = cat.rows.map((r) => ({
+          provider: r.provider,
+          id: r.id,
+          selector: r.selector,
+          model: toModel(r),
+          labelColor: r.isCurrentModel ? "accent" : undefined,
+        }))
+        this.#browser.setItems(items)
+        const cur =
+          options.currentSelector ||
+          cat.rows.find((r) => r.isCurrentModel)?.selector ||
+          (cat.provider && cat.model ? `${cat.provider}/${cat.model}` : undefined)
+        if (cur) this.#browser.selectSelector(cur)
+        this.#tui.requestRender()
+      })
+      .catch((e) => {
+        this.#error = e instanceof Error ? e.message : String(e)
+        this.#status = "Failed to load Hermes model catalog"
+        this.#tui.requestRender()
+      })
+  }
+
+  invalidate(): void {}
+
+  handleInput(data: string): void {
+    if (data.startsWith("\x1b[<")) return
+    this.#browser.handleInput(data)
+  }
+
+  render(width: number): string[] {
+    // Match ModelPickerComponent: row(content, width) — NOT (width, content).
+    const termRows = Math.max(16, this.#tui.terminal?.rows || process.stdout.rows || 40)
+    const listBudget = Math.floor(termRows * HEIGHT_FRACTION) - CHROME_ROWS - BROWSER_FRAME_ROWS
+    this.#browser.setMaxVisible(Math.max(MIN_VISIBLE, listBudget))
+
+    const inner = Math.max(1, width - 4)
+    const status = this.#error
+      ? theme.fg("error", ` ${this.#error}`)
+      : theme.fg("muted", ` ${this.#status}`)
+
+    const out: string[] = []
+    out.push(topBorder(width, "Switch Model"))
+    out.push(row(status, width))
+    for (const line of this.#browser.render(inner)) {
+      out.push(row(asLine(line), width))
+    }
+    out.push(
+      row(
+        theme.fg("dim", "↑/↓ · Enter = Hermes global default · type search · Esc · no OMP roles"),
+        width,
+      ),
+    )
+    out.push(bottomBorder(width))
+    return out
+  }
+}
+
+export async function defaultHermesModelPick(row: HermesModelRow): Promise<string> {
+  await applyHermesModelGlobal(row.provider, row.id)
+  return `${row.provider}/${row.id}`
+}

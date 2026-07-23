@@ -24,6 +24,11 @@ import {
 	type SubmenuOption,
 	TAB_GROUPS,
 } from "../../config/settings-schema";
+import {
+	getProductPathsForTab,
+	isHermesProductSettings,
+} from "../../config/settings-product-manifest";
+import { getHermesSettingDefsForTab } from "./hermes-settings-fields";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // UI Definition Types
@@ -232,9 +237,17 @@ export function getAllSettingDefs(): SettingDef[] {
  * declaration order is preserved.
  */
 export function getSettingsForTab(tab: SettingTab): SettingDef[] {
-	const defs = getAllSettingDefs().filter(def => def.tab === tab);
+	const hermesDefs = isHermesProductSettings() ? getHermesSettingDefsForTab(tab) : [];
+	const paths = isHermesProductSettings() ? getProductPathsForTab(tab) : getPathsForTab(tab);
+	const defs: SettingDef[] = [...hermesDefs];
+	for (const path of paths) {
+		const def = pathToSettingDef(path);
+		if (def) defs.push(def);
+	}
 	const order = TAB_GROUPS[tab];
+	// Hermes groups first within their names; still sort by TAB_GROUPS when possible
 	const rank = (def: SettingDef): number => {
+		if (def.group?.startsWith("Hermes")) return -2;
 		if (!def.group) return -1;
 		const index = order.indexOf(def.group);
 		return index >= 0 ? index : order.length;

@@ -100,13 +100,23 @@ Map gateway events → existing UI event controller shapes in
 
 ### P2.5 — Crossovers (perf / memory / methods)
 See `docs/INTEGRATION_CROSSOVERS.md` — paint coalesce, native scrollback seal, Hermes compaction UI, Grok Build method-steal only, approvals/steer, no dual brain.
+
+### Engineering bar (binding, whole repo)
+See **`docs/CADILLAC.md`**. Public-scrutiny quality, one owner per concern, ports only, named debt. Every package/PR.
+
+### Settings truth (binding)
+See **`docs/SETTINGS_REMAP.md`**. OMP/pi `settings-schema` (~428 keys) is **not** Hermes config. mtui product path filters via `settings-product-manifest.ts` (purge OMP agent lies; coat chrome only until HermesConfigPort). Ports (Kanban/Cron/Profiles) are hub panels, not OMP toggles.
+
 ### P3 — Hermes chrome inside OMP settings (no Herm top tab bar)
 
 **Operator correction:** we do **not** need a Herm-style top task bar. OMP already has a strong **settings / selector** surface (`SettingsSelectorComponent`, session selector, model picker, etc.). Extend that:
 
-- Add **Kanban** (and other Hermes-only panels) as settings/hub categories or slash targets
+- Add **Kanban**, **Cron**, **Profiles** as settings/hub categories — **`docs/KANBAN_PORT.md`**, **`docs/CRON_PORT.md`**, **`docs/PROFILE_PORT.md`**
 - Sessions / models / config stay OMP-native UX wired to Hermes RPCs
 - Avoid a second full-width tab strip that forces Tab-cycling
+- Kanban create + content edit = Herm field parity via CLI + content ladder (not ad-hoc SQLite)
+- Cron = `cron.manage` first; full last/next/status/output visibility
+- Profiles = FS inventory + `hermes profile` mutations; gateway home = active
 
 ### P4 — Product cutover
 - [ ] bin `mtui` / `meshina-tui`
@@ -119,6 +129,7 @@ See `docs/INTEGRATION_CROSSOVERS.md` — paint coalesce, native scrollback seal,
 - Porting Herm React tabs into pi-tui mid-gut
 - Copying OMP binary without source (can’t gut)
 - Dual brains (OMP tools + Hermes tools both live)
+- Anything that fails `docs/CADILLAC.md` pride test
 
 ## Upstream sync
 

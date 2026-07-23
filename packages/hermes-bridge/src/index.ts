@@ -7,3 +7,43 @@ export {
   type MappedAssistantMessage,
   type MappedAssistantMessageEvent,
 } from "./session-event-map.ts"
+export {
+  createProfilePort,
+  profilePort,
+  type ProfilePort,
+  type ProfilePortOptions,
+} from "./profile-port.ts"
+export type { ProfileInfo, DistributionSummary } from "./profile-dto.ts"
+export {
+  profileNameFromHome,
+  hermesRootFromHome,
+  validateProfileName,
+} from "./profile-dto.ts"
+export { listProfiles, defaultHermesHome } from "./profile-fs.ts"
+export {
+  createHermesConfigPort,
+  hermesConfigPort,
+  resetHermesConfigPortForTests,
+  HERMES_CONFIG_FIELDS,
+  HERMES_CONFIG_KEYS,
+  type HermesConfigPort,
+  type HermesConfigField,
+  type OmpSettingsTab,
+} from "./hermes-config-port.ts"
+export {
+  HERMES_OMP_FIELD_SPECS,
+  hermesTabsPresent,
+} from "./hermes-omp-settings-map.ts"
+export {
+  loadHermesModelCatalog,
+  applyHermesModelGlobal,
+  flattenCatalog,
+  type HermesModelCatalog,
+  type HermesModelRow,
+} from "./hermes-model-catalog.ts"
+export {
+  buildHermesSlashCatalog,
+  listHermesSkills,
+  HERMES_BUILTIN_SLASH,
+  type HermesSlashEntry,
+} from "./hermes-slash-catalog.ts"

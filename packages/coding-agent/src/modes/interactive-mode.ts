@@ -77,6 +77,8 @@ import type {
 import type { CompactOptions } from "../extensibility/extensions/types";
 import type { Skill } from "../extensibility/skills";
 import { loadSlashCommands } from "../extensibility/slash-commands";
+import { isHermesProductSettings } from "../config/settings-product-manifest";
+import { buildHermesSlashCatalog } from "@meshina/hermes-bridge";
 import { type GuidedGoalMessage, newGuidedGoalSessionId, runGuidedGoalTurn } from "../goals/guided-setup";
 import type { Goal, GoalModeState } from "../goals/state";
 import { resolveLocalUrlToPath } from "../internal-urls";
@@ -1135,6 +1137,21 @@ export class InteractiveMode implements InteractiveModeContext {
 				commands.push({ name: commandName, description: skill.description });
 			}
 		}
+		// Hermes product: surface ~/.hermes/skills as first-class slash names (not only skill: prefix)
+		if (isHermesProductSettings()) {
+			try {
+				for (const entry of buildHermesSlashCatalog()) {
+					if (entry.source !== "hermes-skill") continue;
+					if (commands.some(c => c.name === entry.name)) continue;
+					commands.push({
+						name: entry.name,
+						description: `Hermes skill · ${entry.description}`,
+					});
+				}
+			} catch {
+				/* skills dir missing */
+			}
+		}
 		return commands;
 	}
 
@@ -1177,8 +1194,25 @@ export class InteractiveMode implements InteractiveModeContext {
 				// source suffix (e.g. "Review code (project)"), so pass it through verbatim.
 				description: template.description,
 			}));
+		// Hermes slash builtins (model, kanban, cron, …) into autocomplete on product path
+		const hermesSlash: SlashCommand[] = [];
+		if (isHermesProductSettings()) {
+			try {
+				for (const entry of buildHermesSlashCatalog()) {
+					if (reservedNames.has(entry.name)) continue;
+					if (entry.source === "hermes-skill") continue; // already in skill rebuild
+					reservedNames.add(entry.name);
+					hermesSlash.push({
+						name: entry.name,
+						description: `Hermes · ${entry.description}`,
+					});
+				}
+			} catch {
+				/* */
+			}
+		}
 		this.#baseAutocompleteProvider = this.#inputController.createAutocompleteProvider(
-			[...this.#pendingSlashCommands, ...fileSlashCommands, ...promptTemplateCommands],
+			[...this.#pendingSlashCommands, ...fileSlashCommands, ...promptTemplateCommands, ...hermesSlash],
 			basePath,
 		);
 		this.#applyAutocompleteProvider();

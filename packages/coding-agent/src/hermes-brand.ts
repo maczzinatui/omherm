@@ -11,6 +11,9 @@ export function applyHermesBrandEnv(): void {
   process.env.MESHINA_TUI_BRAND = "hermes"
   process.env.MESHINA_TUI_VERSION = PRODUCT_VERSION
   process.env.OMP_QUIET_BRAND = "1"
-  // Do not inherit OMP profile naming in process title
+  // Product settings filter (SETTINGS_REMAP) — set unless operator forces raw OMP schema
+  if (process.env.MESHINA_TUI_RAW_OMP_SETTINGS !== "1") {
+    process.env.MESHINA_TUI_PRODUCT_SETTINGS = process.env.MESHINA_TUI_PRODUCT_SETTINGS || "1"
+  }
   process.title = PRODUCT_CLI
 }

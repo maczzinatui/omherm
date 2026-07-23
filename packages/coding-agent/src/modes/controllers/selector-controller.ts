@@ -80,6 +80,11 @@ import { LoginDialogComponent } from "../components/login-dialog";
 import { LogoutAccountSelectorComponent } from "../components/logout-account-selector";
 import { ModelHubComponent, type ModelRoleSelectionScope } from "../components/model-hub";
 import { ModelPickerComponent } from "../components/model-picker";
+import {
+	defaultHermesModelPick,
+	HermesModelPickerComponent,
+} from "../components/hermes-model-picker";
+import { isHermesProductSettings } from "../../config/settings-product-manifest";
 import { OAuthSelectorComponent } from "../components/oauth-selector";
 import { PluginSelectorComponent } from "../components/plugin-selector";
 import { ResetUsageSelectorComponent } from "../components/reset-usage-selector";
@@ -176,6 +181,7 @@ export class SelectorController {
 				},
 				{
 					onChange: (id, value) => this.handleSettingChange(id, value),
+					onOpenModelSelector: () => this.showModelSelector(),
 					onThemePreview: async themeName => {
 						const result = await previewTheme(themeName);
 						if (result.success) {
@@ -634,11 +640,61 @@ export class SelectorController {
 	}
 
 	showModelSelector(options?: { temporaryOnly?: boolean }): void {
+		// Product path: keep the OMP model hub/picker chrome (clean UX).
+		// Hermes global default is dual-written on default-role assign (see onAssign).
 		if (options?.temporaryOnly) {
 			this.#showModelPicker();
 			return;
 		}
 		this.#showModelHub({});
+	}
+
+	/**
+	 * Optional Hermes-only catalog picker (inventory-backed). Not the default
+	 * /model path — OMP hub is preferred; call this if we need a pure Hermes list.
+	 */
+	#showHermesModelPicker(): void {
+		const current = this.ctx.session.model;
+		let overlayHandle: OverlayHandle | undefined;
+		let closed = false;
+		const done = () => {
+			if (closed) return;
+			closed = true;
+			overlayHandle?.hide();
+			this.focusActiveEditorArea();
+			this.ctx.ui.requestRender();
+		};
+		const picker = new HermesModelPickerComponent(
+			this.ctx.ui,
+			this.ctx.settings,
+			{
+				onPick: async row => {
+					try {
+						const label = await defaultHermesModelPick(row);
+						this.ctx.statusLine.invalidate();
+						this.ctx.showStatus(
+							`Hermes default model → ${label} (restart session/gateway if mid-turn)`,
+						);
+						done();
+					} catch (error) {
+						this.ctx.showError(error instanceof Error ? error.message : String(error));
+					}
+				},
+				onCancel: done,
+				onError: msg => this.ctx.showError(msg),
+			},
+			{
+				currentSelector: current ? `${current.provider}/${current.id}` : undefined,
+			},
+		);
+		overlayHandle = this.ctx.ui.showOverlay(picker, {
+			anchor: "bottom-center",
+			width: "100%",
+			maxHeight: "100%",
+			margin: 0,
+		});
+		this.ctx.ui.setFocus(picker);
+		this.ctx.ui.requestRender();
 	}
 
 	/**
@@ -809,6 +865,22 @@ export class SelectorController {
 								this.ctx.updateEditorBorderColor();
 							}
 							this.ctx.showStatus(`${defaultStatusLabel} model: ${selector ?? model.id}`);
+							// Product path: keep Hermes config.yaml in lockstep with OMP default role
+							if (isHermesProductSettings()) {
+								void import("@meshina/hermes-bridge")
+									.then(({ applyHermesModelGlobal }) =>
+										applyHermesModelGlobal(model.provider, model.id),
+									)
+									.then(() => {
+										this.ctx.showStatus(
+											`${defaultStatusLabel} model: ${selector ?? model.id} · Hermes config updated`,
+										);
+									})
+									.catch((err: unknown) => {
+										const msg = err instanceof Error ? err.message : String(err);
+										this.ctx.showError(`OMP model set; Hermes config failed: ${msg}`);
+									});
+							}
 						} else {
 							// Other roles (smol, slow, custom): update settings, not the current model.
 							const modelRoleValue = formatModelSelectorValue(selectorValue, concreteThinking);
