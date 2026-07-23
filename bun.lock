@@ -77,6 +77,7 @@
         "@agentclientprotocol/sdk": "catalog:",
         "@babel/parser": "catalog:",
         "@babel/traverse": "catalog:",
+        "@meshina/hermes-bridge": "workspace:*",
         "@mozilla/readability": "catalog:",
         "@oh-my-pi/hashline": "catalog:",
         "@oh-my-pi/omp-stats": "catalog:",
@@ -133,6 +134,13 @@
         "@oh-my-pi/pi-natives": "catalog:",
         "lru-cache": "catalog:",
       },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+      },
+    },
+    "packages/hermes-bridge": {
+      "name": "@meshina/hermes-bridge",
+      "version": "0.1.0",
       "devDependencies": {
         "@types/bun": "catalog:",
       },
@@ -515,6 +523,8 @@
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
     "@kurkle/color": ["@kurkle/color@0.3.4", "", {}, "sha512-M5UknZPHRu3DEDWoipU6sE8PdkZ6Z/S+v4dD+Ke8IaNlpdSQah50lz1KtcFBa2vsdOnwbbnxJwVM4wty6udA5w=="],
+
+    "@meshina/hermes-bridge": ["@meshina/hermes-bridge@workspace:packages/hermes-bridge"],
 
     "@mixmark-io/domino": ["@mixmark-io/domino@2.2.0", "", {}, "sha512-Y28PR25bHXUg88kCV7nivXrP2Nj2RueZ3/l/jdx6J9f8J4nsEGcgX0Qe6lt7Pa+J79+kPiJU3LguR6O/6zrLOw=="],
 

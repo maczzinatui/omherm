@@ -16,17 +16,23 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { engines, version } from "../package.json" with { type: "json" };
 
-/** App name (e.g. "omp") */
-export const APP_NAME: string = "omp";
+/** App name (e.g. "hermes" product path, "omp" upstream stock) */
+export const APP_NAME: string =
+	process.env.MESHINA_TUI_BRAND === "hermes" || process.env.MESHINA_TUI_BRAND === "1"
+		? "hermes"
+		: "omp";
 
-/** Config directory name (e.g. ".omp") */
+/** Config directory name (e.g. ".omp") — Hermes product still uses OMP settings layout on disk for now */
 export const CONFIG_DIR_NAME: string = ".omp";
 
 /** Ordered main settings filenames: canonical write target first, legacy-compatible YAML fallback second. */
 export const MAIN_CONFIG_FILENAMES = ["config.yml", "config.yaml"] as const;
 
-/** Version (e.g. "1.0.0") */
-export const VERSION: string = version;
+/** Version (e.g. "1.0.0") — Hermes product overrides via MESHINA_TUI_VERSION */
+export const VERSION: string =
+	process.env.MESHINA_TUI_BRAND === "hermes" || process.env.MESHINA_TUI_BRAND === "1"
+		? process.env.MESHINA_TUI_VERSION || "0.1.0-hermes"
+		: version;
 
 /** Minimum Bun version */
 export const MIN_BUN_VERSION: string = engines.bun.replace(/[^0-9.]/g, "");

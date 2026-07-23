@@ -53,6 +53,7 @@
     "@babel/parser": "catalog:",
     "@babel/traverse": "catalog:",
     "@mozilla/readability": "catalog:",
+    "@meshina/hermes-bridge": "workspace:*",
     "@oh-my-pi/hashline": "catalog:",
     "@oh-my-pi/omp-stats": "catalog:",
     "@oh-my-pi/pi-agent-core": "catalog:",
