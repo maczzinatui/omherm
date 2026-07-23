@@ -1,0 +1,32 @@
+{
+  "name": "meshina-tui",
+  "version": "0.1.0-dev.0",
+  "private": true,
+  "description": "OMP-class pi-tui cockpit for Hermes Agent — gateway chrome primary, ACP optional",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/maczzinatui/meshina-tui.git"
+  },
+  "bin": {
+    "meshina-tui": "src/index.ts",
+    "mtui": "src/index.ts"
+  },
+  "engines": {
+    "bun": ">=1.3.0"
+  },
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "typecheck": "bunx tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@oh-my-pi/pi-tui": "^17.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.0",
+    "typescript": "^5.9.3"
+  }
+}
