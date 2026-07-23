@@ -1,14 +1,27 @@
 #!/usr/bin/env bash
 # mtui — meshina-tui launcher
-# Phase P0: stock OMP interactive UI from this vendor tree (visual reference).
-# Later: Hermes-backed entry (packages/coding-agent hermes entry).
+# P0: stock OMP interactive UI from vendor tree (visual reference).
+# Later: Hermes-backed packages/coding-agent/src/mtui.ts
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-export MESHINA_TUI_ROOT="${MESHINA_TUI_ROOT:-$ROOT}"
-BUN="${BUN:-$HOME/.bun/bin/bun}"
-[[ -x "$BUN" ]] || BUN="$(command -v bun)"
 
-# Prefer Hermes env for future bridge; harmless for stock OMP.
+# Prefer fixed product tree; do not derive root from ~/.bun/bin/mtui path.
+ROOT="${MESHINA_TUI_ROOT:-$HOME/meshina-tui}"
+if [[ ! -d "$ROOT/packages/coding-agent" ]]; then
+  # fallback: script living in repo scripts/
+  HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  if [[ -d "$HERE/../packages/coding-agent" ]]; then
+    ROOT="$(cd "$HERE/.." && pwd)"
+  fi
+fi
+if [[ ! -d "$ROOT/packages/coding-agent" ]]; then
+  echo "mtui: coding-agent not found under $ROOT (set MESHINA_TUI_ROOT)" >&2
+  exit 1
+fi
+
+BUN="${BUN:-$HOME/.bun/bin/bun}"
+[[ -x "$BUN" ]] || BUN="$(command -v bun || true)"
+[[ -n "${BUN:-}" ]] || { echo "mtui: bun not found" >&2; exit 127; }
+
 if [[ -z "${HERMES_PYTHON:-}" && -x "$HOME/.hermes/hermes-agent/venv/bin/python" ]]; then
   export HERMES_PYTHON="$HOME/.hermes/hermes-agent/venv/bin/python"
 fi
@@ -17,9 +30,7 @@ if [[ -z "${HERMES_AGENT_ROOT:-}" && -d "$HOME/.hermes/hermes-agent" ]]; then
 fi
 
 cd "$ROOT"
-# Hermès path when present
 if [[ -f "$ROOT/packages/coding-agent/src/mtui.ts" ]]; then
   exec "$BUN" "$ROOT/packages/coding-agent/src/mtui.ts" "$@"
 fi
-# P0 fallback: stock OMP CLI from workspace
 exec "$BUN" "$ROOT/packages/coding-agent/src/cli.ts" "$@"
