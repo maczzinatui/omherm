@@ -9,7 +9,7 @@ import {
 } from "@oh-my-pi/pi-tui";
 import { APP_NAME } from "@oh-my-pi/pi-utils";
 import { theme } from "../../modes/theme/theme";
-import { frame as hermesBrailleFrame, pickWordmark } from "./hermes-splash-art.ts";
+import { frame as hermesBrailleFrame, pickChrome, pickWordmark } from "./hermes-splash-art.ts";
 import tipsText from "./tips.txt" with { type: "text" };
 
 function isHermesProduct(): boolean {
@@ -481,15 +481,12 @@ export class WelcomeComponent implements Component {
 	#renderHermesSplash(termWidth: number, termRows = 24): string[] {
 		// Use nearly full width (leave 1 col margin each side for TUI padding).
 		const maxWidth = Math.max(0, termWidth - 2);
-		// Frame chrome = 16 rows (8+8). Prefer ≥10 inner rows when the terminal is tall enough.
-		const frameChrome = 16;
-		const minInner = 10;
-		const ideal = frameChrome + minInner; // 26
-		const available = Math.max(18, termRows - 8); // leave ~editor/footer
-		const height =
-			termRows >= ideal + 6
-				? Math.min(available, Math.max(ideal, Math.floor(termRows * 0.6)))
-				: available;
+		// Leave room for tip + footer/editor; still claim most of the pane on tall screens.
+		const available = Math.max(16, termRows - 8);
+		const height = Math.min(available, Math.max(16, Math.floor(termRows * 0.65)));
+		// Shrink top/bottom braille chrome so the INNER band keeps room for wordmark+meta.
+		const chrome = pickChrome(height, 8);
+
 		if (maxWidth < 40) {
 			// Too narrow for full frame — compact themed fallback
 			const mark = pickWordmark(maxWidth);
@@ -506,7 +503,7 @@ export class WelcomeComponent implements Component {
 			return lines;
 		}
 
-		const { lines: raw, inner } = hermesBrailleFrame(maxWidth, height);
+		const { lines: raw, inner } = hermesBrailleFrame(maxWidth, height, { chrome });
 		if (raw.length === 0) {
 			return [theme.fg("accent", "hermes")];
 		}
@@ -516,25 +513,28 @@ export class WelcomeComponent implements Component {
 		const muted = (s: string) => theme.fg("muted", s);
 		const dim = (s: string) => theme.fg("dim", s);
 
-		const word = pickWordmark(inner.w);
-		const meta = [
-			`${APP_NAME} v${this.version}`,
-			this.modelName ? `${this.modelName} · ${this.providerName}` : "",
-		].filter(Boolean);
-
+		// Build body that fits INNER height (never paint only 1 line in a huge frame).
+		const wordBudget = Math.max(1, Math.min(3, inner.h - 4));
+		const word = pickWordmark(inner.w, wordBudget);
+		const meta: string[] = [];
+		if (inner.h >= word.length + 3) meta.push(`${APP_NAME} v${this.version}`);
+		if (inner.h >= word.length + 4 && this.modelName) {
+			meta.push(`${this.modelName} · ${this.providerName}`);
+		}
 		const sessionHint =
-			this.recentSessions[0] != null
+			this.recentSessions[0] != null && inner.h >= word.length + meta.length + 5
 				? `· ${this.recentSessions[0].name} (${this.recentSessions[0].timeAgo})`
 				: "";
 
-		const body: string[] = [
-			"Welcome back!",
-			"",
-			...word,
-			"",
-			...meta,
-			sessionHint,
-		].filter((l, i, a) => !(l === "" && a[i - 1] === ""));
+		let body: string[] = ["Welcome back!", "", ...word];
+		if (meta.length) body.push("", ...meta);
+		if (sessionHint) body.push(sessionHint);
+		body = body.filter((l, i, a) => !(l === "" && a[i - 1] === ""));
+		// Hard clip to inner band — prefer wordmark over empty padding
+		if (body.length > inner.h) {
+			const keep = ["Welcome back!", ...word, ...meta].filter(Boolean);
+			body = keep.slice(0, inner.h);
+		}
 
 		// Paint frame; inject centered body into the inner vertical band.
 		const out: string[] = [];
@@ -554,7 +554,7 @@ export class WelcomeComponent implements Component {
 			const right = line.slice(cw + inner.w);
 			const midPlain = text
 				? this.#centerText(
-						bodyIdx === 0
+						bodyIdx === 0 && text === "Welcome back!"
 							? theme.bold(theme.fg("accent", text))
 							: word.includes(text)
 								? theme.fg("accent", text)
