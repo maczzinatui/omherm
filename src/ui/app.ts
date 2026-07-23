@@ -8,7 +8,6 @@ import {
   TUI,
   type Component,
   type Tab,
-  type TabBarTheme,
 } from "@oh-my-pi/pi-tui"
 import { loadPanel } from "../chrome/panels"
 import { TOOLBAR, type TabId } from "../chrome/tabs"
@@ -22,6 +21,7 @@ import {
   pushUser,
   type State,
 } from "../timeline/model"
+import { editorTheme, tabTheme } from "./theme"
 
 class LineBox implements Component {
   private lines: string[] = []
@@ -45,31 +45,11 @@ class FooterView implements Component {
   }
 }
 
-const editorTheme = {
-  currentLine: { bg: undefined as string | undefined },
-  otherLine: {},
-  selection: { bg: "#333355" },
-  cursor: { bg: "#aaaaaa", fg: "#000000" },
-  autocomplete: {
-    selectedBg: "#333355",
-    selectedFg: "#ffffff",
-    normalBg: undefined as string | undefined,
-    normalFg: undefined as string | undefined,
-  },
-}
-
-const tabTheme: TabBarTheme = {
-  label: (t) => t,
-  activeTab: (t) => `\x1b[1m\x1b[36m${t}\x1b[0m`,
-  inactiveTab: (t) => `\x1b[2m${t}\x1b[0m`,
-  hint: (t) => `\x1b[2m${t}\x1b[0m`,
-}
-
 export async function runApp() {
   const gw = new GatewayClient()
   let state = initialState()
   let activeTab: TabId = "chat"
-  let panelCache = new Map<TabId, string[]>()
+  const panelCache = new Map<TabId, string[]>()
 
   const terminal = new ProcessTerminal()
   const tui = new TUI(terminal)
@@ -84,8 +64,8 @@ export async function runApp() {
 
   const body = new LineBox()
   const footer = new FooterView()
-  const editor = new Editor(editorTheme as never)
-  const help = new Text("Alt+←/→ tabs · /quit · /interrupt · toolbar = Herm chrome over gateway")
+  const editor = new Editor(editorTheme)
+  const help = new Text("Alt+←/→ tabs · /quit · /interrupt · /refresh · toolbar = Herm chrome")
 
   const chatLines = () => state.segments.map(formatSegment)
 
@@ -169,7 +149,6 @@ export async function runApp() {
       void refreshPanel(activeTab)
       return
     }
-    // slash → tab jump (Herm TAB_SLASH lite)
     if (t.startsWith("/") && !t.includes(" ")) {
       const name = t.slice(1).toLowerCase()
       const hit = TOOLBAR.find((x) => x.id === name || x.label.toLowerCase() === name)
@@ -182,7 +161,6 @@ export async function runApp() {
       }
     }
 
-    // Always route prompts to chat
     if (activeTab !== "chat") {
       tabBar.setActiveIndex(0)
       activeTab = "chat"

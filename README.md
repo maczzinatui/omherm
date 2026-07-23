@@ -46,11 +46,31 @@ Spike track:
 
 Parked: Herm OpenTUI fork (`~/herm` `feat/eikon-cut`) — reference only, do not delete.
 
+## Launch alias (locked)
+
+| Command | Meaning |
+|---------|---------|
+| **`mtui`** | **Primary short launcher** (install to `~/.local/bin` + `~/.bun/bin`) |
+| `meshina-tui` | Same wrapper, long form |
+| `bun run start` | Dev from repo checkout |
+
+Wrapper: `scripts/mtui` → `bun $MESHINA_TUI_ROOT/src/index.ts`  
+Defaults: `HERMES_PYTHON=$HOME/.hermes/hermes-agent/venv/bin/python`, `HERMES_AGENT_ROOT=$HOME/.hermes/hermes-agent`.
+
+```bash
+mtui                 # spawn local tui_gateway + pi-tui cockpit
+mtui --help
+HERMES_TUI_GATEWAY_URL=ws://127.0.0.1:PORT/api/ws mtui   # attach remote
+MESHINA_TUI_ROOT=/path/to/checkout mtui                  # other tree
+```
+
+Not named `herm` (OpenTUI fork) or `hermes` (CLI/gateway). Stock daily driver remains `hermes --tui` until cutover.
+
 ## Quick start
 
 ```bash
 bun install
-bun run start          # spawns tui_gateway from ~/.hermes/hermes-agent
+bun run start          # or: mtui
 # or attach to a running gateway:
 HERMES_TUI_GATEWAY_URL=ws://127.0.0.1:8733 bun run start
 ```
