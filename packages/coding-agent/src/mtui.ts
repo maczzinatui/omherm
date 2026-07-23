@@ -1,38 +1,47 @@
 #!/usr/bin/env bun
 /**
- * mtui — Hermes Agent cockpit entry.
- * Coat: OMP/pi-tui chrome. Brain: Hermes tui_gateway.
- * No OMP/Pi product branding on this path.
+ * mtui — Hermes product entry over the OMP vendor tree.
+ *
+ * DEFAULT: full InteractiveMode (real OMP trench coat) + Hermes product branding.
+ *   Looks like the OMP clone. Brain is still OMP AgentSession until Hermes is
+ *   plugged under InteractiveMode without stripping the chrome.
+ *
+ * EXPERIMENTAL: --bridge = thin hermes-interactive-shell (gateway brain, plain
+ *   transcript). Visual regression vs OMP — not default dogfood.
  */
 import { applyHermesBrandEnv, PRODUCT_CLI, PRODUCT_VERSION } from "./hermes-brand.ts"
 
 applyHermesBrandEnv()
 
-const args = process.argv.slice(2)
+const rawArgv = process.argv.slice(2)
+const useBridge = rawArgv.includes("--bridge")
+const args = rawArgv.filter((a) => a !== "--bridge")
+
 if (args.includes("-h") || args.includes("--help")) {
-  process.stdout.write(`${PRODUCT_CLI} — Hermes Agent cockpit
+	process.stdout.write(`${PRODUCT_CLI} — Hermes Agent cockpit
 
 Usage:
-  mtui
-  HERMES_TUI_GATEWAY_URL=ws://host:port mtui
+  mtui              Full OMP InteractiveMode chrome + Hermes branding (default)
+  mtui --bridge     Experimental thin Hermes-gateway shell (looks different)
 
-Env:
-  HERMES_AGENT_ROOT     default ~/.hermes/hermes-agent
-  HERMES_PYTHON         python for tui_gateway
-  HERMES_CWD            agent working directory
-  HERMES_TUI_GATEWAY_URL  remote gateway WS
+Default path is the OMP coat. Hermes brain under that coat is still in progress
+(bridge package exists; not default UI yet).
 
-In-session:
-  /quit  /exit  /interrupt
+Env: HERMES_* / MESHINA_TUI_BRAND (launcher sets hermes)
 `)
-  process.exit(0)
+	process.exit(0)
 }
 if (args.includes("-V") || args.includes("--version")) {
-  process.stdout.write(`hermes/${PRODUCT_VERSION}\n`)
-  process.exit(0)
+	process.stdout.write(`hermes/${PRODUCT_VERSION}${useBridge ? " (bridge)" : ""}\n`)
+	process.exit(0)
 }
 
-// Ensure local workspace packages resolve
-import { runHermesShell } from "./modes/hermes-interactive-shell.ts"
+if (useBridge) {
+	const { runHermesShell } = await import("./modes/hermes-interactive-shell.ts")
+	await runHermesShell()
+	process.exit(0)
+}
 
-await runHermesShell()
+// Full OMP InteractiveMode via existing CLI runner (branded hermes via dirs.ts)
+const { runCli } = await import("./cli.ts")
+await runCli(args)

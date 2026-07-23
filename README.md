@@ -1,53 +1,30 @@
 # meshina-tui
 
-**Hermes cockpit built by gutting OMP’s TUI, not rebuilding it.**
+**Hermes Agent cockpit.** Visual coat = OMP InteractiveMode. Brain target = Hermes gateway.
 
-Upstream base: [can1357/oh-my-pi](https://github.com/can1357/oh-my-pi) (MIT) · tip recorded in `.omp-upstream-sha`.  
-Product goal: OMP interactive surface + Hermes `tui_gateway` backend. Hermes agent source stays upstream/untouchable.
+## Confusion fix (2026-07-23)
 
-## Launch (target)
+| Command | What you get |
+|---------|----------------|
+| **`mtui`** | **Full OMP InteractiveMode chrome** (looks like the clone) + Hermes **branding** (`hermes/0.1.0-hermes`). Brain is still OMP AgentSession until gut finishes. |
+| `mtui --bridge` | Thin Hermes-gateway shell (experimental). Looks bare — **not** the dogfood default. |
 
-| Command | Meaning |
-|---------|---------|
-| **`mtui`** | Primary launcher (Hermes backend) |
-| `meshina-tui` | Same |
+We briefly made `--bridge` the only path; that **was** a visual regression. Default is full coat again.
 
-Until the gut lands, `omp` from this tree is still stock OMP (dev reference).
-
-## Strategy (binding)
-
-1. **Vendor full OMP monorepo packages needed for interactive TUI** (this tree).
-2. **Do not rebuild** footer / assistant-message / status-line / themes from scratch.
-3. **Gut** `AgentSession` / provider / tool harness as the execution brain.
-4. **Plug** Hermes `tui_gateway` JSON-RPC (stdio/WS) as the session + turn driver.
-5. Keep Herm OpenTUI fork parked (`~/herm` `feat/eikon-cut`) — reference only.
-
-Detail: [`docs/HERMES_GUT_PLAN.md`](docs/HERMES_GUT_PLAN.md)
-
-## Layout
-
-```
-packages/coding-agent/   # InteractiveMode + components (primary work)
-packages/tui/            # @oh-my-pi/pi-tui
-packages/agent/          # pi-agent-core — replace behind adapter
-packages/ai/             # providers — strip from product path
-packages/utils/ wire/ …
-docs/HERMES_GUT_PLAN.md
-docs/UPSTREAM-OMP-README.md
-.omp-upstream-sha
-```
-
-## Dev
+## Run
 
 ```bash
 cd ~/meshina-tui
-bun install
-# stock OMP UI (reference while gutting):
-bun run --filter @oh-my-pi/pi-coding-agent start
-# or:
-bun packages/coding-agent/src/cli.ts
+git pull && bun install && ./scripts/bootstrap-local-artifacts.sh
+mtui --version    # hermes/0.1.0-hermes
+mtui              # full OMP UI
 ```
 
-## License
+## Gut plan
 
-OMP MIT — see `LICENSE`. Meshina product commits retain MIT; attribute upstream in README.
+`docs/HERMES_GUT_PLAN.md` — plug Hermes under InteractiveMode; settings for kanban (no Herm top bar).  
+Bridge code: `packages/hermes-bridge` (used by `--bridge` today; target for default path later).
+
+## Identity
+
+Product strings: **Hermes** / **mtui**. Internal packages may still say `@oh-my-pi/*` (coat). Upstream OMP tip: `.omp-upstream-sha`.
