@@ -1,7 +1,7 @@
 // Panel loaders — thin gateway queries for toolbar tabs (tier-0 first).
 
-import type { GatewayClient } from "../gateway/client.ts"
-import type { TabId } from "./tabs.ts"
+import type { GatewayClient } from "../gateway/client"
+import type { TabId } from "./tabs"
 
 export type PanelLines = string[]
 

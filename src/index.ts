@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // meshina-tui — OMP-class cockpit for Hermes (gateway chrome primary)
 
-import { runApp } from "./ui/app.ts"
+import { runApp } from "./ui/app"
 
 const args = process.argv.slice(2)
 if (args.includes("-h") || args.includes("--help")) {

@@ -10,10 +10,10 @@ import {
   type Tab,
   type TabBarTheme,
 } from "@oh-my-pi/pi-tui"
-import { loadPanel } from "../chrome/panels.ts"
-import { TOOLBAR, type TabId } from "../chrome/tabs.ts"
-import { GatewayClient } from "../gateway/client.ts"
-import type { SessionCreateResponse } from "../gateway/wire.ts"
+import { loadPanel } from "../chrome/panels"
+import { TOOLBAR, type TabId } from "../chrome/tabs"
+import { GatewayClient } from "../gateway/client"
+import type { SessionCreateResponse } from "../gateway/wire"
 import {
   applyEvent,
   formatFooter,
@@ -21,7 +21,7 @@ import {
   initialState,
   pushUser,
   type State,
-} from "../timeline/model.ts"
+} from "../timeline/model"
 
 class LineBox implements Component {
   private lines: string[] = []

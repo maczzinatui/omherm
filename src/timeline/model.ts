@@ -1,6 +1,6 @@
 // Pure timeline reducer: gateway events → in-transcript segments + footer.
 
-import type { GatewayEvent, SessionInfo, Usage } from "../gateway/wire.ts"
+import type { GatewayEvent, SessionInfo, Usage } from "../gateway/wire"
 
 export type Phase = "boot" | "ready" | "streaming" | "waiting" | "error"
 
@@ -155,7 +155,7 @@ export function applyEvent(state: State, ev: GatewayEvent): State {
 
     case "thinking.delta":
     case "reasoning.delta": {
-      const chunk = (ev.payload as { text?: string } | undefined)?.text ?? ""
+      const chunk = ev.payload?.text ?? ""
       if (!chunk) break
       const i = lastOpen(segments, "thinking")
       if (i >= 0) {
@@ -193,16 +193,26 @@ export function applyEvent(state: State, ev: GatewayEvent): State {
       break
     }
 
-    case "tool.progress":
-    case "tool.generating": {
+    case "tool.progress": {
       for (let i = segments.length - 1; i >= 0; i--) {
         const s = segments[i]
         if (s.kind === "tool" && s.open) {
           segments[i] = {
             ...s,
-            preview: (ev.payload as { preview?: string })?.preview ?? s.preview,
-            name: (ev.payload as { name?: string })?.name || s.name,
+            preview: ev.payload.preview ?? s.preview,
+            name: ev.payload.name || s.name,
           }
+          break
+        }
+      }
+      break
+    }
+
+    case "tool.generating": {
+      for (let i = segments.length - 1; i >= 0; i--) {
+        const s = segments[i]
+        if (s.kind === "tool" && s.open) {
+          segments[i] = { ...s, name: ev.payload.name || s.name }
           break
         }
       }
@@ -257,9 +267,6 @@ export function applyEvent(state: State, ev: GatewayEvent): State {
         kind: "system",
         text: `approval: ${ev.payload.description || ev.payload.command}`,
       })
-      break
-
-    default:
       break
   }
 

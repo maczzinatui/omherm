@@ -41,17 +41,16 @@ export type SessionCreateResponse = {
   info?: SessionInfo
 }
 
-export type GatewayEvent = {
-  session_id?: string
-} & (
-  | { type: "gateway.ready"; payload?: { skin?: GatewaySkin } }
-  | { type: "gateway.stderr"; payload: { line: string } }
-  | { type: "gateway.start_timeout"; payload?: { cwd?: string; python?: string } }
-  | { type: "gateway.protocol_error"; payload?: { preview?: string } }
-  | { type: "session.info"; payload: SessionInfo }
-  | { type: "session.title"; payload: { session_id?: string; title?: string } }
-  | { type: "message.start"; payload?: undefined }
-  | { type: "message.delta"; payload?: { text?: string; rendered?: string } }
+/** Known events only — unknown types stay outside this union so switch narrows. */
+export type GatewayEvent =
+  | { type: "gateway.ready"; payload?: { skin?: GatewaySkin }; session_id?: string }
+  | { type: "gateway.stderr"; payload: { line: string }; session_id?: string }
+  | { type: "gateway.start_timeout"; payload?: { cwd?: string; python?: string }; session_id?: string }
+  | { type: "gateway.protocol_error"; payload?: { preview?: string }; session_id?: string }
+  | { type: "session.info"; payload: SessionInfo; session_id?: string }
+  | { type: "session.title"; payload: { session_id?: string; title?: string }; session_id?: string }
+  | { type: "message.start"; payload?: undefined; session_id?: string }
+  | { type: "message.delta"; payload?: { text?: string; rendered?: string }; session_id?: string }
   | {
       type: "message.complete"
       payload?: {
@@ -61,11 +60,12 @@ export type GatewayEvent = {
         status?: "complete" | "error" | "interrupted"
         usage?: Usage
       }
+      session_id?: string
     }
-  | { type: "thinking.delta"; payload?: { text?: string } }
-  | { type: "reasoning.delta"; payload?: { text?: string; verbose?: boolean } }
-  | { type: "reasoning.available"; payload?: { text?: string; verbose?: boolean } }
-  | { type: "status.update"; payload?: { text?: string; kind?: string } }
+  | { type: "thinking.delta"; payload?: { text?: string }; session_id?: string }
+  | { type: "reasoning.delta"; payload?: { text?: string; verbose?: boolean }; session_id?: string }
+  | { type: "reasoning.available"; payload?: { text?: string; verbose?: boolean }; session_id?: string }
+  | { type: "status.update"; payload?: { text?: string; kind?: string }; session_id?: string }
   | {
       type: "tool.start"
       payload: {
@@ -74,9 +74,10 @@ export type GatewayEvent = {
         context?: string
         args_text?: string
       }
+      session_id?: string
     }
-  | { type: "tool.progress"; payload: { name?: string; preview?: string } }
-  | { type: "tool.generating"; payload: { name?: string } }
+  | { type: "tool.progress"; payload: { name?: string; preview?: string }; session_id?: string }
+  | { type: "tool.generating"; payload: { name?: string }; session_id?: string }
   | {
       type: "tool.complete"
       payload: {
@@ -87,9 +88,46 @@ export type GatewayEvent = {
         duration_s?: number
         result_text?: string
       }
+      session_id?: string
     }
-  | { type: "clarify.request"; payload: { request_id: string; question: string; choices: string[] | null } }
-  | { type: "approval.request"; payload: { command: string; description: string; pattern_keys?: string[] } }
-  | { type: "error"; payload?: { message?: string } }
-  | { type: string; payload?: unknown }
-)
+  | {
+      type: "clarify.request"
+      payload: { request_id: string; question: string; choices: string[] | null }
+      session_id?: string
+    }
+  | {
+      type: "approval.request"
+      payload: { command: string; description: string; pattern_keys?: string[] }
+      session_id?: string
+    }
+  | { type: "error"; payload?: { message?: string }; session_id?: string }
+
+const KNOWN = new Set<string>([
+  "gateway.ready",
+  "gateway.stderr",
+  "gateway.start_timeout",
+  "gateway.protocol_error",
+  "session.info",
+  "session.title",
+  "message.start",
+  "message.delta",
+  "message.complete",
+  "thinking.delta",
+  "reasoning.delta",
+  "reasoning.available",
+  "status.update",
+  "tool.start",
+  "tool.progress",
+  "tool.generating",
+  "tool.complete",
+  "clarify.request",
+  "approval.request",
+  "error",
+])
+
+export function asGatewayEvent(v: unknown): GatewayEvent | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null
+  const t = (v as { type?: unknown }).type
+  if (typeof t !== "string" || !KNOWN.has(t)) return null
+  return v as GatewayEvent
+}

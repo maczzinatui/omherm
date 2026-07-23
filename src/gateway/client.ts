@@ -5,7 +5,7 @@ import { EventEmitter } from "events"
 import { existsSync } from "fs"
 import { homedir } from "os"
 import { delimiter, resolve } from "path"
-import type { GatewayEvent } from "./wire.ts"
+import { asGatewayEvent, type GatewayEvent } from "./wire"
 
 const STARTUP_MS = 15_000
 const REQUEST_MS = 120_000
@@ -60,20 +60,23 @@ function python(root: string): string {
   return paths.find((p) => p && existsSync(p)) || "python3"
 }
 
-function asEvent(v: unknown): GatewayEvent | null {
-  if (v && typeof v === "object" && !Array.isArray(v) && typeof (v as { type?: unknown }).type === "string")
-    return v as GatewayEvent
-  return null
-}
-
 function textOf(raw: unknown): string | null {
   if (typeof raw === "string") return raw
   if (raw instanceof ArrayBuffer) return new TextDecoder().decode(raw)
-  if (ArrayBuffer.isView(raw)) return new TextDecoder().decode(raw)
+  if (ArrayBuffer.isView(raw)) {
+    const view = raw as ArrayBufferView
+    return new TextDecoder().decode(
+      new Uint8Array(view.buffer, view.byteOffset, view.byteLength),
+    )
+  }
   return null
 }
 
-async function readLines(stream: ReadableStream<Uint8Array>, cb: (line: string) => void) {
+async function readLines(
+  stream: ReadableStream<Uint8Array> | null | undefined,
+  cb: (line: string) => void,
+) {
+  if (!stream || typeof stream.getReader !== "function") return
   const reader = stream.getReader()
   const dec = new TextDecoder()
   let buf = ""
@@ -153,13 +156,13 @@ export class GatewayClient extends EventEmitter {
       return
     }
     if (msg.method === "event") {
-      const ev = asEvent(msg.params)
+      const ev = asGatewayEvent(msg.params)
       if (ev) this.push(ev)
     }
   }
 
   private fail(err: Error) {
-    for (const p of this.pending.values()) p.reject(err)
+    for (const p of Array.from(this.pending.values())) p.reject(err)
     this.pending.clear()
   }
 
@@ -305,20 +308,16 @@ export class GatewayClient extends EventEmitter {
       stderr: "pipe",
     })
 
-    if (this.proc.stdout) {
-      void readLines(this.proc.stdout, (line) => {
-        try {
-          this.dispatch(JSON.parse(line))
-        } catch {
-          this.push({ type: "gateway.protocol_error", payload: { preview: line.slice(0, LOG_PREVIEW) } })
-        }
-      })
-    }
-    if (this.proc.stderr) {
-      void readLines(this.proc.stderr, (line) => {
-        this.push({ type: "gateway.stderr", payload: { line } })
-      })
-    }
+    void readLines(this.proc.stdout as ReadableStream<Uint8Array> | null, (line) => {
+      try {
+        this.dispatch(JSON.parse(line))
+      } catch {
+        this.push({ type: "gateway.protocol_error", payload: { preview: line.slice(0, LOG_PREVIEW) } })
+      }
+    })
+    void readLines(this.proc.stderr as ReadableStream<Uint8Array> | null, (line) => {
+      this.push({ type: "gateway.stderr", payload: { line } })
+    })
     void this.proc.exited.then((code) => {
       this.fail(new Error(`gateway exited${code === null ? "" : ` (${code})`}`))
       this.emit("exit", code)

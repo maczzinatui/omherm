@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { applyEvent, formatFooter, initialState, pushUser } from "./model.ts"
+import { applyEvent, formatFooter, initialState, pushUser } from "./model"
 
 describe("timeline reducer", () => {
   test("thinking + tool + text turn", () => {
