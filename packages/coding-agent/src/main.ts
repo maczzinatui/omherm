@@ -108,6 +108,10 @@ export function writeStartupNotice(parsedArgs: Pick<Args, "mode">, text: string)
 }
 
 async function checkForNewVersion(currentVersion: string): Promise<string | undefined> {
+	// Hermes product cockpit is not the npm @oh-my-pi package — never nag omp update.
+	if (process.env.MESHINA_TUI_BRAND === "hermes" || process.env.MESHINA_TUI_BRAND === "1") {
+		return;
+	}
 	if (!settings.get("startup.checkUpdate")) {
 		return;
 	}

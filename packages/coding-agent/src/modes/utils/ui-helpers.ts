@@ -722,6 +722,10 @@ export class UiHelpers {
 	}
 
 	showNewVersionNotification(newVersion: string): void {
+		// Hermes product never surfaces upstream OMP update chrome.
+		if (process.env.MESHINA_TUI_BRAND === "hermes" || process.env.MESHINA_TUI_BRAND === "1") {
+			return;
+		}
 		const block = new TranscriptBlock();
 		block.addChild(new DynamicBorder(text => theme.fg("warning", text)));
 		block.addChild(

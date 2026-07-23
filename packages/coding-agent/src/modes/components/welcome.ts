@@ -9,7 +9,12 @@ import {
 } from "@oh-my-pi/pi-tui";
 import { APP_NAME } from "@oh-my-pi/pi-utils";
 import { theme } from "../../modes/theme/theme";
+import { frame as hermesBrailleFrame, pickWordmark } from "./hermes-splash-art.ts";
 import tipsText from "./tips.txt" with { type: "text" };
+
+function isHermesProduct(): boolean {
+	return process.env.MESHINA_TUI_BRAND === "hermes" || process.env.MESHINA_TUI_BRAND === "1";
+}
 
 /** Tips embedded at build time, one per line; blanks dropped. */
 const TIPS: readonly string[] = tipsText
@@ -157,10 +162,13 @@ export class WelcomeComponent implements Component {
 	) {}
 	get tip(): string | undefined {
 		if (this.#selectedTip === undefined) {
-			if (theme.getSymbolPreset() === "unicode" && Math.random() < 0.1) {
+			if (theme.getSymbolPreset() === "unicode" && Math.random() < 0.1 && !isHermesProduct()) {
 				this.#selectedTip = "Please use nerdfont 😭.";
 			} else {
-				this.#selectedTip = pickWeightedTip(TIPS, Math.random());
+				const pool = isHermesProduct()
+					? TIPS.filter((t) => !/\bomp\b/i.test(t) && !/oh-?my-?pi/i.test(t))
+					: TIPS;
+				this.#selectedTip = pickWeightedTip(pool.length ? pool : TIPS, Math.random());
 			}
 		}
 		return this.#selectedTip || undefined;
@@ -232,6 +240,11 @@ export class WelcomeComponent implements Component {
 	}
 
 	#renderLines(termWidth: number): string[] {
+		// Hermes product: Herm-fork braille splash panel (OMP theme colors).
+		if (isHermesProduct()) {
+			return this.#renderHermesSplash(termWidth);
+		}
+
 		// Box dimensions - responsive with max width and small-terminal support
 		const maxWidth = 100;
 		const boxWidth = Math.min(maxWidth, Math.max(0, termWidth - 2));
@@ -447,6 +460,99 @@ export class WelcomeComponent implements Component {
 		const elapsed = performance.now() - this.#animStart;
 		if (elapsed >= INTRO_MS) return REST_FRAME;
 		return introLogoFrame(elapsed / INTRO_MS);
+	}
+
+	/**
+	 * Hermes welcome: Herm braille 9-patch frame + wordmark/model, colored with
+	 * the active OMP theme (theme picker / light-dark still apply).
+	 */
+	#renderHermesSplash(termWidth: number): string[] {
+		const maxWidth = Math.min(100, Math.max(0, termWidth - 2));
+		// Frame chrome is 8+8 rows (top/bottom 9-patch). Need ~10+ inner rows for wordmark.
+		const height = Math.min(28, Math.max(26, 26));
+		if (maxWidth < 40) {
+			// Too narrow for full frame — compact themed fallback
+			const mark = pickWordmark(maxWidth);
+			const lines = [
+				theme.fg("dim", ` ${APP_NAME} v${this.version}`),
+				"",
+				...mark.map((l) => this.#centerText(theme.fg("accent", l), maxWidth)),
+				"",
+				this.#centerText(theme.bold("Welcome back!"), maxWidth),
+				this.#centerText(theme.fg("muted", this.modelName), maxWidth),
+				this.#centerText(theme.fg("borderMuted", this.providerName), maxWidth),
+			];
+			lines.push(...this.#renderTip(maxWidth));
+			return lines;
+		}
+
+		const { lines: raw, inner } = hermesBrailleFrame(maxWidth, height);
+		if (raw.length === 0) {
+			return [theme.fg("accent", "hermes")];
+		}
+
+		// Theme colors — follow picker (accent / muted / dim), not hardcoded pinks.
+		const frameColor = (s: string) => theme.fg("accent", s);
+		const muted = (s: string) => theme.fg("muted", s);
+		const dim = (s: string) => theme.fg("dim", s);
+
+		const word = pickWordmark(inner.w);
+		const meta = [
+			`${APP_NAME} v${this.version}`,
+			this.modelName ? `${this.modelName} · ${this.providerName}` : "",
+		].filter(Boolean);
+
+		const sessionHint =
+			this.recentSessions[0] != null
+				? `· ${this.recentSessions[0].name} (${this.recentSessions[0].timeAgo})`
+				: "";
+
+		const body: string[] = [
+			"Welcome back!",
+			"",
+			...word,
+			"",
+			...meta,
+			sessionHint,
+		].filter((l, i, a) => !(l === "" && a[i - 1] === ""));
+
+		// Paint frame; inject centered body into the inner vertical band.
+		const out: string[] = [];
+		const cw = inner.x;
+		const startBody = inner.y + Math.max(0, Math.floor((inner.h - body.length) / 2));
+
+		for (let row = 0; row < raw.length; row++) {
+			const line = raw[row]!;
+			const inBand = row >= inner.y && row < inner.y + inner.h;
+			if (!inBand) {
+				out.push(frameColor(line));
+				continue;
+			}
+			const bodyIdx = row - startBody;
+			const text = bodyIdx >= 0 && bodyIdx < body.length ? body[bodyIdx]! : "";
+			const left = line.slice(0, cw);
+			const right = line.slice(cw + inner.w);
+			const midPlain = text
+				? this.#centerText(
+						bodyIdx === 0
+							? theme.bold(theme.fg("accent", text))
+							: word.includes(text)
+								? theme.fg("accent", text)
+								: muted(text),
+						inner.w,
+					)
+				: " ".repeat(inner.w);
+			// centerText may exceed with ANSI — fit mid region width of plain spaces base
+			const midFitted = this.#fitToWidth(midPlain, inner.w);
+			out.push(frameColor(left) + midFitted + frameColor(right));
+		}
+
+		out.push(...this.#renderTip(maxWidth));
+		// Quiet tips strip for LSP noise on splash
+		if (this.lspServers.length > 0) {
+			out.push(dim(` LSP: ${this.lspServers.map((s) => s.name).slice(0, 4).join(", ")}`));
+		}
+		return out;
 	}
 }
 
