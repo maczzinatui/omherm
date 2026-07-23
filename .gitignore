@@ -78,3 +78,6 @@ python/robomp/.env
 
 # Local, machine-specific boot perf baseline (see packages/coding-agent/scripts/bench-guard.ts)
 packages/coding-agent/bench/boot-baseline.json
+# local bootstrap artifacts (run scripts/bootstrap-local-artifacts.sh)
+packages/natives/native/*.node
+packages/coding-agent/src/export/html/tool-views.generated.js
