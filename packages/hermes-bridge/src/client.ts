@@ -311,6 +311,56 @@ export class HermesGateway extends EventEmitter {
     await this.request("session.interrupt", {})
   }
 
+  /**
+   * Refresh footer-facing session fields.
+   * Note: `session.info` is a gateway *event*, not an RPC. Pull usage via
+   * `session.usage` and optional config keys via `config.get`.
+   */
+  async refreshInfo(): Promise<SessionInfo> {
+    try {
+      const usage = await this.request<Record<string, unknown>>("session.usage", {})
+      if (usage && typeof usage === "object") {
+        const mapped: SessionInfo["usage"] = {
+          input_tokens: num(usage.input ?? usage.input_tokens),
+          output_tokens: num(usage.output ?? usage.output_tokens),
+          total_tokens: num(usage.total ?? usage.total_tokens),
+          context_used: num(usage.context_used),
+          context_max: num(usage.context_max),
+          context_percent: num(usage.context_percent),
+          cost_usd: num(usage.cost_usd),
+          compressions: num(usage.compressions),
+        }
+        this.info = { ...this.info, usage: { ...this.info.usage, ...stripUndef(mapped) } }
+      }
+    } catch {
+      /* usage optional */
+    }
+    try {
+      // Prefer gateway push for model; config.get may expose reasoning_effort
+      const cfg = await this.request<Record<string, unknown>>("config.get", {
+        keys: ["model", "reasoning_effort", "provider"],
+      })
+      if (cfg && typeof cfg === "object") {
+        const patch: SessionInfo = {}
+        if (typeof cfg.model === "string") patch.model = cfg.model
+        if (typeof cfg.provider === "string") patch.provider = cfg.provider
+        if (typeof cfg.reasoning_effort === "string") patch.reasoning_effort = cfg.reasoning_effort
+        // Some gateways nest under values
+        const values = cfg.values as Record<string, unknown> | undefined
+        if (values) {
+          if (typeof values.model === "string") patch.model = values.model
+          if (typeof values.provider === "string") patch.provider = values.provider
+          if (typeof values.reasoning_effort === "string") patch.reasoning_effort = values.reasoning_effort
+        }
+        if (Object.keys(patch).length) this.info = { ...this.info, ...patch }
+      }
+    } catch {
+      /* config optional */
+    }
+    this.emitUi({ kind: "info", info: this.info })
+    return this.info
+  }
+
   async respondClarify(requestId: string, answer: string): Promise<void> {
     await this.request("clarify.respond", { request_id: requestId, answer })
   }
@@ -334,4 +384,18 @@ export class HermesGateway extends EventEmitter {
     this.ws = null
     this.fail(new Error("gateway closed"))
   }
+}
+
+function num(v: unknown): number | undefined {
+  if (typeof v === "number" && Number.isFinite(v)) return v
+  if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) return Number(v)
+  return undefined
+}
+
+function stripUndef<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  const out: Partial<T> = {}
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) (out as Record<string, unknown>)[k] = v
+  }
+  return out
 }

@@ -85,15 +85,20 @@ Map gateway events → existing UI event controller shapes in
 - [ ] `mtui` wrapper can still run **stock** `omp` for visual reference
 
 ### P1 — Hermes bridge package
-- [ ] `packages/hermes-bridge/` with gateway client (stdio/WS)
-- [ ] Event map: gateway → UiEvent (thinking, tool, text, footer info)
-- [ ] session.create / prompt.submit / interrupt
+- [x] `packages/hermes-bridge/` with gateway client (stdio/WS)
+- [x] Event map: gateway → UiEvent (thinking, tool, text, footer info)
+- [x] session.create / prompt.submit / interrupt
+- [x] refreshInfo via session.usage + config.get (session.info is event-only)
+- [ ] GatewayEvent → AgentSessionEvent edge mapper (for InteractiveMode)
 
 ### P2 — InteractiveMode on bridge
-- [ ] New entry: `src/mtui.ts` that constructs InteractiveMode-like shell with bridge
+- [x] New entry: `src/mtui.ts` — default full InteractiveMode; `--bridge` experimental
+- [x] Bridge shell uses OMP ToolExecution + Markdown (not LineBox) + model•effort footer
 - [ ] Prefer fork InteractiveMode and delete AgentSession calls in slices
-- [ ] First dogfood: one real Hermes turn with full OMP chrome
+- [ ] First dogfood: one real Hermes turn with full OMP InteractiveMode chrome
 
+### P2.5 — Crossovers (perf / memory / methods)
+See `docs/INTEGRATION_CROSSOVERS.md` — paint coalesce, native scrollback seal, Hermes compaction UI, Grok Build method-steal only, approvals/steer, no dual brain.
 ### P3 — Hermes chrome inside OMP settings (no Herm top tab bar)
 
 **Operator correction:** we do **not** need a Herm-style top task bar. OMP already has a strong **settings / selector** surface (`SettingsSelectorComponent`, session selector, model picker, etc.). Extend that:
