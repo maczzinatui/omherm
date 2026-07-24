@@ -116,3 +116,14 @@ export {
   type ToolStatus,
   type ToolKind,
 } from "./tools-port.ts"
+export {
+  createMemoryPort,
+  memoryPort,
+  parseMemoryStatusOutput,
+  formatMemoryLabel,
+  formatMemoryDescription,
+  type MemoryFile,
+  type MemoryPort,
+  type MemoryStatus,
+  type MemoryKind,
+} from "./memory-port.ts"
