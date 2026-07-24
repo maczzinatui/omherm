@@ -38,8 +38,18 @@ describe("hermes model catalog", () => {
     const { formatHermesModelSlash, bareModelId } = await import("./hermes-model-catalog.ts")
     expect(bareModelId("nous", "nous/foo")).toBe("foo")
     expect(bareModelId("nous", "laguna-xs-2.1:free")).toBe("laguna-xs-2.1:free")
+    // org/name:tag must NOT lose the org segment
+    expect(bareModelId("nous", "inclusionai/ling-3.0-flash:free")).toBe(
+      "inclusionai/ling-3.0-flash:free",
+    )
+    expect(bareModelId("nous", "nous/inclusionai/ling-3.0-flash:free")).toBe(
+      "inclusionai/ling-3.0-flash:free",
+    )
     expect(formatHermesModelSlash("nous", "laguna-xs-2.1:free")).toBe(
       "/model laguna-xs-2.1:free --provider nous --global",
+    )
+    expect(formatHermesModelSlash("nous", "inclusionai/ling-3.0-flash:free")).toBe(
+      "/model inclusionai/ling-3.0-flash:free --provider nous --global",
     )
     expect(formatHermesModelSlash("xai-oauth", "grok-4", { global: false })).toBe(
       "/model grok-4 --provider xai-oauth",
@@ -57,6 +67,18 @@ describe("hermes model catalog", () => {
     })
     expect(r.mode).toBe("gateway")
     expect(calls[0]).toBe(formatHermesModelSlash("nous", "hermes-3"))
+  })
+
+  test("applyHermesModelLive fails loud on not-found prose", async () => {
+    const { applyHermesModelLive } = await import("./hermes-model-catalog.ts")
+    await expect(
+      applyHermesModelLive("nous", "inclusionai/ling-3.0-flash:free", {
+        slashExec: async () => ({
+          output:
+            "live session sync failed: Model `ling-3.0-flash:free` was not found in this provider's model listing.",
+        }),
+      }),
+    ).rejects.toThrow(/not found/i)
   })
 })
 

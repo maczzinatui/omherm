@@ -40,6 +40,7 @@ export {
   applyHermesModelLive,
   formatHermesModelSlash,
   bareModelId,
+  isHermesModelSwitchFailureText,
   flattenCatalog,
   type HermesModelCatalog,
   type HermesModelRow,

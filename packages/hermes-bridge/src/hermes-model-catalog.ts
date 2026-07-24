@@ -161,13 +161,22 @@ export async function applyHermesModelGlobal(
   await set("model.default", bare)
 }
 
-/** Strip provider prefix from model id when present. */
+/**
+ * Normalize model id for Hermes config / `/model`.
+ *
+ * Only strip a leading `<provider>/` prefix. Do **not** strip other path
+ * segments — Nous/OpenRouter ids are often `org/name:tag`
+ * (e.g. `inclusionai/ling-3.0-flash:free`). Stripping the org made the
+ * gateway look up `ling-3.0-flash:free` and fail "not found in listing".
+ */
 export function bareModelId(provider: string, modelId: string): string {
-  if (modelId.includes("/") && modelId.startsWith(`${provider}/`)) {
-    return modelId.slice(provider.length + 1)
+  const raw = (modelId || "").trim()
+  if (!raw) return raw
+  const p = (provider || "").trim()
+  if (p && raw.startsWith(`${p}/`)) {
+    return raw.slice(p.length + 1)
   }
-  if (modelId.includes("/")) return modelId.split("/").slice(1).join("/")
-  return modelId
+  return raw
 }
 
 /**
@@ -175,6 +184,9 @@ export function bareModelId(provider: string, modelId: string): string {
  * optional config persist). `--global` writes config.yaml the same way the
  * stock Hermes TUI does — config-only CLI is not enough for a running session
  * (session model_override / in-memory agent ignore bare config.yaml).
+ *
+ * Model token is the provider-native id (may contain `/` and `:`). Provider
+ * is always via `--provider` so parse_model_flags does not eat org/name paths.
  */
 export function formatHermesModelSlash(
   provider: string,
@@ -183,7 +195,10 @@ export function formatHermesModelSlash(
 ): string {
   const bare = bareModelId(provider, modelId)
   const g = opts?.global === false ? "" : " --global"
-  return `/model ${bare} --provider ${provider}${g}`
+  // Quote model when it has shell-ish / spaces — gateway splits on flags, not shell,
+  // but spaces would break join. Slashes and colons are fine unquoted.
+  const modelTok = /\s/.test(bare) ? `"${bare.replace(/"/g, '\\"')}"` : bare
+  return `/model ${modelTok} --provider ${provider}${g}`
 }
 
 export type ApplyHermesModelLiveResult = {
@@ -191,6 +206,22 @@ export type ApplyHermesModelLiveResult = {
   command?: string
   output?: string
   warning?: string
+}
+
+/** True when slash/gateway text means the switch did not stick. */
+export function isHermesModelSwitchFailureText(text: string): boolean {
+  const blob = text.toLowerCase()
+  if (!blob.trim()) return false
+  return (
+    blob.includes("session busy") ||
+    blob.includes("was not found") ||
+    blob.includes("not found in this provider") ||
+    blob.includes("could not switch") ||
+    blob.includes("unknown provider") ||
+    blob.includes("model value required") ||
+    (blob.includes("model switch") && blob.includes("failed")) ||
+    blob.includes("live session sync failed")
+  )
 }
 
 /**
@@ -211,13 +242,9 @@ export async function applyHermesModelLive(
   const command = formatHermesModelSlash(provider, modelId, { global })
   if (opts?.slashExec) {
     const r = await opts.slashExec(command)
-    const blob = `${r.output ?? ""}\n${r.warning ?? ""}`.toLowerCase()
-    // Fail loud on known busy / hard failures so coat doesn't green-check a no-op.
-    if (
-      blob.includes("session busy") ||
-      blob.includes("model switch") && blob.includes("failed") ||
-      blob.includes("could not switch")
-    ) {
+    const blob = `${r.output ?? ""}\n${r.warning ?? ""}`
+    // Fail loud — gateway often returns ok with failure prose in output.
+    if (isHermesModelSwitchFailureText(blob)) {
       throw new Error((r.output || r.warning || "gateway model switch failed").trim().slice(0, 500))
     }
     return {
