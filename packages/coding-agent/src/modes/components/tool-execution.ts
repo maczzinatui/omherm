@@ -38,7 +38,8 @@ import {
 	resolveImageOptions,
 	truncateToWidth,
 } from "../../tools/render-utils";
-import { type FirstResultViewportRepaint, toolRenderers } from "../../tools/renderers";
+import { type FirstResultViewportRepaint, resolveToolRenderer, toolRenderers } from "../../tools/renderers";
+import { humanizeToolName } from "../../tools/generic-tool-render";
 import { TODO_STRIKE_TOTAL_FRAMES, type TodoToolDetails } from "../../tools/todo";
 import { isFramedBlockComponent, markFramedBlockComponent, renderStatusLine, WidthAwareText } from "../../tui";
 import { sanitizeWithOptionalSixelPassthrough } from "../../utils/sixel";
@@ -384,7 +385,7 @@ export class ToolExecutionComponent extends Container implements NativeScrollbac
 	) {
 		super();
 		this.#toolName = toolName;
-		this.#toolLabel = tool?.label ?? toolName;
+		this.#toolLabel = tool?.label ?? humanizeToolName(toolName);
 		this.#showImages = options.showImages ?? true;
 		this.#editFuzzyThreshold = options.editFuzzyThreshold;
 		this.#editAllowFuzzy = options.editAllowFuzzy;
@@ -404,14 +405,14 @@ export class ToolExecutionComponent extends Container implements NativeScrollbac
 		this.#contentBox = new Box(0, 1);
 		this.#contentText = new WidthAwareText(contentWidth => this.#formatToolExecution(contentWidth), 1, 1);
 
-		// Use Box for custom tools or built-in tools that have renderers
-		const hasRenderer = toolName in toolRenderers;
+		// Prefer framed contentBox for everything: dedicated OMP renderers OR the
+		// hermes/generic framed fallback (black-box slabs). Flat contentText only
+		// if something forces it later — not the default product path.
 		const hasCustomRenderer = !!(tool?.renderCall || tool?.renderResult);
-		if (hasCustomRenderer || hasRenderer) {
-			this.addChild(this.#contentBox);
-		} else {
-			this.addChild(this.#contentText);
-		}
+		this.addChild(this.#contentBox);
+		// Keep contentText constructed for #formatToolExecution tests / emergency
+		// fallback; not mounted by default.
+		void hasCustomRenderer;
 		// Tool blocks are visually distinct cards (background-tinted or framed),
 		// so keep their horizontal padding even when the user enables tight layout.
 		this.setIgnoreTight(true);
@@ -650,7 +651,7 @@ export class ToolExecutionComponent extends Container implements NativeScrollbac
 		const isStreamingArgs = !this.#argsComplete && (isEditLikeToolName(this.#toolName) || this.#toolName === "write");
 		const isBackgroundAsyncRunning =
 			(this.#result?.details as { async?: { state?: string } } | undefined)?.async?.state === "running";
-		const renderer = toolRenderers[this.#toolName] as
+		const renderer = resolveToolRenderer(this.#toolName) as
 			| {
 					animatedPendingPreview?: boolean | ((args: unknown) => boolean);
 					animatedPartialResult?: boolean | ((args: unknown) => boolean);
@@ -660,21 +661,16 @@ export class ToolExecutionComponent extends Container implements NativeScrollbac
 		const partialAnimation = renderer?.animatedPartialResult;
 		const pendingCallConsumesSpinner =
 			this.#result === undefined &&
-			(renderer === undefined
-				? // Only the generic #formatToolExecution fallback consumes the frame;
-					// a custom renderCall/renderResult pair routes through the custom
-					// branch whose pending label is a static tool-name Text.
-					!this.#tool?.renderCall && !this.#tool?.renderResult
-				: typeof pendingAnimation === "function"
-					? pendingAnimation(this.#args)
-					: pendingAnimation === true);
+			(typeof pendingAnimation === "function"
+				? pendingAnimation(this.#args)
+				: pendingAnimation === true ||
+					// generic framed path and default tools: spinner while pending
+					true);
 		const partialResultConsumesSpinner =
 			this.#result !== undefined &&
-			(renderer === undefined
-				? !this.#tool?.renderCall && !this.#tool?.renderResult
-				: typeof partialAnimation === "function"
-					? partialAnimation(this.#args)
-					: partialAnimation === true);
+			(typeof partialAnimation === "function"
+				? partialAnimation(this.#args)
+				: partialAnimation === true);
 		const isLivePartialTool =
 			this.#isPartial &&
 			this.#toolName !== "todo" &&
@@ -864,6 +860,11 @@ export class ToolExecutionComponent extends Container implements NativeScrollbac
 		this.#updateDisplay();
 	}
 
+	/** Whether tool args/output are expanded (for click-to-toggle). */
+	isExpanded(): boolean {
+		return this.#expanded;
+	}
+
 	setShowImages(show: boolean): void {
 		this.#showImages = show;
 		this.#updateDisplay();
@@ -889,7 +890,7 @@ export class ToolExecutionComponent extends Container implements NativeScrollbac
 
 	#rendererFlag(name: "forceResultViewportRepaintOnSettle"): boolean {
 		const toolValue = (this.#tool as Record<string, unknown> | undefined)?.[name];
-		const rendererValue = toolRenderers[this.#toolName]?.[name];
+		const rendererValue = resolveToolRenderer(this.#toolName)?.[name];
 		return toolValue === true || (toolValue === undefined && rendererValue === true);
 	}
 
@@ -905,7 +906,9 @@ export class ToolExecutionComponent extends Container implements NativeScrollbac
 		const toolValue = (this.#tool as { forceFirstResultViewportRepaint?: FirstResultViewportRepaint } | undefined)
 			?.forceFirstResultViewportRepaint;
 		const value =
-			toolValue !== undefined ? toolValue : toolRenderers[this.#toolName]?.forceFirstResultViewportRepaint;
+			toolValue !== undefined
+				? toolValue
+				: resolveToolRenderer(this.#toolName)?.forceFirstResultViewportRepaint;
 		if (typeof value === "function") return value(this.#args, this.#renderState);
 		return value === true;
 	}
@@ -1049,9 +1052,9 @@ export class ToolExecutionComponent extends Container implements NativeScrollbac
 			const customFramed = this.#contentBox.children.some(isFramedBlockComponent);
 			this.#contentBox.setPaddingX(customFramed ? 0 : 1);
 			this.#contentBox.setBgFn(customFramed ? undefined : stateBgFn);
-		} else if (this.#toolName in toolRenderers) {
-			// Built-in tools with renderers
-			const renderer = toolRenderers[this.#toolName];
+		} else {
+			// Built-in OMP renderers + framed generic for Hermes-only tools
+			const renderer = resolveToolRenderer(this.#toolName);
 
 			// Clean up previous multi-file boxes
 			for (const box of this.#multiFileBoxes) {
@@ -1185,12 +1188,6 @@ export class ToolExecutionComponent extends Container implements NativeScrollbac
 					}
 				}
 			}
-		} else {
-			// Generic fallback (no custom/built-in renderer). WidthAwareText
-			// reformats at render time so output fills the actual terminal width
-			// instead of a fixed column cap.
-			this.#contentText.setCustomBgFn(stateBgFn);
-			this.#contentText.invalidate();
 		}
 
 		// Handle images (same for both custom and built-in)
@@ -1258,13 +1255,16 @@ export class ToolExecutionComponent extends Container implements NativeScrollbac
 	 * Build render context for tools that need extra state (bash, python, edit)
 	 */
 	#buildRenderContext(): Record<string, unknown> {
-		const context: Record<string, unknown> = {};
+		const context: Record<string, unknown> = {
+			toolName: this.#toolName,
+			toolLabel: this.#toolLabel,
+		};
 		const normalizeTimeoutSeconds = (value: unknown, maxSeconds: number): number | undefined => {
 			if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
 			return Math.max(1, Math.min(maxSeconds, value));
 		};
 
-		if (this.#toolName === "bash") {
+		if (this.#toolName === "bash" || this.#toolName === "terminal" || this.#toolName === "process") {
 			// Bash needs render context even before a result exists. The renderer uses the pending-call args
 			// plus this context to keep the inline command preview visible while tool-call JSON is still streaming.
 			if (this.#result) {
@@ -1275,9 +1275,11 @@ export class ToolExecutionComponent extends Container implements NativeScrollbac
 			context.expanded = this.#expanded;
 			context.previewLines = BASH_DEFAULT_PREVIEW_LINES;
 			context.timeout = normalizeTimeoutSeconds(this.#args?.timeout, 3600);
-		} else if (this.#toolName === "eval" && this.#result) {
-			const output = this.#getTextOutput().trimEnd();
-			context.output = output;
+		} else if (this.#toolName === "eval" || this.#toolName === "execute_code") {
+			if (this.#result) {
+				const output = this.#getTextOutput().trimEnd();
+				context.output = output;
+			}
 			context.expanded = this.#expanded;
 			context.previewLines = EVAL_DEFAULT_PREVIEW_LINES;
 		} else if (this.#toolName === "task") {

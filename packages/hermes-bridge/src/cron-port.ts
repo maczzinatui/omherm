@@ -6,7 +6,7 @@
 import { existsSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
-import { spawnSync } from "node:child_process"
+import { spawn } from "node:child_process"
 
 /** Herm-normalized job DTO (UI binds only this). */
 export type CronJob = {
@@ -100,18 +100,42 @@ function hermesHome(): string {
 	return process.env.HERMES_HOME?.trim() || join(homedir(), ".hermes")
 }
 
-function runCron(args: string[]): { ok: boolean; stdout: string; stderr: string; code: number } {
-	const r = spawnSync(hermesBin(), ["cron", ...args], {
-		encoding: "utf-8",
-		maxBuffer: 8 * 1024 * 1024,
-		env: { ...process.env, HERMES_ACCEPT_HOOKS: process.env.HERMES_ACCEPT_HOOKS || "1" },
+function runCron(args: string[]): Promise<{ ok: boolean; stdout: string; stderr: string; code: number }> {
+	return new Promise((resolve) => {
+		const child = spawn(hermesBin(), ["cron", ...args], {
+			env: { ...process.env, HERMES_ACCEPT_HOOKS: process.env.HERMES_ACCEPT_HOOKS || "1" },
+			stdio: ["ignore", "pipe", "pipe"],
+		})
+		const outChunks: Buffer[] = []
+		const errChunks: Buffer[] = []
+		let outBytes = 0
+		const cap = 8 * 1024 * 1024
+		child.stdout?.on("data", (d: Buffer) => {
+			if (outBytes < cap) {
+				outChunks.push(d)
+				outBytes += d.length
+			}
+		})
+		child.stderr?.on("data", (d: Buffer) => {
+			errChunks.push(d)
+		})
+		child.on("error", (e) => {
+			resolve({
+				ok: false,
+				stdout: Buffer.concat(outChunks).toString("utf-8"),
+				stderr: e instanceof Error ? e.message : String(e),
+				code: 1,
+			})
+		})
+		child.on("close", (code) => {
+			resolve({
+				ok: code === 0,
+				stdout: Buffer.concat(outChunks).toString("utf-8"),
+				stderr: Buffer.concat(errChunks).toString("utf-8"),
+				code: code ?? 1,
+			})
+		})
 	})
-	return {
-		ok: r.status === 0,
-		stdout: r.stdout || "",
-		stderr: r.stderr || "",
-		code: r.status ?? 1,
-	}
 }
 
 function asArr(v: unknown): string[] | undefined {
@@ -271,7 +295,7 @@ export function createCronPort(): CronPort {
 		async list(opts = {}) {
 			const args = ["list"]
 			if (opts.all) args.push("--all")
-			const r = runCron(args)
+			const r = await runCron(args)
 			if (!r.ok && !r.stdout.trim()) {
 				throw new Error(r.stderr.trim() || `hermes cron list failed (${r.code})`)
 			}
@@ -301,31 +325,31 @@ export function createCronPort(): CronPort {
 		},
 
 		async status() {
-			const r = runCron(["status"])
+			const r = await runCron(["status"])
 			const text = (r.stdout || r.stderr || "").trim() || `cron status exit ${r.code}`
 			return parseCronStatusOutput(text)
 		},
 
 		async pause(jobId) {
-			const r = runCron(["pause", jobId])
+			const r = await runCron(["pause", jobId])
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `pause failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},
 
 		async resume(jobId) {
-			const r = runCron(["resume", jobId])
+			const r = await runCron(["resume", jobId])
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `resume failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},
 
 		async run(jobId) {
-			const r = runCron(["run", jobId])
+			const r = await runCron(["run", jobId])
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `run failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},
 
 		async remove(jobId) {
-			const r = runCron(["remove", jobId])
+			const r = await runCron(["remove", jobId])
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `remove failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},
@@ -341,7 +365,7 @@ export function createCronPort(): CronPort {
 			for (const s of input.skills || []) args.push("--skill", s)
 			args.push(input.schedule)
 			if (input.prompt) args.push(input.prompt)
-			const r = runCron(args)
+			const r = await runCron(args)
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `create failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},
@@ -361,7 +385,7 @@ export function createCronPort(): CronPort {
 			for (const s of input.skills || []) args.push("--skill", s)
 			for (const s of input.add_skills || []) args.push("--add-skill", s)
 			for (const s of input.remove_skills || []) args.push("--remove-skill", s)
-			const r = runCron(args)
+			const r = await runCron(args)
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `edit failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},
@@ -370,7 +394,7 @@ export function createCronPort(): CronPort {
 			const args = ["runs"]
 			if (jobId) args.push(jobId)
 			if (limit) args.push("--limit", String(limit))
-			const r = runCron(args)
+			const r = await runCron(args)
 			if (!r.ok && !r.stdout.trim()) {
 				throw new Error(r.stderr.trim() || `runs failed (${r.code})`)
 			}

@@ -3014,6 +3014,7 @@ export function getSettingsListTheme(): SettingsListTheme {
 			dimmed ? theme.fg("dim", theme.underline(text)) : theme.fg("muted", theme.bold(theme.underline(text))),
 		section: (text: string, active: boolean) =>
 			active ? theme.fg("accent", theme.bold(text)) : theme.fg("muted", text),
-		hovered: (text: string) => theme.bg("selectedBg", text),
+		// Accent fg on selectedBg — plain selectedBg alone is too close to panel bg on dark themes.
+		hovered: (text: string) => theme.bg("selectedBg", theme.fg("accent", text)),
 	};
 }

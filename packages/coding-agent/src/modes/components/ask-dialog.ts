@@ -6,7 +6,9 @@ import {
 	matchesKey,
 	renderInlineMarkdown,
 	replaceTabs,
+	routeSgrMouseInput,
 	ScrollView,
+	type SgrMouseEvent,
 	type Tab,
 	TabBar,
 	Text,
@@ -326,6 +328,17 @@ function renderRowLabel(
 	return lines;
 }
 
+/** Hit-test geometry for fullscreen SGR mouse (rows are 0-based frame lines). */
+interface AskDialogMouseFrame {
+	tabRowStart: number;
+	tabRowCount: number;
+	bodyStart: number;
+	bodyRows: number;
+	/** Per visible body line: option/row index, submit action, or null. */
+	bodyHit: Array<number | "submit" | null>;
+	footerRow: number;
+}
+
 export class AskDialogComponent implements Component {
 	#states: QuestionState[];
 	#activeTabIndex = 0;
@@ -341,6 +354,19 @@ export class AskDialogComponent implements Component {
 	#stableHeight: { key: string; total: number } | undefined;
 	#previewCache: PreviewRenderCache = new Map();
 	#overflowLayouts = new WeakMap<ExtensionAskDialogQuestion, Set<string>>();
+	#mouseFrame: AskDialogMouseFrame = {
+		tabRowStart: 0,
+		tabRowCount: 0,
+		bodyStart: 0,
+		bodyRows: 0,
+		bodyHit: [],
+		footerRow: 0,
+	};
+	/** Absolute (unscrolled) line start per option row — last question list layout. */
+	#lineStartByRow: number[] = [];
+	#listTotalLines = 0;
+	/** Absolute line of Submit row in submit tab body. */
+	#submitAbsoluteLine = -1;
 
 	constructor(
 		private readonly questions: ExtensionAskDialogQuestion[],
@@ -387,6 +413,11 @@ export class AskDialogComponent implements Component {
 
 	handleInput(keyData: string): void {
 		if (this.#closed || this.#promptActive) return;
+		// Fullscreen SGR mouse (alt screen tracking on while ask is overlayed).
+		if (keyData.startsWith("\x1b[<")) {
+			this.#handleMouse(keyData);
+			return;
+		}
 		// Reset the inactivity countdown on any key that reaches past the
 		// closed/prompt guards, matching HookSelector/HookInput semantics.
 		this.#countdown?.reset();
@@ -403,6 +434,66 @@ export class AskDialogComponent implements Component {
 			return;
 		}
 		this.#handleQuestionInput(keyData);
+	}
+
+	#handleMouse(data: string): void {
+		this.#countdown?.reset();
+		routeSgrMouseInput(data, event => this.#routeMouse(event));
+	}
+
+	#routeMouse(event: SgrMouseEvent): boolean {
+		const frame = this.#mouseFrame;
+		if (event.wheel !== null) {
+			if (this.#isSubmitTab()) {
+				this.#submitScrollOffset = Math.max(0, this.#submitScrollOffset + event.wheel);
+				this.#requestRender();
+				return true;
+			}
+			const active = this.#activeQuestionState();
+			if (active) {
+				active.state.scrollOffset = Math.max(0, active.state.scrollOffset + event.wheel);
+				active.state.manualScroll = true;
+				this.#requestRender();
+			}
+			return true;
+		}
+		if (!event.leftClick) return true;
+
+		// Tabs
+		const tabLine = event.row - frame.tabRowStart;
+		if (frame.tabRowCount > 0 && tabLine >= 0 && tabLine < frame.tabRowCount && this.#tabBar) {
+			const tab = this.#tabBar.tabAt(tabLine, Math.max(0, event.col - 2));
+			if (tab) {
+				const idx = tab.id === "submit" ? this.#submitTabIndex() : Number.parseInt(tab.id, 10);
+				if (Number.isFinite(idx)) {
+					this.#activeTabIndex = idx;
+					this.#submitScrollOffset = 0;
+					this.#requestRender();
+				}
+			}
+			return true;
+		}
+
+		const bodyLine = event.row - frame.bodyStart;
+		if (bodyLine >= 0 && bodyLine < frame.bodyRows) {
+			const hit = frame.bodyHit[bodyLine];
+			if (hit === "submit") {
+				this.#finishSubmit();
+				return true;
+			}
+			if (typeof hit === "number") {
+				if (this.#isSubmitTab()) return true;
+				const active = this.#activeQuestionState();
+				if (!active) return true;
+				const rows = this.#questionRows(active.question);
+				if (!rows[hit]) return true;
+				active.state.cursorIndex = hit;
+				active.state.manualScroll = false;
+				this.#activateRow(active.question, active.state, rows[hit]!);
+				return true;
+			}
+		}
+		return true;
 	}
 
 	render(width: number): readonly string[] {
@@ -424,6 +515,40 @@ export class AskDialogComponent implements Component {
 			? this.#renderSubmitBody(innerWidth, bodyRows)
 			: this.#renderQuestionBody(innerWidth, bodyRows);
 		const footer = this.#footerHintText(bodyLines.indicator);
+
+		// Geometry for SGR mouse (fullscreen paints from row 0).
+		const tabRowCount = this.#hasSubmitTab() ? 1 : 0;
+		const tabRowStart = 1; // after topBorder
+		const bodyStart = 1 + headerLines.length + 1; // top + header + divider
+		const footerRow = bodyStart + bodyRows + 1; // after body + divider
+		const bodyHit: Array<number | "submit" | null> = new Array(bodyRows).fill(null);
+		if (this.#isSubmitTab()) {
+			const absSubmit = this.#submitAbsoluteLine;
+			if (absSubmit >= 0) {
+				const vis = absSubmit - this.#submitScrollOffset;
+				if (vis >= 0 && vis < bodyRows) bodyHit[vis] = "submit";
+			}
+		} else {
+			const active = this.#activeQuestionState();
+			const offset = active?.state.scrollOffset ?? 0;
+			for (let i = 0; i < this.#lineStartByRow.length; i++) {
+				const start = this.#lineStartByRow[i] ?? 0;
+				const end = this.#lineStartByRow[i + 1] ?? this.#listTotalLines;
+				for (let abs = start; abs < end; abs++) {
+					const vis = abs - offset;
+					if (vis >= 0 && vis < bodyRows) bodyHit[vis] = i;
+				}
+			}
+		}
+		this.#mouseFrame = {
+			tabRowStart,
+			tabRowCount,
+			bodyStart,
+			bodyRows,
+			bodyHit,
+			footerRow,
+		};
+
 		return [
 			topBorder(width, this.#titleText()),
 			...headerLines.map(line => row(line, width)),
@@ -608,6 +733,11 @@ export class AskDialogComponent implements Component {
 		const isEnter = matchesKey(keyData, "enter") || matchesKey(keyData, "return") || keyData === "\n";
 		const isSpace = matchesKey(keyData, "space") || keyData === " ";
 		if (!isEnter && !(question.multi && isSpace)) return;
+		this.#activateRow(question, state, rowItem);
+	}
+
+	/** Activate the given option/other row (Enter/Space or mouse click). */
+	#activateRow(question: ExtensionAskDialogQuestion, state: QuestionState, rowItem: QuestionRow): void {
 		if (rowItem.kind === "other") {
 			void this.#promptForCustomInput(question, state, rowItem);
 			return;
@@ -768,6 +898,8 @@ export class AskDialogComponent implements Component {
 			renderedRows = renderRows(width - 1);
 		}
 		const { allLines, lineStartByRow } = renderedRows;
+		this.#lineStartByRow = lineStartByRow;
+		this.#listTotalLines = allLines.length;
 		const cursorStart = lineStartByRow[state.cursorIndex] ?? 0;
 		const cursorEnd = lineStartByRow[state.cursorIndex + 1] ?? allLines.length;
 		this.#questionCanPage = cursorEnd - cursorStart > rows;
@@ -823,6 +955,7 @@ export class AskDialogComponent implements Component {
 		}
 		allLines.push("");
 		allLines.push(theme.fg("accent", `${theme.nav.cursor} ${SUBMIT_OPTION}`));
+		this.#submitAbsoluteLine = allLines.length - 1;
 		this.#submitScrollOffset = clamp(this.#submitScrollOffset, 0, Math.max(0, allLines.length - rows));
 		const scrollView = new ScrollView(allLines, {
 			height: rows,

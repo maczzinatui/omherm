@@ -30,6 +30,7 @@ import { todoToolRenderer } from "./todo";
 import { createVibeToolRenderer } from "./vibe";
 import { writeToolRenderer } from "./write";
 import { setXdevRendererLookup } from "./xdev";
+import { genericToolRenderer } from "./generic-tool-render";
 
 /**
  * Per-renderer opt-in for a full viewport replay when the first result
@@ -76,22 +77,47 @@ export type ToolRenderer = {
 	forceResultViewportRepaintOnSettle?: boolean;
 };
 
+/** Resolve renderer for a tool name — Hermes aliases live on the map; everything else gets framed generic. */
+export function resolveToolRenderer(toolName: string): ToolRenderer {
+	return (toolRenderers[toolName] as ToolRenderer | undefined) ?? (genericToolRenderer as ToolRenderer);
+}
+
+export { genericToolRenderer, humanizeToolName } from "./generic-tool-render";
+
 export const toolRenderers: Record<string, ToolRenderer> = {
 	ask: askToolRenderer as ToolRenderer,
 	ast_grep: astGrepToolRenderer as ToolRenderer,
 	ast_edit: astEditToolRenderer as ToolRenderer,
 	bash: bashToolRenderer as ToolRenderer,
+	// Hermes brain tool names → stock OMP chrome (Cadillac: map, don't reinvent).
+	terminal: bashToolRenderer as ToolRenderer,
+	process: bashToolRenderer as ToolRenderer,
 	browser: browserToolRenderer as ToolRenderer,
+	browser_navigate: browserToolRenderer as ToolRenderer,
+	browser_click: browserToolRenderer as ToolRenderer,
+	browser_type: browserToolRenderer as ToolRenderer,
+	browser_press: browserToolRenderer as ToolRenderer,
+	browser_scroll: browserToolRenderer as ToolRenderer,
+	browser_snapshot: browserToolRenderer as ToolRenderer,
+	browser_vision: browserToolRenderer as ToolRenderer,
+	browser_console: browserToolRenderer as ToolRenderer,
 	debug: debugToolRenderer as ToolRenderer,
 	eval: evalToolRenderer as ToolRenderer,
+	execute_code: evalToolRenderer as ToolRenderer,
 	edit: editToolRenderer as ToolRenderer,
 	apply_patch: editToolRenderer as ToolRenderer,
+	patch: editToolRenderer as ToolRenderer,
 	glob: globToolRenderer as ToolRenderer,
 	grep: grepToolRenderer as ToolRenderer,
+	search_files: grepToolRenderer as ToolRenderer,
 	lsp: lspToolRenderer as ToolRenderer,
 	inspect_image: inspectImageToolRenderer as ToolRenderer,
-	hub: hubToolRenderer as ToolRenderer,
+	// Lazy: hub module can close a cycle through sdk/tools (same TDZ class as task).
+	get hub(): ToolRenderer {
+		return hubToolRenderer as ToolRenderer;
+	},
 	read: readToolRenderer as ToolRenderer,
+	read_file: readToolRenderer as ToolRenderer,
 	// Keyed by xd:// resolution-device names: the write dispatch delegates here
 	// by dispatch tool, and historical `resolve` tool transcripts still render
 	// through the `resolve` entry. Both devices carry the same ResolveDetails.
@@ -111,12 +137,15 @@ export const toolRenderers: Record<string, ToolRenderer> = {
 	github: githubToolRenderer as ToolRenderer,
 	goal: goalToolRenderer as ToolRenderer,
 	web_search: webSearchToolRenderer as ToolRenderer,
+	web_extract: webSearchToolRenderer as ToolRenderer,
+	open_page: webSearchToolRenderer as ToolRenderer,
 	vibe_spawn: createVibeToolRenderer("spawn") as ToolRenderer,
 	vibe_send: createVibeToolRenderer("send") as ToolRenderer,
 	vibe_wait: createVibeToolRenderer("wait") as ToolRenderer,
 	vibe_kill: createVibeToolRenderer("kill") as ToolRenderer,
 	vibe_list: createVibeToolRenderer("list") as ToolRenderer,
 	write: writeToolRenderer as ToolRenderer,
+	write_file: writeToolRenderer as ToolRenderer,
 };
 
 // Wire the xd:// render delegation. Injected (instead of the xdev module

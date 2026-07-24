@@ -29,6 +29,7 @@ import {
 	Loader,
 	Markdown,
 	ProcessTerminal,
+	routeSgrMouseInput,
 	Spacer,
 	setTerminalTextSizing,
 	setTuiTight,
@@ -146,6 +147,8 @@ import {
 	VibeSessionRegistry,
 } from "../vibe/runtime";
 import type { AssistantMessageComponent } from "./components/assistant-message";
+import { AssistantMessageComponent as AssistantMessageComponentClass } from "./components/assistant-message";
+import { ToolExecutionComponent } from "./components/tool-execution";
 import type { BashExecutionComponent } from "./components/bash-execution";
 import { ChatBlock, type ChatBlockHost } from "./components/chat-block";
 import { CustomEditor } from "./components/custom-editor";
@@ -160,6 +163,7 @@ import { StatusLineComponent } from "./components/status-line";
 import type { ToolExecutionHandle } from "./components/tool-execution";
 import { TranscriptContainer } from "./components/transcript-container";
 import { WelcomeComponent, type LspServerInfo as WelcomeLspServerInfo } from "./components/welcome";
+import { QuickAccessBar } from "./components/quick-access-bar";
 import { BtwController } from "./controllers/btw-controller";
 import { CommandController } from "./controllers/command-controller";
 import { EventController } from "./controllers/event-controller";
@@ -441,6 +445,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	omfgContainer: Container;
 	errorBannerContainer: Container;
 	modelCycleContainer: Container;
+	quickAccessBar: QuickAccessBar;
 	editor: CustomEditor;
 	editorContainer: Container;
 	hookWidgetContainerAbove: Container;
@@ -711,6 +716,14 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.omfgContainer = new AnchoredLiveContainer();
 		this.errorBannerContainer = new AnchoredLiveContainer();
 		this.modelCycleContainer = new AnchoredLiveContainer();
+		this.quickAccessBar = new QuickAccessBar();
+		this.quickAccessBar.setButtons([
+			{
+				id: "settings",
+				label: "Settings",
+				onActivate: () => this.showSettingsSelector(),
+			},
+		]);
 		this.editor = new CustomEditor(getEditorTheme());
 		this.ui.enableScopedInputRender(this.editor);
 		this.editor.setUseTerminalCursor(this.ui.getShowHardwareCursor());
@@ -804,6 +817,11 @@ export class InteractiveMode implements InteractiveModeContext {
 			const handle = getHermesBrainHandle(this.session);
 			if (!handle) return;
 			const ui = this.#extensionUiController;
+			// OMP loader line — Hermes kaomoji/status.update, not transcript rows.
+			handle.setWorkingMessage = (message?: string) => {
+				this.ensureLoadingAnimation();
+				this.setWorkingMessage(message);
+			};
 			handle.setDialogHost({
 				clarify: async (req) => {
 					const optionLabels =
@@ -986,6 +1004,12 @@ export class InteractiveMode implements InteractiveModeContext {
 			this.ui.addChild(new Spacer(1));
 		}
 
+		// Top quick-access: one blank row under the window chrome so the chip
+		// sits closer to the braille welcome (not flush under the taskbar),
+		// then the bar itself. Hit geometry includes the bar's trail spacer.
+		this.ui.addChild(new Spacer(1));
+		this.ui.addChild(this.quickAccessBar);
+
 		if (!startupQuiet) {
 			// Add welcome header
 			this.#welcomeComponent = new WelcomeComponent(
@@ -1062,6 +1086,10 @@ export class InteractiveMode implements InteractiveModeContext {
 		// Start the UI. Cold `omp` launch opts into clearing on the first paint so
 		// the initial welcome frame does not append over the previous run's scrollback.
 		this.ui.start({ clearScrollback: options.clearInitialTerminalHistory === true });
+		// Main-screen mouse: thinking header expand/collapse + tool chrome clicks.
+		// Fullscreen overlays (settings, ask, approvals) still own tracking while open.
+		this.ui.setBaseMouseTracking(true);
+		this.ui.addInputListener(data => this.#handleMainScreenMouse(data));
 		pushTerminalTitle();
 		setTerminalTitleStateEnabled(this.settings.get("tui.titleState"));
 		setSessionTerminalTitle(this.sessionManager.getSessionName(), this.sessionManager.getCwd());
@@ -4803,6 +4831,153 @@ export class InteractiveMode implements InteractiveModeContext {
 
 	setToolsExpanded(expanded: boolean): void {
 		this.#inputController.setToolsExpanded(expanded);
+	}
+
+	/**
+	 * Main-screen SGR mouse (base tracking). Consumes left-clicks on thinking
+	 * headers (expand/collapse compacted CoT) and tool execution chrome
+	 * (toggle expanded output). Ignores events while a fullscreen overlay is up
+	 * (those components handle mouse themselves).
+	 */
+	#handleMainScreenMouse(data: string): { consume: true } | undefined {
+		if (!data.startsWith("\x1b[<")) return undefined;
+		if (this.ui.hasOverlay()) return undefined;
+		let consumed = false;
+		routeSgrMouseInput(data, event => {
+			// Top quick-access strip. Layout is: Spacer(1) then the bar
+			// (content + trail). Screen rows: 0 = spacer (dead), 1..hit
+			// = bar. Fat hit = content row + trail spacer.
+			const width = this.ui.terminal.columns;
+			const leadSpacerRows = 1; // matches Spacer(1) above the bar
+			const barHit = this.quickAccessBar.hitRowCount();
+			const barStart = leadSpacerRows;
+			const barEnd = barStart + barHit;
+			if (barHit > 0 && event.row >= barStart && event.row < barEnd) {
+				// Remap to bar-local row 0 for content-relative handlers
+				// (hover/click only care about col; row is ignored).
+				if (this.quickAccessBar.handleMouse(event)) {
+					this.ui.requestRender();
+				}
+				consumed = true;
+				return true;
+			}
+			// Pointer left the bar zone — drop hover so the next paint
+			// does not leave a stale accent on the last hovered chip.
+			if (event.motion) this.quickAccessBar.clearHover();
+
+			// Wheel: always consume so SGR never hits the editor. Chat history is
+			// native terminal scrollback — with base mouse tracking on, plain
+			// wheel is owned by the app. Use scrollbar, Shift+Wheel, or
+			// Shift+PgUp/PgDn on the host to review history (host bypass).
+			if (event.wheel !== null) {
+				consumed = true;
+				return true;
+			}
+			if (!event.leftClick) {
+				// Swallow bare motion so the editor doesn't get CSI junk.
+				consumed = true;
+				return true;
+			}
+			const termRows = this.ui.terminal.rows;
+			// Bottom chrome height (editor + widgets + status) — chat is above it.
+			let bottomH = 0;
+			for (const child of [
+				this.hookWidgetContainerBelow,
+				this.editorContainer,
+				this.hookWidgetContainerAbove,
+				this.statusLine,
+				this.statusContainer,
+				this.modelCycleContainer,
+				this.errorBannerContainer,
+				this.omfgContainer,
+				this.btwContainer,
+				this.subagentContainer,
+				this.todoContainer,
+				this.pendingMessagesContainer,
+			]) {
+				try {
+					bottomH += child.render(width).length;
+				} catch {
+					/* ignore */
+				}
+			}
+			const chatBottomExclusive = Math.max(0, termRows - bottomH);
+			if (event.row >= chatBottomExclusive) {
+				consumed = true;
+				return true;
+			}
+			// Walk chat from the top of the visible stack. Native scrollback means
+			// only on-screen components participate; we approximate with last-render
+			// heights of live children (newest often near the end of the list).
+			let y = 0;
+			const kids = this.chatContainer.children;
+			// Prefer walking from the end: recent turns sit at the bottom of the
+			// viewport more often than the top.
+			const heights: number[] = kids.map(c => {
+				try {
+					return c.render(width).length;
+				} catch {
+					return 0;
+				}
+			});
+			let total = heights.reduce((a, b) => a + b, 0);
+			// Align the stack's bottom with chatBottomExclusive - 1.
+			let rowCursor = chatBottomExclusive - total;
+			for (let i = 0; i < kids.length; i++) {
+				const h = heights[i] ?? 0;
+				const start = rowCursor;
+				const end = rowCursor + h;
+				if (event.row >= start && event.row < end) {
+					const local = event.row - start;
+					const child = kids[i];
+					if (child instanceof AssistantMessageComponentClass) {
+						if (child.handleThinkingHeaderClick(local)) {
+							this.ui.requestRender();
+							consumed = true;
+							return true;
+						}
+					} else if (child instanceof ToolExecutionComponent) {
+						// Click anywhere on a tool card toggles expand/collapse.
+						child.setExpanded(!child.isExpanded());
+						this.ui.requestRender();
+						consumed = true;
+						return true;
+					} else if (child instanceof Container) {
+						// ChatBlock / wrappers: recurse one level.
+						let innerY = 0;
+						for (const grand of child.children) {
+							let gh = 0;
+							try {
+								gh = grand.render(width).length;
+							} catch {
+								gh = 0;
+							}
+							if (local >= innerY && local < innerY + gh) {
+								if (grand instanceof AssistantMessageComponentClass) {
+									if (grand.handleThinkingHeaderClick(local - innerY)) {
+										this.ui.requestRender();
+										consumed = true;
+										return true;
+									}
+								} else if (grand instanceof ToolExecutionComponent) {
+									grand.setExpanded(!grand.isExpanded());
+									this.ui.requestRender();
+									consumed = true;
+									return true;
+								}
+							}
+							innerY += gh;
+						}
+					}
+					consumed = true;
+					return true;
+				}
+				rowCursor = end;
+			}
+			consumed = true;
+			return true;
+		});
+		return consumed ? { consume: true } : undefined;
 	}
 
 	toggleThinkingBlockVisibility(): void {

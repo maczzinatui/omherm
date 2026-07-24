@@ -234,6 +234,15 @@ export class AssistantMessageComponent extends Container {
 	 *  session-wide {@link sharedSpeedTracker} can't surface a previous turn's rate
 	 *  on a fresh block that has no live token throughput of its own. */
 	#thinkingRateLive = false;
+	/** Per thinking content-index: true = body compacted to header only. */
+	#thinkingCollapsed = new Map<number, boolean>();
+	/**
+	 * Last-render hit map: local row within this component → thinking content index
+	 * for header lines (expand/collapse click targets).
+	 */
+	#thinkingHeaderHits = new Map<number, number>();
+	/** Auto-compact finalized thinking longer than this many display chars. */
+	static readonly THINKING_AUTO_COLLAPSE_CHARS = 280;
 
 	constructor(
 		message?: AssistantMessage,
@@ -289,7 +298,27 @@ export class AssistantMessageComponent extends Container {
 
 	override render(width: number): readonly string[] {
 		this.#lastRenderWidth = width;
-		return super.render(width);
+		const lines = super.render(width);
+		this.#rebuildThinkingHeaderHits(width);
+		return lines;
+	}
+
+	#rebuildThinkingHeaderHits(width: number): void {
+		this.#thinkingHeaderHits.clear();
+		let row = 0;
+		for (const child of this.#markerSlot.children) {
+			row += child.render(width).length;
+		}
+		for (const child of this.#contentContainer.children) {
+			const h = child.render(width).length;
+			const idx = (child as Text & { __thinkingContentIndex?: number }).__thinkingContentIndex;
+			if (typeof idx === "number") {
+				for (let r = 0; r < Math.max(1, h); r++) {
+					this.#thinkingHeaderHits.set(row + r, idx);
+				}
+			}
+			row += h;
+		}
 	}
 
 	setHideThinkingBlock(hide: boolean): void {
@@ -298,6 +327,50 @@ export class AssistantMessageComponent extends Container {
 
 	setProseOnlyThinking(proseOnly: boolean): void {
 		this.proseOnlyThinking = proseOnly;
+	}
+
+	/** Toggle compact/expanded for one thinking block (or all if index omitted). */
+	toggleThinkingCollapsed(contentIndex?: number): boolean {
+		if (contentIndex !== undefined) {
+			const next = !(this.#thinkingCollapsed.get(contentIndex) ?? false);
+			this.#thinkingCollapsed.set(contentIndex, next);
+		} else {
+			// Toggle all known thinking blocks toward the opposite of majority expanded.
+			const indices = [...this.#thinkingCollapsed.keys()];
+			if (indices.length === 0 && this.#lastMessage) {
+				for (let i = 0; i < this.#lastMessage.content.length; i++) {
+					if (this.#lastMessage.content[i]?.type === "thinking") indices.push(i);
+				}
+			}
+			const anyExpanded = indices.some(i => !(this.#thinkingCollapsed.get(i) ?? false));
+			for (const i of indices) this.#thinkingCollapsed.set(i, anyExpanded);
+		}
+		if (this.#lastMessage) {
+			// Collapse state is paint-only — force full rebuild (fast path would keep old headers).
+			this.#fastPathKey = undefined;
+			this.#fastPathItems = undefined;
+			this.updateContent(this.#lastMessage, { transient: this.#lastUpdateTransient });
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Hit-test a 0-based line within this component's last render. Returns true
+	 * when the line was a thinking header and the compact state was toggled.
+	 */
+	handleThinkingHeaderClick(localLine: number): boolean {
+		const contentIndex = this.#thinkingHeaderHits.get(localLine);
+		if (contentIndex === undefined) return false;
+		return this.toggleThinkingCollapsed(contentIndex);
+	}
+
+	/** True when this message still has compacted thinking the operator can expand. */
+	hasCollapsedThinking(): boolean {
+		for (const v of this.#thinkingCollapsed.values()) {
+			if (v) return true;
+		}
+		return false;
 	}
 
 	override dispose(): void {
@@ -455,12 +528,12 @@ export class AssistantMessageComponent extends Container {
 	markTranscriptBlockFinalized(): void {
 		this.#transcriptBlockFinalized = true;
 		this.#stopThinkingAnimation();
-		// If the live pulse was on screen when the block sealed, drop the fast path
-		// and rebuild so the placeholder is removed — finalized blocks never animate.
-		if (this.#thinkingDots) {
-			this.#fastPathKey = undefined;
-			this.#fastPathItems = undefined;
-			if (this.#lastMessage) this.updateContent(this.#lastMessage, { transient: this.#lastUpdateTransient });
+		// Drop fast path and rebuild so: (1) live thinking pulse is removed,
+		// (2) long CoT auto-compacts to a clickable ▸ Thinking header.
+		this.#fastPathKey = undefined;
+		this.#fastPathItems = undefined;
+		if (this.#lastMessage) {
+			this.updateContent(this.#lastMessage, { transient: false });
 		}
 	}
 
@@ -818,14 +891,36 @@ export class AssistantMessageComponent extends Container {
 							(c.type === "thinking" && resolveThinkingDisplay(c, this.proseOnlyThinking).visible),
 					);
 
-				// Thinking traces in thinkingText color, italic
-				const md = new Markdown(thinkingText, 1, 0, getMarkdownTheme(), {
-					color: (text: string) => theme.fg("thinkingText", text),
-					italic: true,
-				});
-				md.transientRenderCache = this.#lastUpdateTransient;
-				this.#contentContainer.addChild(md);
-				captureItems?.push({ md, contentIndex: i, blockType: "thinking", lastText: thinkingText });
+				// Auto-compact long finalized CoT so the transcript stays skimmable;
+				// streaming stays expanded so the operator sees live reasoning.
+				if (
+					!this.#thinkingCollapsed.has(i) &&
+					this.#transcriptBlockFinalized &&
+					thinkingText.length >= AssistantMessageComponent.THINKING_AUTO_COLLAPSE_CHARS
+				) {
+					this.#thinkingCollapsed.set(i, true);
+				}
+				const collapsed = this.#thinkingCollapsed.get(i) ?? false;
+				const lineCount = Math.max(1, thinkingText.split("\n").length);
+				const headerLabel = collapsed
+					? `▸ Thinking · ${lineCount} line${lineCount === 1 ? "" : "s"} · click to expand`
+					: `▾ Thinking · click to collapse`;
+				const header = new Text(theme.fg("dim", headerLabel), 1, 0);
+				this.#contentContainer.addChild(header);
+				// Record header hit after we know its offset within this component
+				// (filled at end of update via #rebuildThinkingHeaderHits).
+				(header as Text & { __thinkingContentIndex?: number }).__thinkingContentIndex = i;
+
+				if (!collapsed) {
+					// Thinking traces in thinkingText color, italic
+					const md = new Markdown(thinkingText, 1, 0, getMarkdownTheme(), {
+						color: (text: string) => theme.fg("thinkingText", text),
+						italic: true,
+					});
+					md.transientRenderCache = this.#lastUpdateTransient;
+					this.#contentContainer.addChild(md);
+					captureItems?.push({ md, contentIndex: i, blockType: "thinking", lastText: thinkingText });
+				}
 				this.#appendThinkingExtensions(i, thinkingIndex, thinkingText);
 				hasRenderedContent = true;
 				thinkingIndex += 1;

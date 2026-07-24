@@ -13,6 +13,8 @@ import {
 	padding,
 	renderInlineMarkdown,
 	replaceTabs,
+	routeSgrMouseInput,
+	type SgrMouseEvent,
 	Spacer,
 	Text,
 	type TUI,
@@ -185,6 +187,12 @@ export class HookSelectorComponent extends Container {
 	#sliderIndex: number = 0;
 	#sliderComponent: Text | undefined;
 	#lastRenderWidth: number | undefined;
+	/** 0-based frame row where the option list starts (fullscreen mouse). */
+	#listRowStart = 0;
+	/** List-local line → filtered option index (null = status/empty). */
+	#listHit: Array<number | null> = [];
+	/** Number of list lines (for wheel clamp / bounds). */
+	#listHitRows = 0;
 	constructor(
 		title: string,
 		options: HookSelectorOptionInput[],
@@ -490,6 +498,7 @@ export class HookSelectorComponent extends Container {
 
 	#updateList(renderWidth = this.#lastRenderWidth): void {
 		const rows: SelectorRow[] = [];
+		const hit: Array<number | null> = [];
 		const total = this.#filteredOptions.length;
 		const mdTheme = getMarkdownTheme();
 		// Compact mode kicks in exactly when the fully-expanded list (all
@@ -534,16 +543,21 @@ export class HookSelectorComponent extends Container {
 				filtered.index,
 			)) {
 				rows.push({ text, highlight });
+				hit.push(i);
 			}
 		}
 
 		if (total === 0) {
 			rows.push({ text: theme.fg("dim", "  No matching options"), highlight: false });
+			hit.push(null);
 		}
 
 		if (startIndex > 0 || endIndex < total || this.#shouldRenderSearchStatus(renderWidth, mdTheme)) {
 			rows.push({ text: this.#renderStatusLine(total), highlight: false });
+			hit.push(null);
 		}
+		this.#listHit = hit;
+		this.#listHitRows = hit.length;
 		if (this.#outlinedList) {
 			this.#outlinedList.setLines(rows);
 			return;
@@ -638,6 +652,10 @@ export class HookSelectorComponent extends Container {
 	}
 
 	handleInput(keyData: string): void {
+		if (keyData.startsWith("\x1b[<")) {
+			this.#handleMouse(keyData);
+			return;
+		}
 		if (this.#countdown) {
 			this.#countdown.reset();
 			this.#onTimeoutResetCallback?.();
@@ -676,12 +694,56 @@ export class HookSelectorComponent extends Container {
 		}
 	}
 
+	#handleMouse(data: string): void {
+		if (this.#countdown) {
+			this.#countdown.reset();
+			this.#onTimeoutResetCallback?.();
+		}
+		routeSgrMouseInput(data, event => this.#routeMouse(event));
+	}
+
+	#routeMouse(event: SgrMouseEvent): boolean {
+		if (event.wheel !== null) {
+			this.#moveSelection(event.wheel);
+			return true;
+		}
+		if (!event.leftClick) return true;
+		const local = event.row - this.#listRowStart;
+		// Outline mode: top border of outlined list is one extra row.
+		const adjusted = this.#outlinedList ? local - 1 : local;
+		if (adjusted < 0 || adjusted >= this.#listHitRows) return true;
+		const filteredIndex = this.#listHit[adjusted];
+		if (filteredIndex === null || filteredIndex === undefined) return true;
+		const filtered = this.#filteredOptions[filteredIndex];
+		if (!filtered || this.#isDisabled(filtered.index)) {
+			this.#selectedIndex = filteredIndex;
+			this.#updateList();
+			return true;
+		}
+		if (this.#selectedIndex === filteredIndex) {
+			this.#onSelectCallback(filtered.option.label);
+		} else {
+			this.#selectedIndex = filteredIndex;
+			this.#updateList();
+		}
+		return true;
+	}
+
 	override render(width: number): readonly string[] {
 		const renderWidth = Math.max(1, width);
 		if (this.#lastRenderWidth !== renderWidth) {
 			this.#lastRenderWidth = renderWidth;
 			this.#updateList(renderWidth);
 		}
+		// Chrome above the option list: border + spacer + title + spacer [+ slider + spacer].
+		let listStart = 1 + 1; // top border + spacer
+		listStart += this.#titleComponent.render(renderWidth).length;
+		listStart += 1; // spacer under title
+		if (this.#sliderComponent) {
+			listStart += this.#sliderComponent.render(renderWidth).length;
+			listStart += 1; // spacer under slider
+		}
+		this.#listRowStart = listStart;
 		return super.render(renderWidth);
 	}
 

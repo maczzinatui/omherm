@@ -581,6 +581,8 @@ export class SettingsSelectorComponent implements Component {
 	#tabRowCount = 0;
 	#contentRowStart = 0;
 	#contentRowCount = 0;
+	/** Last hover signature so motion only repaints when highlight changes. */
+	#lastHoverKey = "";
 
 	constructor(
 		private readonly context: SettingsRuntimeContext,
@@ -739,7 +741,7 @@ export class SettingsSelectorComponent implements Component {
 
 	#routeMouseEvent(event: SgrMouseEvent): boolean {
 		const list = this.#searchList ?? this.#currentList;
-		// row() insets content by the border column plus a space.
+		// row() is `│ ${content} │` — content starts at col 2.
 		const contentColInset = 2;
 		const innerCol = event.col - contentColInset;
 		const contentLine = event.row - this.#contentRowStart;
@@ -747,7 +749,7 @@ export class SettingsSelectorComponent implements Component {
 		// An open submenu owns the pointer: wheel, hover, and clicks route into
 		// it (text-input submenus ignore routed events).
 		if (list?.hasOpenSubmenu()) {
-			list.routeSubmenuMouse(event, contentLine, innerCol);
+			list.routeSubmenuMouse(event, contentLine, Math.max(0, innerCol));
 			return true;
 		}
 
@@ -757,28 +759,52 @@ export class SettingsSelectorComponent implements Component {
 
 		if (event.wheel !== null) {
 			if (overContent) {
-				list?.handleWheelAt(event.wheel, contentLine, innerCol);
+				list?.handleWheelAt(event.wheel, contentLine, Math.max(0, innerCol));
 			}
 			return true;
 		}
 
 		if (event.motion) {
-			const hovered = overTabs ? this.#tabBar.tabAt(tabLine, innerCol) : undefined;
+			const prevHover = this.#lastHoverKey;
+			const hovered = overTabs ? this.#tabBar.tabAt(tabLine, Math.max(0, innerCol)) : undefined;
 			this.#tabBar.setHoverTab(hovered && !hovered.muted ? hovered.id : null);
-			// hoverTest: never light up pane rows while the pointer is on the
-			// sidebar — only rows the pointer is actually on.
-			list?.setHoverItem(overContent ? (list.hoverTest(contentLine, innerCol) ?? null) : null);
+			// Right-pane setting rows vs left category sidebar (split layout).
+			let rowHover: string | null = null;
+			let sidebarHover: number | null = null;
+			if (overContent && list) {
+				const c0 = Math.max(0, innerCol);
+				const c1 = Math.max(0, innerCol + 1);
+				sidebarHover = list.hoverSidebarTest?.(contentLine, c0) ?? list.hoverSidebarTest?.(contentLine, c1) ?? null;
+				if (sidebarHover === null) {
+					rowHover =
+						list.hoverTest(contentLine, c0) ??
+						list.hoverTest(contentLine, c1) ??
+						list.hoverTest(contentLine, Math.max(0, event.col - 1)) ??
+						null;
+				}
+			}
+			list?.setHoverItem(rowHover);
+			list?.setHoverSidebar?.(sidebarHover);
+			const nextHover = `${hovered?.id ?? ""}|${rowHover ?? ""}|sb:${sidebarHover ?? ""}|${overTabs}|${overContent}`;
+			if (nextHover !== prevHover) {
+				this.#lastHoverKey = nextHover;
+				// Motion must repaint or tab-1/section rows never show hover
+				// bands (tab-2/plugins looked fine because other paints ran).
+				this.context.requestRender?.();
+			}
 			return true;
 		}
 		if (!event.leftClick) return true;
 
 		if (overTabs) {
-			const tab = this.#tabBar.tabAt(tabLine, innerCol);
+			const tab = this.#tabBar.tabAt(tabLine, Math.max(0, innerCol));
 			if (tab) this.#tabBar.selectTab(tab.id);
 			return true;
 		}
 		if (overContent && list) {
-			const id = list.hitTest(contentLine, innerCol);
+			const id =
+				list.hitTest(contentLine, Math.max(0, innerCol)) ??
+				list.hitTest(contentLine, Math.max(0, innerCol + 1));
 			if (id !== undefined) {
 				const wasSelected = list.getSelectedItem()?.id === id;
 				list.selectItem(id);
@@ -1376,9 +1402,13 @@ export class SettingsSelectorComponent implements Component {
 				if (isHermesSettingsPath(path)) {
 					if (path === HERMES_OPEN_MODEL_HUB_PATH || isHermesActionPath(path)) {
 						const action = hermesPortActionFromPath(path);
-						this.callbacks.onCancel();
+						// Port/model open must NOT call onCancel for kanban/cron/profiles —
+						// that destroys the settings overlay, so Esc from the port
+						// drops to chat. onOpenHermesPort hides settings and restores.
 						queueMicrotask(() => {
 							if (!action || action === "model_hub") {
+								// Model hub still replaces settings (no restore path yet).
+								this.callbacks.onCancel();
 								this.callbacks.onOpenModelSelector?.();
 								return;
 							}

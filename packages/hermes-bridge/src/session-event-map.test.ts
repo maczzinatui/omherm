@@ -110,4 +110,273 @@ describe("GatewayTurnMapper", () => {
 			expect(t.text).toBe("Hello world");
 		}
 	});
+
+	test("reasoning that restates the answer is dropped (no bright+dim twin)", () => {
+		const m = new GatewayTurnMapper();
+		const body =
+			"Real time is Thu Jul 23 2026 in America/Toronto (EDT, UTC-4). The Shire doesn't have a live clock.";
+		m.feedUi({ kind: "text", text: body });
+		// MiniMax-style: full answer dumped as reasoning.available after stream
+		m.feedUi({ kind: "thinking", text: body, done: true });
+		const te = m.feedUi({ kind: "turn_end" }).find((e) => e.type === "turn_end");
+		expect(te && te.type === "turn_end").toBe(true);
+		if (te && te.type === "turn_end") {
+			const texts = te.message.content.filter((c) => c.type === "text");
+			const thinks = te.message.content.filter((c) => c.type === "thinking");
+			expect(texts.length).toBe(1);
+			expect(thinks.length).toBe(0);
+			expect((texts[0] as { text: string }).text).toBe(body);
+		}
+	});
+
+	test("text then reasoning.available same body via gateway map", () => {
+		const m = new GatewayTurnMapper();
+		const body =
+			"Half the Shire's economy runs on it, the whole point is you don't buy it — you trade a few meals.";
+		const gw: GatewayEvent[] = [
+			{ type: "message.delta", payload: { text: body } },
+			{ type: "reasoning.available", payload: { text: body } },
+			{ type: "message.complete", payload: { text: body, status: "complete" } },
+		];
+		let te: ReturnType<GatewayTurnMapper["feedUi"]>[number] | undefined;
+		for (const g of gw) {
+			for (const e of m.feedGateway(g, mapGatewayToUi)) {
+				if (e.type === "turn_end") te = e;
+			}
+		}
+		expect(te && te.type === "turn_end").toBe(true);
+		if (te && te.type === "turn_end") {
+			expect(te.message.content.filter((c) => c.type === "text").length).toBe(1);
+			expect(te.message.content.filter((c) => c.type === "thinking").length).toBe(0);
+		}
+	});
+
+	test("real distinct reasoning is kept", () => {
+		const m = new GatewayTurnMapper();
+		m.feedUi({ kind: "thinking", text: "Need local timezone then lore joke." });
+		m.feedUi({ kind: "thinking", text: "Need local timezone then lore joke.", done: true });
+		m.feedUi({ kind: "text", text: "It's Thursday in Toronto. Want lore flavor?" });
+		const te = m.feedUi({ kind: "turn_end" }).find((e) => e.type === "turn_end");
+		if (te && te.type === "turn_end") {
+			expect(te.message.content.some((c) => c.type === "thinking")).toBe(true);
+			expect(te.message.content.some((c) => c.type === "text")).toBe(true);
+		}
+	});
+
+	test("post-tool text strips re-emitted pre-tool preamble", () => {
+		const m = new GatewayTurnMapper();
+		const pre =
+			"The user is asking about X-Files Season 3 Episode 20. Let me think about this. Jose Chung episode.";
+		const post = "Here's the plot summary: Scully writes a book.";
+		m.feedUi({ kind: "text", text: pre });
+		m.feedUi({ kind: "tool_start", id: "t1", name: "web_search", args: '{"query":"xfiles"}' });
+		m.feedUi({
+			kind: "tool_end",
+			id: "t1",
+			name: "web_search",
+			summary: "Did 5 searches in 0.8s",
+			result: {
+				data: {
+					web: [
+						{ title: "Jose Chung", url: "https://example.com/jc", description: "ep guide" },
+						{ title: "X-Files wiki", url: "https://example.com/xf", description: "wiki" },
+					],
+				},
+			},
+		});
+		// Model re-sends preamble + new prose
+		m.feedUi({ kind: "text", text: pre + post });
+		const te = m.feedUi({ kind: "turn_end" }).find((e) => e.type === "turn_end");
+		expect(te && te.type === "turn_end").toBe(true);
+		if (te && te.type === "turn_end") {
+			const texts = te.message.content
+				.filter((c) => c.type === "text")
+				.map((c) => (c as { text: string }).text);
+			expect(texts.length).toBe(2);
+			expect(texts[0]).toBe(pre);
+			expect(texts[1]).toBe(post);
+			// preamble must not appear twice
+			const joined = texts.join("");
+			expect(joined.indexOf(pre)).toBe(joined.lastIndexOf(pre));
+		}
+	});
+
+	test("terminal tool normalizes command args and paints bash-shaped details", () => {
+		const m = new GatewayTurnMapper();
+		const start = m.feedUi({
+			kind: "tool_start",
+			id: "t-term",
+			name: "terminal",
+			args: JSON.stringify({ command: "date", workdir: "/tmp" }),
+		});
+		const ts = start.find((e) => e.type === "tool_execution_start");
+		expect(ts && ts.type === "tool_execution_start").toBe(true);
+		if (ts && ts.type === "tool_execution_start") {
+			const a = ts.args as { command?: string; cwd?: string };
+			expect(a.command).toBe("date");
+			expect(a.cwd).toBe("/tmp");
+		}
+		const end = m.feedUi({
+			kind: "tool_end",
+			id: "t-term",
+			name: "terminal",
+			summary: "Fri Jul 24",
+			result: { output: "Fri Jul 24\n", exit_code: 0 },
+		});
+		const te = end.find((e) => e.type === "tool_execution_end");
+		expect(te && te.type === "tool_execution_end").toBe(true);
+		if (te && te.type === "tool_execution_end") {
+			const r = te.result as {
+				content: Array<{ text: string }>;
+				details?: { exitCode?: number };
+			};
+			expect(r.content[0]?.text).toContain("Fri Jul 24");
+			expect(r.details?.exitCode).toBe(0);
+		}
+	});
+
+	test("browser_navigate normalizes to open+url", () => {
+		const m = new GatewayTurnMapper();
+		const start = m.feedUi({
+			kind: "tool_start",
+			id: "b1",
+			name: "browser_navigate",
+			args: "https://example.com/foo",
+		});
+		const ts = start.find((e) => e.type === "tool_execution_start");
+		if (ts && ts.type === "tool_execution_start") {
+			const a = ts.args as { action?: string; url?: string };
+			expect(a.action).toBe("open");
+			expect(a.url).toContain("example.com");
+		}
+	});
+
+	test("read_file maps path for OMP read renderer", () => {
+		const m = new GatewayTurnMapper();
+		const start = m.feedUi({
+			kind: "tool_start",
+			id: "r1",
+			name: "read_file",
+			args: JSON.stringify({ path: "/home/nixos/meshina/README.md" }),
+		});
+		const ts = start.find((e) => e.type === "tool_execution_start");
+		if (ts && ts.type === "tool_execution_start") {
+			const a = ts.args as { path?: string; file_path?: string };
+			expect(a.path).toContain("README.md");
+			expect(a.file_path).toContain("README.md");
+		}
+	});
+
+	test("web_search tool_end paints OMP search details", () => {
+		const m = new GatewayTurnMapper();
+		m.feedUi({ kind: "tool_start", id: "s1", name: "web_search", args: "X-Files s3e20" });
+		const end = m.feedUi({
+			kind: "tool_end",
+			id: "s1",
+			name: "web_search",
+			summary: "Did 2 searches in 0.5s",
+			result: {
+				data: {
+					web: [{ title: "A", url: "https://a.example", description: "aa" }],
+				},
+			},
+		});
+		const te = end.find((e) => e.type === "tool_execution_end");
+		expect(te && te.type === "tool_execution_end").toBe(true);
+		if (te && te.type === "tool_execution_end") {
+			const r = te.result as {
+				content: Array<{ text: string }>;
+				details?: { response?: { sources?: unknown[] } };
+			};
+			expect(r.details?.response?.sources?.length).toBe(1);
+			expect(r.content[0]?.text).toContain("Did 2 searches");
+		}
+	});
+
+	test("message.complete.reasoning is thinking-first and stripped from text", () => {
+		const m = new GatewayTurnMapper();
+		const cot =
+			"Key facts I know:\n- Located in Clarington\n- About 80 km east of Toronto\nI'll give a direct useful answer without padding.";
+		const answer =
+			"Newcastle is a small community in Clarington, Durham Region, about 80 km east of Toronto on Lake Ontario.";
+		const gw: GatewayEvent[] = [
+			{ type: "message.delta", payload: { text: answer } },
+			{
+				type: "message.complete",
+				payload: {
+					text: `${cot}\n\n${answer}`,
+					reasoning: cot,
+					status: "complete",
+				},
+			},
+		];
+		let te: ReturnType<GatewayTurnMapper["feedUi"]>[number] | undefined;
+		for (const g of gw) {
+			for (const e of m.feedGateway(g, mapGatewayToUi)) {
+				if (e.type === "turn_end") te = e;
+			}
+		}
+		expect(te && te.type === "turn_end").toBe(true);
+		if (te && te.type === "turn_end") {
+			const parts = te.message.content;
+			const thinks = parts.filter((c) => c.type === "thinking");
+			const texts = parts.filter((c) => c.type === "text") as Array<{ type: "text"; text: string }>;
+			// thinking first
+			expect(parts[0]?.type).toBe("thinking");
+			expect(thinks.length).toBe(1);
+			expect(texts.length).toBe(1);
+			expect(texts[0]!.text).toContain("Newcastle is a small community");
+			expect(texts[0]!.text).not.toContain("Key facts I know");
+			expect(texts[0]!.text).not.toContain("without padding");
+		}
+	});
+
+	test("late reasoning after text does not leave CoT twin in answer body", () => {
+		const m = new GatewayTurnMapper();
+		const cot = "Let me plan the tone. Casual operator voice, keep it short, no fluff padding.";
+		const answer = "Newcastle ON is in Clarington on Lake Ontario, east of Toronto.";
+		m.feedUi({ kind: "text", text: answer + "\n\n" + cot });
+		m.feedUi({ kind: "thinking", text: cot, done: true });
+		const te = m.feedUi({ kind: "turn_end" }).find((e) => e.type === "turn_end");
+		if (te && te.type === "turn_end") {
+			const text = te.message.content
+				.filter((c) => c.type === "text")
+				.map((c) => (c as { text: string }).text)
+				.join("");
+			// CoT stripped from answer; may remain as thinking OR dropped if near-dup of text before strip order
+			expect(text).not.toContain("no fluff padding");
+			expect(text).toContain("Clarington");
+		}
+	});
+});
+
+describe("mapGatewayToUi status / thinking", () => {
+	test("thinking.delta is status-only (kaomoji)", () => {
+		const u = mapGatewayToUi({ type: "thinking.delta", payload: { text: "(°ロ°) formulating..." } });
+		expect(u).toEqual({ kind: "status", text: "(°ロ°) formulating..." });
+	});
+
+	test("reasoning.delta still maps to thinking", () => {
+		const u = mapGatewayToUi({ type: "reasoning.delta", payload: { text: "hmm" } });
+		expect(u).toEqual({ kind: "thinking", text: "hmm" });
+	});
+
+	test("status.update process is status; lifecycle is lifecycle", () => {
+		expect(mapGatewayToUi({ type: "status.update", payload: { kind: "process", text: "busy" } })).toEqual({
+			kind: "status",
+			text: "busy",
+		});
+		expect(mapGatewayToUi({ type: "status.update", payload: { kind: "lifecycle", text: "HTTP 404" } })).toEqual({
+			kind: "lifecycle",
+			text: "HTTP 404",
+		});
+	});
+
+	test("mapper paints status as working_status not thinking", () => {
+		const m = new GatewayTurnMapper();
+		const evs = m.feedUi({ kind: "status", text: "(°ロ°) formulating..." });
+		expect(evs).toEqual([{ type: "working_status", message: "(°ロ°) formulating..." }]);
+		const think = m.feedUi({ kind: "thinking", text: "real reason " });
+		expect(think.some((e) => e.type === "message_update")).toBe(true);
+	});
 });

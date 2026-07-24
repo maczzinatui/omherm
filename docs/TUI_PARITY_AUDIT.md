@@ -90,3 +90,6 @@ Analytics, Journey, Herm leader chords, dual brain, computer-use stack, web dash
 | 2026-07-23 | P0 slash router (deep-link + slash.exec) |
 | 2026-07-23 | P0 approval/clarify → ask-dialog |
 | 2026-07-23 | P1 cron create/edit form + kanban create/assign (port UI) |
+| 2026-07-24 | Mouse QoL: top-left overlays, list-backed detail, Esc stack, category hover |
+| 2026-07-24 | Perf: async kanban/cron CLI (no spawnSync on TUI loop); soft reload; paint local helper |
+| 2026-07-24 | Concrete backlog → `docs/REMAINING_WORK.md` |

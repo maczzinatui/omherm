@@ -70,6 +70,7 @@ export class ExtensionUiController {
 	// the rest queue. See `#presentDialog`.
 	#dialogActive = false;
 	#dialogQueue: Array<() => void> = [];
+	#hookSelectorOverlay: OverlayHandle | undefined;
 	/**
 	 * Built once in `initHooksAndCustomTools()`. Reused directly by `/tree`
 	 * `ask` re-answer (issue #5642) to drive a standalone `AskTool.execute()`
@@ -606,14 +607,17 @@ export class ExtensionUiController {
 	): Promise<ExtensionAskDialogResult | undefined> {
 		return this.#presentDialog<ExtensionAskDialogResult>(dialogOptions?.signal, settle => {
 			let askDialog: AskDialogComponent | undefined;
+			let overlayHandle: OverlayHandle | undefined;
 			let promptEditor: HookEditorComponent | undefined;
 			let promptResolve: ((value: string | undefined) => void) | undefined;
 			let closed = false;
 
 			const restoreAskDialog = (): void => {
 				if (closed || !askDialog) return;
+				// Leave any inline prompt; show ask again as fullscreen so mouse tracks.
 				this.ctx.editorContainer.clear();
-				this.ctx.editorContainer.addChild(askDialog);
+				this.ctx.editorContainer.addChild(this.ctx.editor);
+				overlayHandle?.setHidden(false);
 				this.ctx.ui.setFocus(askDialog);
 				this.ctx.ui.requestRender();
 			};
@@ -630,6 +634,8 @@ export class ExtensionUiController {
 				if (closed) return Promise.resolve(undefined);
 				const { promise, resolve } = Promise.withResolvers<string | undefined>();
 				promptResolve = resolve;
+				// Hide fullscreen ask while the nested editor owns the main buffer.
+				overlayHandle?.setHidden(true);
 				promptEditor = new HookEditorComponent(
 					this.ctx.ui,
 					title,
@@ -658,8 +664,14 @@ export class ExtensionUiController {
 					tui: this.ctx.ui,
 				},
 			);
-			this.ctx.editorContainer.clear();
-			this.ctx.editorContainer.addChild(askDialog);
+			// Fullscreen alt-screen enables SGR mouse (same path as settings).
+			overlayHandle = this.ctx.ui.showOverlay(askDialog, {
+				fullscreen: true,
+				anchor: "center",
+				width: "100%",
+				maxHeight: "100%",
+				margin: 0,
+			});
 			this.ctx.ui.setFocus(askDialog);
 			this.ctx.ui.requestRender();
 
@@ -669,6 +681,8 @@ export class ExtensionUiController {
 				promptResolve?.(undefined);
 				promptResolve = undefined;
 				promptEditor = undefined;
+				overlayHandle?.hide();
+				overlayHandle = undefined;
 				this.ctx.editorContainer.clear();
 				this.ctx.editorContainer.addChild(this.ctx.editor);
 				this.ctx.ui.setFocus(this.ctx.editor);
@@ -884,8 +898,14 @@ export class ExtensionUiController {
 					slider: extra?.slider,
 				},
 			);
-			this.ctx.editorContainer.clear();
-			this.ctx.editorContainer.addChild(this.ctx.hookSelector);
+			// Fullscreen so command-approval / confirm get SGR mouse tracking.
+			this.#hookSelectorOverlay = this.ctx.ui.showOverlay(this.ctx.hookSelector, {
+				fullscreen: true,
+				anchor: "center",
+				width: "100%",
+				maxHeight: "100%",
+				margin: 0,
+			});
 			this.ctx.ui.setFocus(this.ctx.hookSelector);
 			this.ctx.ui.requestRender();
 			return () => this.hideHookSelector();
@@ -896,6 +916,8 @@ export class ExtensionUiController {
 	 */
 	hideHookSelector(): void {
 		this.ctx.hookSelector?.dispose();
+		this.#hookSelectorOverlay?.hide();
+		this.#hookSelectorOverlay = undefined;
 		this.ctx.editorContainer.clear();
 		this.ctx.editorContainer.addChild(this.ctx.editor);
 		this.ctx.hookSelector = undefined;

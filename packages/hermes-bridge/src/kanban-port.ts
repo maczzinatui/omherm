@@ -3,7 +3,7 @@
  * Prefer --json reads. See docs/KANBAN_PORT.md.
  */
 
-import { spawnSync } from "node:child_process"
+import { spawn } from "node:child_process"
 
 export type KanbanTask = {
 	id: string
@@ -58,18 +58,45 @@ function hermesBin(): string {
 	return process.env.HERMES_BIN?.trim() || "hermes"
 }
 
-function runKanban(args: string[]): { ok: boolean; stdout: string; stderr: string; code: number } {
-	const r = spawnSync(hermesBin(), ["kanban", ...args], {
-		encoding: "utf-8",
-		maxBuffer: 8 * 1024 * 1024,
-		env: process.env,
+type CliResult = { ok: boolean; stdout: string; stderr: string; code: number }
+
+/** Async CLI — never spawnSync on the TUI event loop (blocks mouse/paint). */
+function runKanban(args: string[]): Promise<CliResult> {
+	return new Promise((resolve) => {
+		const child = spawn(hermesBin(), ["kanban", ...args], {
+			env: process.env,
+			stdio: ["ignore", "pipe", "pipe"],
+		})
+		const outChunks: Buffer[] = []
+		const errChunks: Buffer[] = []
+		let outBytes = 0
+		const cap = 8 * 1024 * 1024
+		child.stdout?.on("data", (d: Buffer) => {
+			if (outBytes < cap) {
+				outChunks.push(d)
+				outBytes += d.length
+			}
+		})
+		child.stderr?.on("data", (d: Buffer) => {
+			errChunks.push(d)
+		})
+		child.on("error", (e) => {
+			resolve({
+				ok: false,
+				stdout: Buffer.concat(outChunks).toString("utf-8"),
+				stderr: e instanceof Error ? e.message : String(e),
+				code: 1,
+			})
+		})
+		child.on("close", (code) => {
+			resolve({
+				ok: code === 0,
+				stdout: Buffer.concat(outChunks).toString("utf-8"),
+				stderr: Buffer.concat(errChunks).toString("utf-8"),
+				code: code ?? 1,
+			})
+		})
 	})
-	return {
-		ok: r.status === 0,
-		stdout: r.stdout || "",
-		stderr: r.stderr || "",
-		code: r.status ?? 1,
-	}
 }
 
 function withBoard(args: string[], board?: string): string[] {
@@ -130,10 +157,10 @@ export function createKanbanPort(): KanbanPort {
 			if (opts.status) args.push("--status", opts.status)
 			if (opts.mine) args.push("--mine")
 			if (opts.archived) args.push("--archived")
-			const r = runKanban(args)
+			const r = await runKanban(args)
 			if (!r.ok && !r.stdout.trim()) {
 				// fallback human list
-				const h = runKanban(withBoard(["list"], opts.board))
+				const h = await runKanban(withBoard(["list"], opts.board))
 				if (!h.ok && !h.stdout.trim()) {
 					throw new Error(r.stderr.trim() || h.stderr.trim() || `hermes kanban list failed (${r.code})`)
 				}
@@ -151,7 +178,7 @@ export function createKanbanPort(): KanbanPort {
 
 		async show(id, board) {
 			const args = withBoard(["show", id, "--json"], board)
-			const r = runKanban(args)
+			const r = await runKanban(args)
 			if (r.ok && r.stdout.trim().startsWith("{")) {
 				try {
 					const parsed = JSON.parse(r.stdout) as Record<string, unknown>
@@ -166,7 +193,7 @@ export function createKanbanPort(): KanbanPort {
 					/* fall through */
 				}
 			}
-			const h = runKanban(withBoard(["show", id], board))
+			const h = await runKanban(withBoard(["show", id], board))
 			if (!h.ok) throw new Error(h.stderr.trim() || r.stderr.trim() || `hermes kanban show failed (${h.code})`)
 			const text = h.stdout
 			const listGuess = parseKanbanListOutput(text)
@@ -190,56 +217,56 @@ export function createKanbanPort(): KanbanPort {
 			if (input.parent) args.push("--parent", input.parent)
 			if (input.workspace) args.push("--workspace", input.workspace)
 			for (const s of input.skills || []) args.push("--skill", s)
-			const r = runKanban(args)
+			const r = await runKanban(args)
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `create failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},
 
 		async complete(ids, board) {
 			const args = withBoard(["complete", ...ids], board)
-			const r = runKanban(args)
+			const r = await runKanban(args)
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `complete failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},
 
 		async block(ids, board) {
-			const r = runKanban(withBoard(["block", ...ids], board))
+			const r = await runKanban(withBoard(["block", ...ids], board))
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `block failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},
 
 		async unblock(ids, board) {
-			const r = runKanban(withBoard(["unblock", ...ids], board))
+			const r = await runKanban(withBoard(["unblock", ...ids], board))
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `unblock failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},
 
 		async promote(ids, board) {
-			const r = runKanban(withBoard(["promote", ...ids], board))
+			const r = await runKanban(withBoard(["promote", ...ids], board))
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `promote failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},
 
 		async archive(ids, board) {
-			const r = runKanban(withBoard(["archive", ...ids], board))
+			const r = await runKanban(withBoard(["archive", ...ids], board))
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `archive failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},
 
 		async assign(id, assignee, board) {
-			const r = runKanban(withBoard(["assign", id, assignee], board))
+			const r = await runKanban(withBoard(["assign", id, assignee], board))
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `assign failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},
 
 		async comment(id, text, board) {
-			const r = runKanban(withBoard(["comment", id, text], board))
+			const r = await runKanban(withBoard(["comment", id, text], board))
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `comment failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},
 
 		async stats(board) {
-			const r = runKanban(withBoard(["stats"], board))
+			const r = await runKanban(withBoard(["stats"], board))
 			if (!r.ok && !r.stdout.trim()) throw new Error(r.stderr.trim() || `stats failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},

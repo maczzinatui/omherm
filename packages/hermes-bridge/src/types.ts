@@ -54,7 +54,8 @@ export type GatewayEvent =
   | { type: "thinking.delta"; payload?: { text?: string } }
   | { type: "reasoning.delta"; payload?: { text?: string } }
   | { type: "reasoning.available"; payload?: { text?: string } }
-  | { type: "status.update"; payload?: { text?: string } }
+  | { type: "status.update"; payload?: { text?: string; kind?: string } }
+  | { type: "message.interim"; payload?: { text?: string; already_streamed?: boolean } }
   | {
       type: "tool.start"
       payload: { tool_id: string; name?: string; args_text?: string; context?: string }
@@ -70,6 +71,9 @@ export type GatewayEvent =
         error?: string
         duration_s?: number
         result_text?: string
+        /** Parsed tool return (gateway always sets when JSON). */
+        result?: unknown
+        args?: unknown
       }
     }
   | {
@@ -92,6 +96,7 @@ const KNOWN = new Set([
   "message.start",
   "message.delta",
   "message.complete",
+  "message.interim",
   "thinking.delta",
   "reasoning.delta",
   "reasoning.available",
@@ -112,18 +117,42 @@ export function asGatewayEvent(v: unknown): GatewayEvent | null {
   return v as GatewayEvent
 }
 
+/** Drop last_reasoning when it was also stuffed into final_response text. */
+function stripReasoningFromCompleteText(text: string, reasoning: string): string {
+  if (!text?.trim() || !reasoning?.trim()) return text ?? ""
+  const r = reasoning.trim()
+  if (text.trim() === r) return text // identical: keep; UI prefers text over empty
+  let t = text
+  if (t.includes(r) && t.trim() !== r) t = t.split(r).join("")
+  else {
+    const tt = t.trimEnd()
+    if (tt.endsWith(r) && tt.length > r.length) t = tt.slice(0, -r.length)
+    else if (tt.startsWith(r) && tt.length > r.length) t = tt.slice(r.length)
+  }
+  return t.replace(/\n{3,}/g, "\n\n").replace(/[ \t]+\n/g, "\n").trim()
+}
+
 /** UI-facing events after mapping (OMP chrome host consumes these). */
 export type UiEvent =
   | { kind: "ready" }
   | { kind: "info"; info: SessionInfo }
   | { kind: "stderr"; line: string }
   | { kind: "status"; text: string }
+  | { kind: "lifecycle"; text: string }
   | { kind: "user"; text: string }
   | { kind: "thinking"; text: string; done?: boolean }
   | { kind: "text"; text: string; done?: boolean }
   | { kind: "tool_start"; id: string; name: string; args?: string }
   | { kind: "tool_update"; id: string; preview?: string }
-  | { kind: "tool_end"; id: string; name: string; summary?: string; error?: string }
+  | {
+      kind: "tool_end"
+      id: string
+      name: string
+      summary?: string
+      error?: string
+      /** Raw gateway result (object or string) for OMP-shaped details. */
+      result?: unknown
+    }
   | { kind: "error"; text: string }
   | { kind: "clarify"; id: string; question: string; choices: string[] | null }
   | {
@@ -149,9 +178,21 @@ export function mapGatewayToUi(ev: GatewayEvent): UiEvent | UiEvent[] | null {
       return { kind: "error", text: `protocol: ${ev.payload?.preview ?? "?"}` }
     case "session.info":
       return { kind: "info", info: ev.payload }
-    case "status.update":
-      return ev.payload?.text ? { kind: "status", text: ev.payload.text } : null
+    case "status.update": {
+      // Herm events.ts: process/status = transient coat status only;
+      // lifecycle/error/warn also leave a durable notice (not error — error ends turns).
+      const text = (ev.payload?.text ?? "").trim()
+      if (!text) return null
+      const kind = (ev.payload as { kind?: string } | undefined)?.kind
+      if (!kind || kind === "status" || kind === "process") {
+        return { kind: "status", text }
+      }
+      return { kind: "lifecycle", text }
+    }
     case "thinking.delta":
+      // Cosmetic spinner / kaomoji from Hermes — NOT model reasoning.
+      // Herm: status-only. Never paint into transcript thinking blocks.
+      return ev.payload?.text ? { kind: "status", text: ev.payload.text } : null
     case "reasoning.delta":
       return ev.payload?.text ? { kind: "thinking", text: ev.payload.text } : null
     case "reasoning.available":
@@ -160,16 +201,33 @@ export function mapGatewayToUi(ev: GatewayEvent): UiEvent | UiEvent[] | null {
       return { kind: "text", text: "" }
     case "message.delta":
       return ev.payload?.text != null ? { kind: "text", text: ev.payload.text } : null
+    case "message.interim": {
+      // Mid-turn commentary. If already_streamed, skip (gateway already sent deltas).
+      const p = ev.payload as { text?: string; already_streamed?: boolean } | undefined
+      if (p?.already_streamed || !p?.text?.trim()) return null
+      return { kind: "text", text: p.text, done: true }
+    }
     case "message.complete": {
       const out: UiEvent[] = []
-      if (ev.payload?.status === "error") {
-        out.push({ kind: "error", text: ev.payload.text || "request failed" })
-      } else if (ev.payload?.text) {
-        out.push({ kind: "text", text: ev.payload.text, done: true })
-      } else {
-        out.push({ kind: "text", text: "", done: true })
+      const p = ev.payload
+      if (p?.status === "error") {
+        out.push({ kind: "error", text: p.text || "request failed" })
+        out.push({ kind: "turn_end", usage: p?.usage })
+        return out
       }
-      out.push({ kind: "turn_end", usage: ev.payload?.usage })
+      // Gateway attaches last_reasoning separately; also strip it out of text
+      // when the model double-stuffed CoT into final_response (MiniMax etc.).
+      const reasoning = typeof p?.reasoning === "string" ? p.reasoning.trim() : ""
+      let text = typeof p?.text === "string" ? p.text : p?.text == null ? "" : String(p.text)
+      if (reasoning) {
+        out.push({ kind: "thinking", text: reasoning, done: true })
+        text = stripReasoningFromCompleteText(text, reasoning)
+      }
+      if (p?.status === "interrupted" && text) {
+        text = text.endsWith("*[interrupted]*") ? text : `${text}\n\n*[interrupted]*`
+      }
+      out.push({ kind: "text", text, done: true })
+      out.push({ kind: "turn_end", usage: p?.usage })
       return out
     }
     case "tool.start":
@@ -182,14 +240,29 @@ export function mapGatewayToUi(ev: GatewayEvent): UiEvent | UiEvent[] | null {
     case "tool.progress":
     case "tool.generating":
       return { kind: "tool_update", id: "", preview: (ev.payload as { preview?: string }).preview }
-    case "tool.complete":
+    case "tool.complete": {
+      const p = ev.payload as {
+        tool_id?: string
+        name?: string
+        summary?: string
+        error?: string
+        result_text?: string
+        result?: unknown
+      }
+      // Prefer human summary; fall back to result_text; keep raw result for OMP details.
+      const summary =
+        p.summary ||
+        p.result_text ||
+        (typeof p.result === "string" ? p.result : undefined)
       return {
         kind: "tool_end",
-        id: ev.payload.tool_id,
-        name: ev.payload.name || "tool",
-        summary: ev.payload.summary || ev.payload.result_text,
-        error: ev.payload.error,
+        id: p.tool_id || "",
+        name: p.name || "tool",
+        summary,
+        error: p.error,
+        result: p.result,
       }
+    }
     case "clarify.request":
       return {
         kind: "clarify",

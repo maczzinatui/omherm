@@ -1104,6 +1104,8 @@ export class TUI extends Container {
 	// normal screen. #altPreviousLines is the last alt frame, for repaint-skip.
 	#altActive = false;
 	#altMouseTrackingActive = false;
+	/** Main-screen mouse (thinking headers / tool chrome) when no fullscreen overlay. */
+	#baseMouseTracking = false;
 	#altPreviousLines: string[] = [];
 	#altEnterWidth = 0;
 	#altEnterHeight = 0;
@@ -1508,6 +1510,19 @@ export class TUI extends Container {
 			},
 			isHidden: () => entry.hidden,
 		};
+	}
+
+	/**
+	 * Enable SGR mouse on the normal screen (outside fullscreen overlays).
+	 * Fullscreen overlays still take over tracking while open.
+	 */
+	setBaseMouseTracking(enabled: boolean): void {
+		if (this.#baseMouseTracking === enabled) return;
+		this.#baseMouseTracking = enabled;
+		if (!this.#altActive) {
+			this.terminal.write(enabled ? MOUSE_TRACKING_ON : MOUSE_TRACKING_OFF);
+		}
+		this.requestRender();
 	}
 
 	/** Hide the topmost overlay and restore previous focus. */
@@ -2779,7 +2794,8 @@ export class TUI extends Container {
 		let deferredAltExit = this.#pendingAltExit;
 		const topOverlay = this.#getTopmostVisibleOverlay();
 		const wantAlt = topOverlay?.options?.fullscreen === true;
-		const wantMouseTracking = wantAlt && topOverlay.options?.mouseTracking !== false;
+		const wantMouseTracking =
+			(wantAlt && topOverlay.options?.mouseTracking !== false) || (!wantAlt && this.#baseMouseTracking);
 		if (wantAlt && !this.#altActive) {
 			// Enhanced keyboard modes can be buffer-local: re-push the active
 			// modified-key reporting sequence on the freshly entered alternate
@@ -2799,7 +2815,11 @@ export class TUI extends Container {
 		} else if (!wantAlt && this.#altActive) {
 			const mouseExit = this.#altMouseTrackingActive ? MOUSE_TRACKING_OFF : "";
 			const enhancementExit = this.#keyboardEnhancementExit();
-			const exitSequence = `${mouseExit}${enhancementExit}\x1b[?1049l`;
+			// Leave alt with mouse off, then immediately restore base-screen
+			// tracking when enabled. Waiting a second paint left a dead zone
+			// where main-screen chips (quick-access Settings) only worked once.
+			const mouseRestore = this.#baseMouseTracking ? MOUSE_TRACKING_ON : "";
+			const exitSequence = `${mouseExit}${enhancementExit}\x1b[?1049l${mouseRestore}`;
 			// Session replacement can finish while a fullscreen selector is still
 			// covering the old normal buffer. Keep the overlay visible until the
 			// replacement is ready, then fuse the buffer restore into that full paint;
@@ -2811,7 +2831,7 @@ export class TUI extends Container {
 			setAltScreenActive(false);
 			this.#forgetHardwareCursorState();
 			this.#altActive = false;
-			this.#altMouseTrackingActive = false;
+			this.#altMouseTrackingActive = this.#baseMouseTracking;
 			this.#altPreviousLines = [];
 			// A resize while on the alt buffer reflowed the terminal's saved
 			// normal screen; it no longer matches our accounting, so force the

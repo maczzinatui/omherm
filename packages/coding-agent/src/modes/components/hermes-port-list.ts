@@ -6,7 +6,7 @@
  * SelectList dump — real columns, selection caret, side KV pane when wide.
  */
 import type { Component, TUI } from "@oh-my-pi/pi-tui"
-import { matchesKey, visibleWidth } from "@oh-my-pi/pi-tui"
+import { matchesKey, routeSgrMouseInput, type SgrMouseEvent, visibleWidth } from "@oh-my-pi/pi-tui"
 import {
 	cronPort,
 	kanbanPort,
@@ -136,19 +136,56 @@ export class HermesPortListComponent implements Component {
 	/** Cached layout from last render */
 	#tableRows = 12
 	#wide = false
+	/** Mouse hit geometry (overlay MUST be top-left anchored so screen row == line). */
+	#tableStartRow = 0
+	#tableHitCount = 0
+	/** Exclusive right edge of table hit zone (cols left of detail pane). */
+	#tableColEnd = 9999
+	#actionStartRow = -1
+	#actionCount = 0
+	/** Relative row of first action inside detail body (before frame offset). */
+	#actionRelStart = -1
+	#confirmRows: { cancel: number; yes: number } | null = null
+	#formFieldStarts: number[] = []
+	/** Debounce detail network refresh after wheel/selection storms. */
+	#detailRefreshTimer: ReturnType<typeof setTimeout> | undefined
+	#detailRefreshGen = 0
+	/** Last selected index whose detail was fetched (skip redundant CLI). */
+	#detailForSel = -1
+	/** Hovered table row index (absolute task/job index), or -1. */
+	#hoverIdx = -1
+	#lastHoverKey = ""
 
 	constructor(tui: TUI, kind: HermesPortKind, onCancel: () => void) {
 		this.#tui = tui
 		this.#kind = kind
 		this.#onCancel = onCancel
+		// Hover/sel/nav only mutates this overlay — skip full transcript walk.
+		this.#tui.enableScopedInputRender?.(this)
 		void this.reload()
 	}
 
+	/** Local overlay paint (hover/nav). Prefer component-scoped when available. */
+	#paintLocal(): void {
+		if (typeof this.#tui.requestComponentRender === "function") {
+			this.#tui.requestComponentRender(this)
+		} else {
+			this.#tui.requestRender()
+		}
+	}
+
+	/** Structural paint (load/reload/open forms) — full frame OK. */
+	#paintFull(): void {
+		this.#tui.requestRender()
+	}
+
 	async reload(): Promise<void> {
-		this.#loading = true
+		const cold = this.#count() === 0
+		this.#loading = cold
 		this.#error = ""
 		this.#banner = ""
-		this.#tui.requestRender()
+		// Skip full-frame flash on soft reload (R after data already shown).
+		if (cold) this.#paintFull()
 		try {
 			if (this.#kind === "cron") {
 				const [jobs, st] = await Promise.all([
@@ -158,11 +195,12 @@ export class HermesPortListComponent implements Component {
 				this.#jobs = jobs
 				this.#cronStatus = st
 				if (this.#sel >= jobs.length) this.#sel = Math.max(0, jobs.length - 1)
-				await this.#refreshCronDetail()
+				this.#paintDetailFromList()
+				void this.#refreshCronDetail()
 			} else if (this.#kind === "kanban") {
 				this.#tasks = await kanbanPort.list({ limit: 80 })
 				if (this.#sel >= this.#tasks.length) this.#sel = Math.max(0, this.#tasks.length - 1)
-				await this.#refreshKanbanDetail()
+				this.#paintDetailFromList()
 			} else {
 				this.#profiles = await profilePort.list()
 				if (this.#sel >= this.#profiles.length) this.#sel = Math.max(0, this.#profiles.length - 1)
@@ -173,48 +211,71 @@ export class HermesPortListComponent implements Component {
 			this.#error = e instanceof Error ? e.message : String(e)
 		} finally {
 			this.#loading = false
-			this.#tui.requestRender()
+			this.#paintFull()
 		}
 	}
 
-	async #refreshCronDetail(): Promise<void> {
-		const j = this.#jobs[this.#sel]
-		if (!j) {
-			this.#detail = null
-			this.#detailLines = []
-			this.#runsPreview = []
+	/**
+	 * Instant detail from already-loaded list rows. Never spawnSync here —
+	 * `hermes kanban/cron show` blocks the TUI event loop for seconds and
+	 * made every click feel dead.
+	 */
+	#paintDetailFromList(): void {
+		if (this.#kind === "cron") {
+			const j = this.#jobs[this.#sel]
+			if (!j) {
+				this.#detail = null
+				this.#detailLines = []
+				this.#runsPreview = []
+				this.#detailForSel = -1
+				return
+			}
+			this.#detail = j
+			this.#detailLines = this.#cronKv(j)
+			this.#detailForSel = this.#sel
 			return
 		}
-		const rich = (await cronPort.show(j.id).catch(() => null)) || j
-		this.#detail = rich
-		this.#detailLines = this.#cronKv(rich)
-		// soft load runs (non-blocking feel)
+		if (this.#kind === "kanban") {
+			const t = this.#tasks[this.#sel]
+			if (!t) {
+				this.#detail = null
+				this.#detailLines = []
+				this.#detailForSel = -1
+				return
+			}
+			this.#detail = t
+			this.#detailLines = this.#kanbanKv(t)
+			this.#detailForSel = this.#sel
+			return
+		}
+		this.#detail = null
+		this.#detailLines = []
+		this.#detailForSel = this.#sel
+	}
+
+	async #refreshCronDetail(): Promise<void> {
+		// List paint already ran. Soft-enrich runs only (best-effort, non-blocking).
+		const j = this.#jobs[this.#sel]
+		if (!j) return
+		const sel = this.#sel
 		cronPort
 			.runs(j.id, 8)
 			.then((rows) => {
+				if (sel !== this.#sel) return
 				this.#runsPreview = rows.map((r) => r.raw)
-				this.#tui.requestRender()
+				this.#paintLocal()
 			})
 			.catch(() => {
+				if (sel !== this.#sel) return
 				this.#runsPreview = []
 			})
 	}
 
 	async #refreshKanbanDetail(): Promise<void> {
-		const t = this.#tasks[this.#sel]
-		if (!t) {
-			this.#detail = null
-			this.#detailLines = []
-			return
-		}
-		try {
-			const d = await kanbanPort.show(t.id)
-			this.#detail = d
-			this.#detailLines = this.#kanbanKv(d)
-		} catch (e) {
-			this.#detail = t
-			this.#detailLines = [`error: ${e instanceof Error ? e.message : String(e)}`]
-		}
+		// Intentionally no-op for selection path. List DTO is enough for the
+		// pane; spawnSync `kanban show` freezes mouse for 3–5s. Mutations still
+		// go through CLI on action keys (archive/complete/…).
+		this.#paintDetailFromList()
 	}
 
 	#cronKv(j: CronJob): string[] {
@@ -282,29 +343,31 @@ export class HermesPortListComponent implements Component {
 	#actions(): { id: string; label: string; desc: string }[] {
 		if (this.#kind === "cron") {
 			const j = this.#jobs[this.#sel]
+			const back = { id: "close", label: "Back to Settings", desc: "Esc/q" }
 			const base = [
 				{ id: "create", label: "New job…", desc: "n" },
 				{ id: "reload", label: "Reload list", desc: "R" },
-				{ id: "close", label: "Close", desc: "Esc" },
+				back,
 			]
 			if (!j) return base
 			return [
 				{ id: "create", label: "New job…", desc: "n" },
 				{ id: "edit", label: "Edit job…", desc: "e" },
 				{ id: "toggle", label: j.enabled ? "Pause" : "Resume", desc: "p" },
-				{ id: "run", label: "Run next tick", desc: "r" },
+				{ id: "run", label: "Run next tick", desc: "!" },
 				{ id: "runs", label: "Refresh runs", desc: "" },
 				{ id: "reload", label: "Reload list", desc: "R" },
 				{ id: "remove", label: "Delete job…", desc: "d" },
-				{ id: "close", label: "Close", desc: "Esc" },
+				back,
 			]
 		}
 		if (this.#kind === "kanban") {
 			const t = this.#tasks[this.#sel]
+			const back = { id: "close", label: "Back to Settings", desc: "Esc/q" }
 			const base = [
 				{ id: "create", label: "New task…", desc: "n" },
 				{ id: "reload", label: "Reload list", desc: "R" },
-				{ id: "close", label: "Close", desc: "Esc" },
+				back,
 			]
 			if (!t) return base
 			return [
@@ -314,14 +377,14 @@ export class HermesPortListComponent implements Component {
 				{ id: "complete", label: "Complete", desc: "c" },
 				{ id: "block", label: "Block", desc: "b" },
 				{ id: "unblock", label: "Unblock", desc: "" },
-				{ id: "archive", label: "Archive", desc: "d" },
+				{ id: "archive", label: "Archive", desc: "r" },
 				{ id: "reload", label: "Reload list", desc: "R" },
-				{ id: "close", label: "Close", desc: "Esc" },
+				back,
 			]
 		}
 		return [
 			{ id: "reload", label: "Reload", desc: "R" },
-			{ id: "close", label: "Close", desc: "Esc" },
+			{ id: "close", label: "Back", desc: "Esc/q" },
 		]
 	}
 
@@ -371,7 +434,7 @@ export class HermesPortListComponent implements Component {
 					this.#confirm = "remove_cron"
 					this.#focus = "confirm"
 					this.#actionSel = 0
-					this.#tui.requestRender()
+					this.#paintLocal()
 					return
 				}
 			}
@@ -388,7 +451,7 @@ export class HermesPortListComponent implements Component {
 		} catch (e) {
 			this.#banner = e instanceof Error ? e.message : String(e)
 		}
-		this.#tui.requestRender()
+		this.#paintLocal()
 	}
 
 	#openCronCreate(): void {
@@ -404,7 +467,7 @@ export class HermesPortListComponent implements Component {
 			],
 		}
 		this.#focus = "form"
-		this.#tui.requestRender()
+		this.#paintLocal()
 	}
 
 	#openCronEdit(): void {
@@ -423,7 +486,7 @@ export class HermesPortListComponent implements Component {
 			],
 		}
 		this.#focus = "form"
-		this.#tui.requestRender()
+		this.#paintLocal()
 	}
 
 	#openKanbanCreate(): void {
@@ -438,7 +501,7 @@ export class HermesPortListComponent implements Component {
 			],
 		}
 		this.#focus = "form"
-		this.#tui.requestRender()
+		this.#paintLocal()
 	}
 
 	#openKanbanAssign(): void {
@@ -459,7 +522,7 @@ export class HermesPortListComponent implements Component {
 			],
 		}
 		this.#focus = "form"
-		this.#tui.requestRender()
+		this.#paintLocal()
 	}
 
 	async #submitForm(): Promise<void> {
@@ -472,12 +535,12 @@ export class HermesPortListComponent implements Component {
 				const prompt = get("prompt")
 				if (!schedule) {
 					f.error = "schedule required"
-					this.#tui.requestRender()
+					this.#paintLocal()
 					return
 				}
 				if (!prompt) {
 					f.error = "prompt required"
-					this.#tui.requestRender()
+					this.#paintLocal()
 					return
 				}
 				this.#banner = await cronPort.create({
@@ -490,7 +553,7 @@ export class HermesPortListComponent implements Component {
 				const schedule = get("schedule")
 				if (!schedule) {
 					f.error = "schedule required"
-					this.#tui.requestRender()
+					this.#paintLocal()
 					return
 				}
 				this.#banner = await cronPort.edit(f.targetId, {
@@ -503,7 +566,7 @@ export class HermesPortListComponent implements Component {
 				const title = get("title")
 				if (!title) {
 					f.error = "title required"
-					this.#tui.requestRender()
+					this.#paintLocal()
 					return
 				}
 				this.#banner = await kanbanPort.create({
@@ -520,29 +583,34 @@ export class HermesPortListComponent implements Component {
 			await this.reload()
 		} catch (e) {
 			f.error = e instanceof Error ? e.message : String(e)
-			this.#tui.requestRender()
+			this.#paintLocal()
 		}
 	}
 
 	handleInput(data: string): void {
-		if (matchesSelectCancel(data)) {
+		if (data.startsWith("\x1b[<")) {
+			this.#handleMouse(data)
+			return
+		}
+		if (matchesSelectCancel(data) || data === "q") {
 			if (this.#focus === "form") {
 				this.#form = null
 				this.#focus = "table"
-				this.#tui.requestRender()
+				this.#paintLocal()
 				return
 			}
 			if (this.#focus === "confirm") {
 				this.#confirm = null
 				this.#focus = "table"
-				this.#tui.requestRender()
+				this.#paintLocal()
 				return
 			}
 			if (this.#focus === "actions") {
 				this.#focus = "table"
-				this.#tui.requestRender()
+				this.#paintLocal()
 				return
 			}
+			// Esc/q from table = back to settings (port dismiss), not full app quit
 			this.#onCancel()
 			return
 		}
@@ -557,19 +625,19 @@ export class HermesPortListComponent implements Component {
 				form.idx = (form.idx + 1) % form.fields.length
 				form.editing = true
 				form.error = undefined
-				this.#tui.requestRender()
+				this.#paintLocal()
 				return
 			}
 			if (matchesSelectUp(data)) {
 				form.idx = (form.idx + form.fields.length - 1) % form.fields.length
 				form.editing = true
-				this.#tui.requestRender()
+				this.#paintLocal()
 				return
 			}
 			if (matchesSelectDown(data)) {
 				form.idx = (form.idx + 1) % form.fields.length
 				form.editing = true
-				this.#tui.requestRender()
+				this.#paintLocal()
 				return
 			}
 			// Ctrl+Enter submit (often arrives as \n with control — also bare enter when last field)
@@ -579,26 +647,26 @@ export class HermesPortListComponent implements Component {
 				} else {
 					form.idx = form.idx + 1
 					form.editing = true
-					this.#tui.requestRender()
+					this.#paintLocal()
 				}
 				return
 			}
 			// backspace
 			if (data === "\x7f" || data === "\b") {
 				field.value = field.value.slice(0, -1)
-				this.#tui.requestRender()
+				this.#paintLocal()
 				return
 			}
 			// printable
 			if (data.length === 1 && data >= " ") {
 				field.value += data
-				this.#tui.requestRender()
+				this.#paintLocal()
 				return
 			}
 			// multi-char paste
 			if (data.length > 1 && !data.includes("\x1b")) {
 				field.value += data.replace(/\r/g, "")
-				this.#tui.requestRender()
+				this.#paintLocal()
 			}
 			return
 		}
@@ -607,7 +675,7 @@ export class HermesPortListComponent implements Component {
 		if (this.#focus === "confirm") {
 			if (matchesSelectUp(data) || matchesSelectDown(data)) {
 				this.#actionSel = this.#actionSel === 0 ? 1 : 0
-				this.#tui.requestRender()
+				this.#paintLocal()
 				return
 			}
 			if (matchesKey(data, "enter") || matchesKey(data, "return") || data === "\n") {
@@ -654,7 +722,7 @@ export class HermesPortListComponent implements Component {
 			if (this.#count() > 0) {
 				this.#focus = this.#focus === "table" ? "actions" : "table"
 				this.#actionSel = 0
-				this.#tui.requestRender()
+				this.#paintLocal()
 			}
 			return
 		}
@@ -663,12 +731,12 @@ export class HermesPortListComponent implements Component {
 			const acts = this.#actions()
 			if (matchesSelectUp(data)) {
 				this.#actionSel = (this.#actionSel + acts.length - 1) % acts.length
-				this.#tui.requestRender()
+				this.#paintLocal()
 				return
 			}
 			if (matchesSelectDown(data)) {
 				this.#actionSel = (this.#actionSel + 1) % acts.length
-				this.#tui.requestRender()
+				this.#paintLocal()
 				return
 			}
 			if (matchesKey(data, "enter") || matchesKey(data, "return") || data === "\n") {
@@ -684,7 +752,8 @@ export class HermesPortListComponent implements Component {
 				void this.#runAction("toggle")
 				return
 			}
-			if (data === "r") {
+			if (data === "!" || data === "r") {
+				// "r" kept as alias for run on cron; kanban owns "r" for archive
 				void this.#runAction("run")
 				return
 			}
@@ -706,7 +775,8 @@ export class HermesPortListComponent implements Component {
 				void this.#runAction("block")
 				return
 			}
-			if (data === "d") {
+			if (data === "r" || data === "d") {
+				// r = archive (operator); d kept as alias
 				void this.#runAction("archive")
 				return
 			}
@@ -739,18 +809,203 @@ export class HermesPortListComponent implements Component {
 			// Enter opens actions pane (detail already visible when wide)
 			this.#focus = "actions"
 			this.#actionSel = 0
-			this.#tui.requestRender()
+			this.#paintLocal()
 		}
+	}
+
+	#handleMouse(data: string): void {
+		routeSgrMouseInput(data, (event: SgrMouseEvent) => {
+			if (event.release) return true
+
+			// Hover highlight — motion only paints, never selects.
+			if (event.motion) {
+				if (
+					this.#focus === "table" &&
+					event.row >= this.#tableStartRow &&
+					event.row < this.#tableStartRow + this.#tableHitCount &&
+					event.col < this.#tableColEnd
+				) {
+					const idx = this.#scroll + (event.row - this.#tableStartRow)
+					const n = this.#count()
+					const next = idx >= 0 && idx < n ? idx : -1
+					const key = `${next}|${event.row}`
+					if (key !== this.#lastHoverKey) {
+						this.#lastHoverKey = key
+						this.#hoverIdx = next
+						this.#paintLocal()
+					}
+				} else if (this.#hoverIdx !== -1) {
+					this.#hoverIdx = -1
+					this.#lastHoverKey = ""
+					this.#paintLocal()
+				}
+				return true
+			}
+
+			if (event.wheel !== null) {
+				this.#hoverIdx = -1
+				if (this.#focus === "confirm") {
+					this.#actionSel = this.#actionSel === 0 ? 1 : 0
+					this.#paintLocal()
+					return true
+				}
+				if (this.#focus === "form" && this.#form) {
+					const form = this.#form
+					form.idx = Math.max(0, Math.min(form.fields.length - 1, form.idx + event.wheel))
+					form.editing = true
+					this.#paintLocal()
+					return true
+				}
+				if (this.#focus === "actions") {
+					const acts = this.#actions()
+					if (acts.length) {
+						this.#actionSel = Math.max(0, Math.min(acts.length - 1, this.#actionSel + event.wheel))
+						this.#paintLocal()
+					}
+					return true
+				}
+				// Table: move selection + viewport only — NEVER await network on every
+				// wheel tick (that locked the TUI when kanban/cron was opened from settings).
+				const n = this.#count()
+				if (n > 0) {
+					const next = Math.max(0, Math.min(n - 1, this.#sel + event.wheel))
+					if (next !== this.#sel) {
+						this.#sel = next
+						this.#focus = "table"
+						this.#clampScroll()
+						// Instant list detail — never spawnSync on wheel.
+						this.#paintDetailFromList()
+						this.#paintLocal()
+						if (this.#kind === "cron") this.#scheduleDetailRefresh(160)
+					} else {
+						// At edge: still paint so clamp feels responsive
+						this.#paintLocal()
+					}
+				}
+				return true
+			}
+			if (!event.leftClick) return true
+
+			if (this.#focus === "confirm" && this.#confirmRows) {
+				if (event.row === this.#confirmRows.cancel) {
+					this.#actionSel = 0
+					this.#confirm = null
+					this.#focus = "table"
+					this.#paintLocal()
+					return true
+				}
+				if (event.row === this.#confirmRows.yes) {
+					this.#actionSel = 1
+					// Reuse keyboard confirm path
+					this.handleInput("\n")
+					return true
+				}
+				return true
+			}
+
+			if (this.#focus === "form" && this.#form && this.#formFieldStarts.length) {
+				for (let i = 0; i < this.#formFieldStarts.length; i++) {
+					const start = this.#formFieldStarts[i]!
+					const next = this.#formFieldStarts[i + 1] ?? start + 2
+					if (event.row >= start && event.row < next) {
+						this.#form.idx = i
+						this.#form.editing = true
+						this.#paintLocal()
+						return true
+					}
+				}
+				return true
+			}
+
+			// Actions column (right pane / stacked) — prefer over table when overlapping rows
+			if (
+				this.#actionStartRow >= 0 &&
+				event.row >= this.#actionStartRow &&
+				event.row < this.#actionStartRow + this.#actionCount &&
+				// On wide layout actions sit in the right pane (col >= tableColEnd)
+				(!this.#wide || event.col >= this.#tableColEnd)
+			) {
+				const i = event.row - this.#actionStartRow
+				const acts = this.#actions()
+				if (i >= 0 && i < acts.length) {
+					if (this.#focus === "actions" && this.#actionSel === i) {
+						void this.#runAction(acts[i]!.id)
+					} else {
+						this.#focus = "actions"
+						this.#actionSel = i
+						this.#paintLocal()
+					}
+				}
+				return true
+			}
+
+			// Table rows: only the LEFT column on wide split (right is detail).
+			// Requires top-left overlay anchor so event.row == component line index.
+			if (
+				event.row >= this.#tableStartRow &&
+				event.row < this.#tableStartRow + this.#tableHitCount &&
+				event.col < this.#tableColEnd
+			) {
+				const idx = this.#scroll + (event.row - this.#tableStartRow)
+				const n = this.#count()
+				if (idx >= 0 && idx < n) {
+					// Instant select + list-backed detail (no CLI). Second click
+					// on same row enters action focus for Enter-to-run.
+					this.#focus = idx === this.#sel && this.#focus === "table" ? "actions" : "table"
+					if (this.#focus === "actions") this.#actionSel = 0
+					this.#sel = idx
+					this.#hoverIdx = idx
+					this.#clampScroll()
+					this.#paintDetailFromList()
+					this.#paintLocal()
+					// Cron: soft-load recent runs after settle (still async-ish).
+					if (this.#kind === "cron") this.#scheduleDetailRefresh(120)
+				}
+				return true
+			}
+			return true
+		})
+	}
+
+	/** Soft async enrich only (cron runs). Selection paint is always sync. */
+	#scheduleDetailRefresh(delayMs = 90): void {
+		if (this.#detailRefreshTimer) clearTimeout(this.#detailRefreshTimer)
+		const gen = ++this.#detailRefreshGen
+		const sel = this.#sel
+		this.#detailRefreshTimer = setTimeout(() => {
+			this.#detailRefreshTimer = undefined
+			if (gen !== this.#detailRefreshGen || sel !== this.#sel) return
+			void this.#refreshDetailNow()
+		}, delayMs)
+		this.#detailRefreshTimer.unref?.()
+	}
+
+	async #refreshDetailNow(): Promise<void> {
+		const gen = this.#detailRefreshGen
+		// Always keep list paint current first.
+		this.#paintDetailFromList()
+		if (this.#kind === "cron") await this.#refreshCronDetail()
+		if (gen !== this.#detailRefreshGen) return
+		this.#paintLocal()
 	}
 
 	async #onSelChange(): Promise<void> {
 		this.#clampScroll()
-		if (this.#kind === "cron") await this.#refreshCronDetail()
-		else if (this.#kind === "kanban") await this.#refreshKanbanDetail()
-		this.#tui.requestRender()
+		// Instant local detail — never await hermes CLI on ↑/↓.
+		this.#paintDetailFromList()
+		this.#paintLocal()
+		if (this.#kind === "cron") this.#scheduleDetailRefresh(120)
 	}
 
 	// ── render helpers ──────────────────────────────────────────
+
+	/** selectedBg band for selection; lighter accent band for hover-only. */
+	#paintRowBand(line: string, inner: number, selected: boolean, hovered: boolean): string {
+		const fitted = fit(line, inner)
+		if (selected) return theme.bg("selectedBg", fitted)
+		if (hovered) return theme.bg("selectedBg", theme.fg("accent", fitted))
+		return fitted
+	}
 
 	#renderCronHeader(inner: number): string {
 		// ▸ · · Name …… Schedule(14) Last(12) Next(12)
@@ -764,7 +1019,7 @@ export class HermesPortListComponent implements Component {
 		return h
 	}
 
-	#renderCronRow(j: CronJob, selected: boolean, inner: number): string {
+	#renderCronRow(j: CronJob, selected: boolean, hovered: boolean, inner: number): string {
 		const schedW = 14
 		const lastW = 12
 		const nextW = 12
@@ -786,7 +1041,7 @@ export class HermesPortListComponent implements Component {
 			theme.fg("dim", pad(agoLabel(j.last_run), lastW)) +
 			" " +
 			theme.fg(j.enabled ? "text" : "dim", pad(j.enabled ? untilLabel(j.next_run) : "paused", nextW))
-		return selected ? theme.bg("selectedBg", fit(line, inner)) : fit(line, inner)
+		return this.#paintRowBand(line, inner, selected, hovered && !selected)
 	}
 
 	#renderKanbanHeader(inner: number): string {
@@ -801,7 +1056,7 @@ export class HermesPortListComponent implements Component {
 		)
 	}
 
-	#renderKanbanRow(t: KanbanTask, selected: boolean, inner: number): string {
+	#renderKanbanRow(t: KanbanTask, selected: boolean, hovered: boolean, inner: number): string {
 		const stW = 10
 		const idW = 12
 		const whoW = 12
@@ -825,16 +1080,16 @@ export class HermesPortListComponent implements Component {
 			theme.fg("dim", pad(t.assignee || "—", whoW)) +
 			" " +
 			(selected ? theme.bold(theme.fg("accent", pad(t.title, titleW))) : theme.fg("text", pad(t.title, titleW)))
-		return selected ? theme.bg("selectedBg", fit(line, inner)) : fit(line, inner)
+		return this.#paintRowBand(line, inner, selected, hovered && !selected)
 	}
 
-	#renderProfileRow(p: ProfileInfo, selected: boolean, inner: number): string {
+	#renderProfileRow(p: ProfileInfo, selected: boolean, hovered: boolean, inner: number): string {
 		const caret = selected ? theme.fg("accent", "▸ ") : "  "
 		const mark = p.is_active ? theme.fg("success", "● ") : theme.fg("dim", "○ ")
 		const name = pad(p.name + (p.is_sticky ? " *" : ""), Math.min(24, Math.floor(inner * 0.35)))
 		const rest = [p.model, p.provider].filter(Boolean).join(" · ")
 		const line = caret + mark + (selected ? theme.bold(theme.fg("accent", name)) : name) + " " + theme.fg("dim", rest)
-		return selected ? theme.bg("selectedBg", fit(line, inner)) : fit(line, inner)
+		return this.#paintRowBand(line, inner, selected, hovered && !selected)
 	}
 
 	#detailTitle(): string {
@@ -878,17 +1133,21 @@ export class HermesPortListComponent implements Component {
 				}
 			}
 		}
-		// Actions footer in detail
-		if (this.#focus === "actions" || !this.#wide) {
+		// Keep detail clean — keys live on the FULL-WIDTH footer (not split).
+		// Only paint a compact action list when focus === "actions" (Tab).
+		const acts = this.#actions()
+		this.#actionCount = acts.length
+		this.#actionRelStart = -1
+		if (this.#focus === "actions" && acts.length > 0) {
 			lines.push("")
-			lines.push(theme.fg("dim", this.#focus === "actions" ? "Actions (Enter)" : "Enter · actions"))
-			const acts = this.#actions()
+			lines.push(theme.fg("dim", "Actions · Enter runs · Esc back to list"))
 			for (let i = 0; i < acts.length && lines.length < maxLines; i++) {
 				const a = acts[i]!
-				const sel = this.#focus === "actions" && i === this.#actionSel
+				const sel = i === this.#actionSel
 				const mark = sel ? theme.fg("accent", "▸ ") : "  "
 				const lab = sel ? theme.bold(theme.fg("accent", a.label)) : theme.fg("text", a.label)
 				const desc = a.desc ? theme.fg("dim", `  ${a.desc}`) : ""
+				if (i === 0) this.#actionRelStart = lines.length
 				lines.push(fit(mark + lab + desc, bodyW))
 			}
 		}
@@ -896,24 +1155,35 @@ export class HermesPortListComponent implements Component {
 		return lines.slice(0, maxLines)
 	}
 
+	/** Single full-width chrome line — never split (split was clipping keys). */
 	#hint(): string {
+		const back = "Esc/q → Settings"
 		if (this.#kind === "cron") {
-			return "↑↓ nav  n new  e edit  Enter actions  p pause  r run  d del  R reload  Esc"
+			return `↑↓ · n new · e edit · !/r run · p pause · d delete · R reload · Tab actions · ${back}`
 		}
 		if (this.#kind === "kanban") {
-			return "↑↓ nav  n new  a assign  Enter actions  u/c/b/d  R reload  Esc"
+			return `↑↓ · n new · a assign · r archive · c complete · u promote · R reload · Tab actions · ${back}`
 		}
-		return "↑↓ nav  R reload  Esc close · switch: hermes profile use"
+		return `↑↓ · R reload · Tab actions · ${back}`
 	}
 
 	render(width: number): string[] {
 		const w = Math.max(40, width)
 		this.#wide = w >= 100 && this.#kind !== "profiles"
+		this.#confirmRows = null
+		this.#formFieldStarts = []
+		this.#actionStartRow = -1
+		this.#actionCount = 0
+		this.#tableStartRow = 0
+		this.#tableHitCount = 0
+		this.#tableColEnd = w // default full width; wide layout tightens below
 
 		// Vertical budget from terminal when available (OMP overlay is % of screen).
 		const termRows = typeof process !== "undefined" && process.stdout?.rows ? process.stdout.rows : 36
-		const chrome = this.#wide ? 7 : 12
-		this.#tableRows = Math.max(6, Math.min(22, termRows - chrome - 4))
+		// Fill almost full height — top-left anchor + tall table so mouse 1:1
+		// and less dead chrome under the board.
+		const chrome = this.#wide ? 8 : 14
+		this.#tableRows = Math.max(8, Math.min(termRows - 4, termRows - chrome))
 		this.#clampScroll()
 
 		const out: string[] = []
@@ -942,11 +1212,12 @@ export class HermesPortListComponent implements Component {
 				kanban_assign: "Assign task",
 			}
 			out.push(topBorder(w, titles[form.kind]))
-			out.push(row(theme.fg("dim", "↑↓ fields  type  Enter next/save  Esc cancel"), w))
+			out.push(row(theme.fg("dim", "↑↓ fields  type  Enter next/save  Esc cancel · click field"), w))
 			if (form.error) out.push(row(theme.fg("error", form.error.slice(0, w - 6)), w))
 			out.push(divider(w))
 			const inner = Math.max(20, w - 4)
 			for (let i = 0; i < form.fields.length; i++) {
+				this.#formFieldStarts.push(out.length)
 				const f = form.fields[i]!
 				const active = i === form.idx
 				const caret = active ? theme.fg("accent", "▸ ") : "  "
@@ -975,9 +1246,10 @@ export class HermesPortListComponent implements Component {
 			const j = this.#jobs[this.#sel]
 			out.push(row(theme.fg("warning", `Delete "${j?.name || j?.id || "?"}"? This cannot be undone.`), w))
 			out.push(row("", w))
+			this.#confirmRows = { cancel: out.length, yes: out.length + 1 }
 			out.push(row((this.#actionSel === 0 ? theme.fg("accent", "▸ ") : "  ") + "Cancel", w))
 			out.push(row((this.#actionSel === 1 ? theme.fg("error", "▸ ") : "  ") + theme.fg("error", "Yes, delete permanently"), w))
-			out.push(row(theme.fg("dim", "↑↓  Enter  Esc"), w))
+			out.push(row(theme.fg("dim", "↑↓  Enter  Esc · click"), w))
 			out.push(bottomBorder(w))
 			return out
 		}
@@ -1008,6 +1280,8 @@ export class HermesPortListComponent implements Component {
 			const bodyW = splitBodyWidth(w, sideW)
 			const tableInner = sideW
 			const rows = this.#tableRows
+			// Table hit zone ends at the vertical divider (sideW + border inset).
+			this.#tableColEnd = sideW + 3
 
 			out.push(topBorderSplit(w, this.#title(), sideW))
 			out.push(splitRow(fit(statusLine, sideW), fit(theme.fg("dim", "Detail"), bodyW), w, sideW))
@@ -1027,6 +1301,9 @@ export class HermesPortListComponent implements Component {
 
 			const detailLines = this.#renderDetailBody(bodyW, rows + 1)
 			const n = this.#count()
+			// Detail body is painted as the right column aligned with table rows
+			// starting after header line (current out.length + loop). Table starts next.
+			const tableStartBefore = out.length
 
 			if (n === 0) {
 				const empty =
@@ -1037,30 +1314,30 @@ export class HermesPortListComponent implements Component {
 					out.push(splitRow(i === 0 ? fit(empty, sideW) : "", fit(detailLines[i] || "", bodyW), w, sideW))
 				}
 			} else {
+				this.#tableStartRow = out.length
+				this.#tableHitCount = rows
 				for (let i = 0; i < rows; i++) {
 					const idx = this.#scroll + i
 					let left = ""
 					if (idx < n) {
-						if (this.#kind === "cron") left = this.#renderCronRow(this.#jobs[idx]!, idx === this.#sel, tableInner)
-						else if (this.#kind === "kanban") left = this.#renderKanbanRow(this.#tasks[idx]!, idx === this.#sel, tableInner)
-						else left = this.#renderProfileRow(this.#profiles[idx]!, idx === this.#sel, tableInner)
+						if (this.#kind === "cron") left = this.#renderCronRow(this.#jobs[idx]!, idx === this.#sel, idx === this.#hoverIdx, tableInner)
+						else if (this.#kind === "kanban") left = this.#renderKanbanRow(this.#tasks[idx]!, idx === this.#sel, idx === this.#hoverIdx, tableInner)
+						else left = this.#renderProfileRow(this.#profiles[idx]!, idx === this.#sel, idx === this.#hoverIdx, tableInner)
 					}
 					out.push(splitRow(fit(left, sideW), fit(detailLines[i] || "", bodyW), w, sideW))
 				}
 			}
+			// Map action rows: relative within detailLines, absolute = tableStart + rel
+			if (this.#actionRelStart >= 0 && this.#tableStartRow > 0) {
+				this.#actionStartRow = this.#tableStartRow + this.#actionRelStart
+			} else if (this.#actionRelStart >= 0) {
+				this.#actionStartRow = tableStartBefore + this.#actionRelStart
+			}
 
-			out.push(dividerSplit(w, sideW))
-			out.push(splitRow(fit(theme.fg("dim", this.#hint()), sideW), fit(theme.fg("dim", this.#focus === "actions" ? "ACTIONS" : "Tab → actions"), bodyW), w, sideW))
-			out.push(bottomBorder(w)) // bottomBorder is full width - need split bottom
-			// Fix: bottom should be split too - use divider style bottom
-			out[out.length - 1] = (() => {
-				const box = theme.boxRound
-				const paint = (s: string) => theme.fg("border", s)
-				const divCol = sideW + 3
-				const leftLen = Math.max(0, divCol - 1)
-				const rightLen = Math.max(0, w - 2 - divCol)
-				return paint(box.bottomLeft + box.horizontal.repeat(leftLen) + box.teeUp + box.horizontal.repeat(rightLen) + box.bottomRight)
-			})()
+			// Full-width footer under the split (keys were clipped in a split footer).
+			out.push(divider(w))
+			out.push(row(theme.fg("dim", this.#hint()), w))
+			out.push(bottomBorder(w))
 			return out
 		}
 
@@ -1079,21 +1356,27 @@ export class HermesPortListComponent implements Component {
 		if (n === 0) {
 			out.push(row(theme.fg("dim", this.#kind === "cron" ? "No cron jobs." : "Empty."), w))
 		} else {
+			this.#tableStartRow = out.length
+			this.#tableHitCount = rows
 			for (let i = 0; i < rows; i++) {
 				const idx = this.#scroll + i
 				if (idx >= n) {
 					out.push(row("", w))
 					continue
 				}
-				if (this.#kind === "cron") out.push(row(this.#renderCronRow(this.#jobs[idx]!, idx === this.#sel, inner), w))
-				else if (this.#kind === "kanban") out.push(row(this.#renderKanbanRow(this.#tasks[idx]!, idx === this.#sel, inner), w))
-				else out.push(row(this.#renderProfileRow(this.#profiles[idx]!, idx === this.#sel, inner), w))
+				if (this.#kind === "cron") out.push(row(this.#renderCronRow(this.#jobs[idx]!, idx === this.#sel, idx === this.#hoverIdx, inner), w))
+				else if (this.#kind === "kanban") out.push(row(this.#renderKanbanRow(this.#tasks[idx]!, idx === this.#sel, idx === this.#hoverIdx, inner), w))
+				else out.push(row(this.#renderProfileRow(this.#profiles[idx]!, idx === this.#sel, idx === this.#hoverIdx, inner), w))
 			}
 		}
 		out.push(divider(w))
 		// Mini detail
+		const detailStart = out.length
 		for (const l of this.#renderDetailBody(inner, 6)) {
 			out.push(row(l, w))
+		}
+		if (this.#actionRelStart >= 0) {
+			this.#actionStartRow = detailStart + this.#actionRelStart
 		}
 		out.push(divider(w))
 		out.push(row(theme.fg("dim", this.#hint()), w))

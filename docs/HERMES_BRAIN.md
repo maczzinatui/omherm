@@ -47,14 +47,16 @@ Hermes owns the agent loop. OMP InteractiveMode is the coat. One launch: `mtui`.
 
 1. **Not a full AgentSession facade** — chrome still holds a real OMP session for settings/title/`!bash`. Exit: narrow `CockpitSession` interface.  
 2. **Synthetic OMP prompts rejected** (plan/vibe auto-prompts) — fail loud notice until ported.  
-3. **followUp while streaming** = interrupt then new turn (no true Hermes `session.steer` yet).  
+3. **followUp while streaming** = interrupt then new turn (no true Hermes `session.steer` yet) — dogfood may already use gateway steer path.  
 4. ~~Approvals / clarify notices only~~ **shipped** ask-dialog host (sudo/secret still missing).  
 5. ~~Slash execution~~ **shipped** router + `slash.exec` (skill names may still need dogfood).  
 6. ~~Port create/edit~~ **shipped** basic field forms; rich Herm cron-editor fields (skills/toolsets/script multi-line) next; Profiles still inventory.  
 7. **Config write lane (Herm parity)** — Herm TUI routes hot keys via gateway `config.set` RPC aliases; mtui HermesConfigPort is **CLI-only**. Live mid-session apply for reasoning/display needs gateway RPC.  
 8. **Settings text rows** — never call OMP `settings.get/set` on `hermes:*` paths. Values: HermesConfigPort cache only.  
 9. **slash.exec output** — currently notice + status; pager overlay like Herm is nicer for long help.  
-10. **Sessions list/resume** still OMP chrome — wire gateway session.* next.
+10. **Sessions list/resume** still OMP chrome — wire gateway session.* next.  
+11. **Tool slab chrome** — Hermes aliases + **framed generic fallback** for all other tools (`generic-tool-render.ts` via `resolveToolRenderer`). Named: terminal→bash, read_file→read, web_search/extract, browser_*, execute_code→eval, …. Remaining: gateway `result` JSON density; polish titles/icons per tool family.  
+12. ~~Kaomoji in transcript~~ **fixed 2026-07-23** — `thinking.delta` → `working_status` → OMP `setWorkingMessage` (loader above footer). Real model reason = `reasoning.delta` only.
 
 ## Dogfood gate
 

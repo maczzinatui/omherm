@@ -165,6 +165,9 @@ export class SelectorController {
 			const done = () => {
 				overlayHandle?.hide();
 				this.focusActiveEditorArea();
+				// Re-assert base mouse after fullscreen alt exit (belt + suspenders
+				// with tui.ts mouseRestore). Prevents Settings chip dying after one use.
+				this.ctx.ui.setBaseMouseTracking(true);
 				this.ctx.ui.requestRender();
 			};
 			const selector = new SettingsSelectorComponent(
@@ -183,7 +186,21 @@ export class SelectorController {
 				{
 					onChange: (id, value) => this.handleSettingChange(id, value),
 					onOpenModelSelector: () => this.showModelSelector(),
-					onOpenHermesPort: (port) => this.showHermesPortList(port),
+					onOpenHermesPort: port => {
+						// Do NOT stack two *visible* fullscreens — nested alt + dual
+						// mouse locked the TUI. Open port first so it owns preFocus,
+						// then hide settings. On dismiss: unhide settings BEFORE
+						// removing the port overlay so alt-screen never fully exits
+						// (Esc/q must land back in Settings, not the chat editor).
+						this.showHermesPortList(port, {
+							onDismiss: () => {
+								overlayHandle?.setHidden(false)
+								this.ctx.ui.setFocus(selector)
+								this.ctx.ui.requestRender()
+							},
+						})
+						overlayHandle?.setHidden(true)
+					},
 					onThemePreview: async themeName => {
 						const result = await previewTheme(themeName);
 						if (result.success) {
@@ -238,7 +255,10 @@ export class SelectorController {
 				},
 			);
 			overlayHandle = this.ctx.ui.showOverlay(selector, {
-				anchor: "bottom-center",
+				// top-left + full size so SGR mouse rows map 1:1 into component
+				// lines. bottom-center/center left empty rows above the panel and
+				// every click/hover hit-test was off by that offset (~5 rows).
+				anchor: "top-left",
 				width: "100%",
 				maxHeight: "100%",
 				margin: 0,
@@ -652,22 +672,36 @@ export class SelectorController {
 	}
 
 	/** Settings → Tasks Hermes ports (Kanban / Cron / Profiles) — full-width table+detail. */
-	showHermesPortList(kind: "kanban" | "cron" | "profiles"): void {
+	showHermesPortList(
+		kind: "kanban" | "cron" | "profiles",
+		opts?: { onDismiss?: () => void },
+	): void {
 		let overlayHandle: OverlayHandle | undefined
 		let closed = false
 		const done = () => {
 			if (closed) return
 			closed = true
+			// Restore parent (Settings) while port is still the top visible overlay,
+			// then pop the port — avoids a frame with zero visible fullscreen
+			// overlays (alt exit → base chat, Esc feels like "quit everything").
+			if (opts?.onDismiss) {
+				opts.onDismiss()
+			}
 			overlayHandle?.hide()
-			this.focusActiveEditorArea()
-			this.ctx.ui.requestRender()
+			if (!opts?.onDismiss) {
+				this.focusActiveEditorArea()
+			}
+			// hide() already requestRenders; onDismiss does too — one more is waste.
 		}
 		const panel = new HermesPortListComponent(this.ctx.ui, kind, done)
 		overlayHandle = this.ctx.ui.showOverlay(panel, {
-			anchor: "center",
+			// top-left + 100% so mouse row/col === component line/col.
+			// center anchor was shifting the panel down; clicks hit ~5 rows off.
+			anchor: "top-left",
 			width: "100%",
-			maxHeight: "95%",
+			maxHeight: "100%",
 			margin: 0,
+			fullscreen: true,
 		})
 		this.ctx.ui.setFocus(panel)
 		this.ctx.ui.requestRender()

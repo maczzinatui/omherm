@@ -22,6 +22,8 @@ export type HermesBrainHandle = {
   brain: HermesBrain
   dispose: () => void
   setDialogHost: (host: HermesDialogHost | null) => void
+  /** OMP InteractiveMode.setWorkingMessage — kaomoji / status line (not transcript). */
+  setWorkingMessage?: (message?: string) => void
 }
 
 const BRAIN_KEY = Symbol.for("meshina.hermesBrain")
@@ -52,9 +54,29 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
   // Fan Hermes events into the same listeners IM attaches via session.subscribe.
   // OMP agent may still emit (should be idle); we do not strip those — but we never
   // feed it user prompts, so tool harness stays cold.
+  // working_status is coat-only (loader) — not an AgentSessionEvent; never forward.
   session.subscribe = (listener: (event: AgentSessionEvent) => void) => {
     const unsubSession = origSubscribe(listener)
     const unsubBrain = brain.subscribe((ev: HermesBrainEvent) => {
+      if (ev.type === "working_status") {
+        try {
+          // InteractiveMode attaches setWorkingMessage on the session facade via IM ctx;
+          // use emit path: optional coat hook hung on session after IM starts.
+          const coat = session as unknown as {
+            setWorkingMessage?: (m?: string) => void
+          }
+          // Prefer live IM hook installed below via HANDLE_KEY / setCoatWorkingMessage
+          const h = getHermesBrainHandle(session)
+          if (h?.setWorkingMessage) {
+            h.setWorkingMessage(ev.message)
+          } else if (typeof coat.setWorkingMessage === "function") {
+            coat.setWorkingMessage(ev.message)
+          }
+        } catch {
+          /* coat not ready */
+        }
+        return
+      }
       listener(ev as unknown as AgentSessionEvent)
     })
     return () => {
@@ -122,6 +144,7 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
   const handle: HermesBrainHandle = {
     brain,
     setDialogHost: (host) => brain.setDialogHost(host),
+    setWorkingMessage: undefined,
     dispose: () => {
       brain.dispose()
       session.subscribe = origSubscribe

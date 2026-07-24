@@ -112,6 +112,8 @@ export class SettingsList implements Component {
 	// Mouse support: hover highlight and per-render hit maps (content-line
 	// index → item id), rebuilt by every main-list render.
 	#hoveredItemId: string | null = null;
+	/** Split-layout left category pane hover (section index), or null. */
+	#hoveredSidebarIndex: number | null = null;
 	#hitRows: (string | undefined)[] = [];
 	#sidebarHitRows: (string | undefined)[] = [];
 	#sidebarHitCol = 0;
@@ -213,6 +215,11 @@ export class SettingsList implements Component {
 		this.#hoveredItemId = id;
 	}
 
+	/** Highlight a split-layout category (left pane) by section index; null clears. */
+	setHoverSidebar(index: number | null): void {
+		this.#hoveredSidebarIndex = index;
+	}
+
 	/**
 	 * Resolve a pointer position against the last rendered frame. `line` is the
 	 * 0-based content-line index within this component's render output, `col`
@@ -227,14 +234,26 @@ export class SettingsList implements Component {
 	}
 
 	/**
-	 * Like {@link hitTest}, but only rows the pointer is visually on: sidebar
-	 * jump targets are excluded so hovering section names does not light up
-	 * pane rows.
+	 * Like {@link hitTest}, but only right-pane setting rows. Sidebar categories
+	 * use {@link hoverSidebarTest} so hovering a section name lights the left
+	 * pane without falsely highlighting a right-pane setting.
 	 */
 	hoverTest(line: number, col: number): string | undefined {
 		if (this.#submenuComponent) return undefined;
 		if (this.#sidebarHitCol > 0 && col < this.#sidebarHitCol) return undefined;
 		return this.#hitRows[line];
+	}
+
+	/**
+	 * Split-layout left category under the pointer, or null. `line` is a
+	 * content-line index; only lines that mapped to a section hit count.
+	 */
+	hoverSidebarTest(line: number, col: number): number | null {
+		if (this.#submenuComponent) return null;
+		if (this.#sidebarHitCol <= 0 || col < 0 || col >= this.#sidebarHitCol) return null;
+		if (line < 0 || line >= this.#sidebarHitRows.length) return null;
+		if (!this.#sidebarHitRows[line]) return null;
+		return line;
 	}
 
 	/**
@@ -511,8 +530,11 @@ export class SettingsList implements Component {
 		const labelText = this.#theme.label(labelPadded, isSelected, item.changed === true);
 		const valueText = this.#theme.value(valuePlain, isSelected, item.changed === true);
 		const text = truncateToWidth(prefix + labelText + separator + valueText, Math.max(0, rowWidth));
-		// Pointer hover paints a band behind the whole row, distinct from the
-		// keyboard selection (cursor glyph + accent) which stays where it is.
+		// Selection gets a full-row band (not just accent text) so the left
+		// pane cursor is obvious on dark themes. Hover is separate.
+		if (isSelected && this.#theme.hovered) {
+			return this.#theme.hovered(text);
+		}
 		if (hovered && this.#theme.hovered) {
 			return this.#theme.hovered(text);
 		}
@@ -647,7 +669,18 @@ export class SettingsList implements Component {
 			const label = truncateToWidth(name, sidebarWidth - 4, Ellipsis.Omit);
 			// Section focus parks the cursor glyph on the active sidebar entry.
 			const prefix = this.#sectionFocus && i === activeIndex ? this.#theme.cursor : "  ";
-			return `${prefix}${sectionStyle(label, i === activeIndex)}${padding(sidebarWidth - visibleWidth(prefix) - visibleWidth(label))}`;
+			const isActive = i === activeIndex;
+			const isHovered = this.#hoveredSidebarIndex === i && !isActive;
+			let cell = `${prefix}${sectionStyle(label, isActive)}`;
+			cell += padding(Math.max(0, sidebarWidth - visibleWidth(cell)));
+			// Hover band on category names (active section already accent-styled).
+			if (isHovered && this.#theme.hovered) {
+				cell = this.#theme.hovered(cell);
+			} else if (isActive && this.#theme.hovered && this.#hoveredSidebarIndex === i) {
+				// Pointer on the already-active category still shows a band.
+				cell = this.#theme.hovered(cell);
+			}
+			return cell;
 		});
 
 		// Right pane: the whole list, continuously scrollable. The active
