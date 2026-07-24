@@ -1,86 +1,85 @@
 # Remaining work — omherm M1′ (concrete)
 
-**Stamp:** 2026-07-24 ~12:45 EDT · tip `9e49754` + **dirty B2.1–B2.5** (uncommitted) · Cadillac: Hermes brain, OMP coat, one launch `omherm`.
+**Stamp:** 2026-07-24 ~14:55 EDT · tip **`b2b98b0`** (pushed) · dirty: port-list fail-loud color + handoff stamps · Cadillac: `docs/CADILLAC.md` (binding bar).
 
-**Next-session brief (perf + residual):** [`docs/HANDOFF_PERF_WAVE_B.md`](./HANDOFF_PERF_WAVE_B.md)  
-**Parallel sessions:** do **not** edit `~/meshina` hub `plans/HANDOFF.md` / model-lineup from a TUI session.
+**Next-session brief:** [`docs/HANDOFF_PERF_WAVE_B.md`](./HANDOFF_PERF_WAVE_B.md)  
+**Bar:** every slice held against Cadillac pride test + ownership map + review checklist.  
+**Parallel:** do **not** edit `~/meshina` hub `plans/HANDOFF.md` / model-lineup from a TUI session.
 
-Dogfood mouse/chrome + P1 dashboard + **P2 inventory/mapper** landed. Relaunch `omherm` after coat/bridge edits (no HMR).
+---
+
+## Cadillac filter (what “done” means here)
+
+| Gate | Implication for remaining work |
+|------|--------------------------------|
+| One brain | P0 dogfood proves Hermes dialog host + slash.exec + ports — not OMP dual path |
+| One writer per fact | Sessions resume must stay Hermes SoT; coat chrome replay is **named debt**, not a second store |
+| Ports only | Fail-loud stays in port UI + port throw contract — no raw CLI spray |
+| Designed empty/error | Port banners on CLI death must read as **error**, not success accent |
+| Named debt | Coat history-after-resume, spinner flakes, pi-tui overlay compose — fingerprinted below |
+| Contract tests | Port mappers already tested; UI dogfood is operator gate for P0 |
 
 ---
 
 ## Landed this arc (do not re-do)
 
-| Area | What |
-|------|------|
-| Mouse/chrome dogfood | top-left overlays, async ports, hover sidebar, Esc stack, quick-access chips (Settings·Kanban·Sessions·Model) |
-| P1 cron / kanban comment / profile confirm / steer / context% | `0a66cfc` + follow-ups |
-| P2 Skills/Tools/Memory **ports** | `ee48c33` / `5a34482` / `6bbc1ab` |
-| P2 overlays + mapper + trail + image + slash | inventory crash-harden + siblings |
-| Perf pass A | 8s TTL list cache (skills/tools/memory status); mutations invalidate; inventory hover coalesce; status-line `contextUsageRevision` after Hermes `refreshInfo` |
-| Perf pass B (`6b47bcd`) | mouse height WeakMap + assistant/tool note; splash frame LRU; slash cmd Map; ASCII pad |
-| **Perf B2.1–B2.5 (dirty, await commit)** | counters; height sum + editor note; thinking hit cache; coalesce; **overlay-paint** + soft reload local + hover coalesce + model-hub local |
-| Profile CLI | async `Bun.spawn` (no spawnSync on TUI path) |
-| Kanban board switch / slash pager | shipped |
+| Area | What | Cadillac |
+|------|------|----------|
+| Sticky chips + chat scroll | `b2b98b0` | coat paint ownership |
+| B2.1–B2.5 perf | counters/coalesce **opt-in** | craft + no default dual path |
+| P2 ports/overlays | skills/tools/memory via ports | ownership map |
+| P1 dashboard slices | cron/kanban/profile via ports | one writer |
 
 ---
 
-## P0 — product safety (still live dogfood)
+## P0 — product safety (Cadillac UX + fail-loud)
 
-| # | Item | Why | Owner path |
-|---|------|-----|------------|
-| 1 | Approvals + clarify → ask-dialog e2e | safety UX | ask-dialog + bridge |
-| 2 | Slash.exec live gateway results | pager only without live | router + brain |
-| 3 | Port mutations fail-loud under CLI death | silent fail | port-list banners |
+Code mostly landed on tip. **Operator dogfood is the remaining gate** (not more coat features).
 
----
+| # | Item | Cadillac lens | Status |
+|---|------|---------------|--------|
+| 1 | Approvals + clarify → ask-dialog | Hermes brain owns prompt; coat hosts dialog only | **wired** · dogfood open |
+| 2 | Slash.exec live + pager + dead-gateway warning | slash via brain path; fail-loud | **wired** · dogfood open |
+| 3 | Port mutations fail-loud under CLI death | designed error state; ports throw | throws + **warning banner** (dirty polish) |
 
-## P1 — sessions / config / status
-
-| # | Item | Status |
-|---|------|--------|
-| Sessions resume SoT | list partial; resume incomplete |
-| Live `config.set` hot keys | ConfigPort |
-| Status-line invalidate after usage | revision path partial |
+Dogfood script: `docs/DOGFOOD_CHECKLIST.md` §1.
 
 ---
 
-## P2 — polish / mapper
+## P1 — sessions / config (named dual-SoT debt)
 
-| # | Item | Status |
-|---|------|--------|
-| 11–16 | Skills/tools/memory/trail/mapper/image/slash | **shipped** |
-| slash.exec pager | **shipped** `HermesTextOverlay` + tmp dump |
-| Quick-access bar | **shipped** multi-chip + tight layout |
-
-Dogfood: `docs/DOGFOOD_CHECKLIST.md`
-
----
-
-## Perf — wave B2
-
-| Done | Next | Skip / non-goal |
-|------|------|-----------------|
-| Pass A TTL + hover coalesce | Operator dogfood B2 dirty + commit | Markdown lex fork |
-| Pass B height + frame LRU + slash Map | Live `MTUI_PERF=1` stream receipt optional | React flushSync / Activity |
-| **B2.1–B2.5 dirty** | Product P0 residual | Dual brain / Herm tab strip |
-| Shell microtask (bridge shell) | pi-tui overlay partial-compose (upstream) | Hub model-lineup |
-
-Tip debt (not B2): 3× `tool-execution-spinner` “does not tick …” fails on main.
+| Item | Status | Exit condition |
+|------|--------|----------------|
+| Sessions list + gateway resume | **shipped** | — |
+| Coat full history replay after resume | **named debt** | implement coat inject from resume payload **or** document notice-only forever |
+| Live `config.set` hot keys | open | ConfigPort only |
+| Status-line invalidate after usage | partial | revision path |
 
 ---
 
-## P3 — explicit non-goals
+## Perf residual
 
-Dual brain, Herm top tab bar, plasma-fractal OS, web dashboard chase, plain-wheel chat without mouse tradeoff (native scrollback vs SGR).
+| Done | Next | Non-goal |
+|------|------|----------|
+| A+B+B2 on `b2b98b0` | dogfood; optional `MTUI_PERF=1` receipt | lex fork, React |
+| Sticky/scroll chrome | — | dual brain |
+
+Tip debt: 3× `tool-execution-spinner` fails — separate, named, not B2.
 
 ---
 
-## Cadillac checklist
+## P3 non-goals (Cadillac anti-patterns)
 
-- Ownership: board/cron/profile/skills/tools writes only via ports  
-- No Herm React tab strip / second coordinator  
-- Sessions dual-SoT **named + exit** (above)  
-- Debt named here if deferred  
-- **Relaunch `omherm` after coat/bridge edits** (no hot reload)  
-- **Parallel:** hub HANDOFF / VITALS / Config A* = other session  
+Dual brain · Herm top tab strip · markdown board as SoT · plasma OS · SQLite writers outside ports · hub model-lineup thrash
+
+---
+
+## Cadillac PR paste (for next commit)
+
+- [ ] Ownership table still true  
+- [ ] Hermes touch via port/public surface  
+- [ ] Contract test N/A or present  
+- [ ] No dual write  
+- [ ] Debt named (sessions replay, spinner)  
+- [ ] UX loading/error/empty  
+- [ ] Launch path `omh`/`omherm` brand hermes  

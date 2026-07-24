@@ -146,6 +146,8 @@ export class HermesPortListComponent implements Component {
 	#loading = true
 	#error = ""
 	#banner = ""
+	/** true when banner is a failure (CLI death / throw) — paint warning, not accent success. */
+	#bannerIsError = false
 	#sel = 0
 	#scroll = 0
 	/** list | detail_focus (actions on detail) | confirm | form */
@@ -211,11 +213,24 @@ export class HermesPortListComponent implements Component {
 		paintOverlayFull(this.#tui)
 	}
 
+	/** Set status banner. Errors paint warning/error fg so CLI death is not accent-green. */
+	#setBanner(text: string, isError = false): void {
+		this.#banner = text
+		this.#bannerIsError = isError && !!text
+	}
+
+	#bannerFg(text: string): string {
+		if (this.#bannerIsError) {
+			return theme.fg("warning", text)
+		}
+		return theme.fg("accent", text)
+	}
+
 	async reload(): Promise<void> {
 		const cold = this.#count() === 0
 		this.#loading = cold
 		this.#error = ""
-		this.#banner = ""
+		this.#setBanner("")
 		// Skip full-frame flash on soft reload (R after data already shown).
 		if (cold) this.#paintFull()
 		try {
@@ -312,7 +327,7 @@ export class HermesPortListComponent implements Component {
 				if (sel !== this.#sel) return
 				this.#runsPreview = []
 				// Fail-loud: don't hide runs CLI death
-				this.#banner = e instanceof Error ? e.message : String(e)
+				this.#setBanner(e instanceof Error ? e.message : String(e), true)
 				this.#paintLocal()
 			})
 	}
@@ -463,7 +478,7 @@ export class HermesPortListComponent implements Component {
 	}
 
 	async #runAction(id: string): Promise<void> {
-		this.#banner = ""
+		this.#setBanner("")
 		try {
 			if (id === "close" || id === "back") {
 				this.#onCancel()
@@ -499,7 +514,7 @@ export class HermesPortListComponent implements Component {
 				if (!p) return
 				if (id === "use_profile") {
 					if (p.is_active) {
-						this.#banner = `Already on profile ${p.name}`
+						this.#setBanner(`Already on profile ${p.name}`)
 						this.#paintLocal()
 						return
 					}
@@ -512,7 +527,7 @@ export class HermesPortListComponent implements Component {
 				}
 				if (id === "delete_profile") {
 					if (p.name === "default") {
-						this.#banner = "cannot delete default profile"
+						this.#setBanner("cannot delete default profile", true)
 						this.#paintLocal()
 						return
 					}
@@ -528,18 +543,18 @@ export class HermesPortListComponent implements Component {
 				const j = this.#jobs[this.#sel]
 				if (!j) return
 				if (id === "toggle") {
-					this.#banner = j.enabled ? await cronPort.pause(j.id) : await cronPort.resume(j.id)
+					this.#setBanner(j.enabled ? await cronPort.pause(j.id) : await cronPort.resume(j.id))
 					await this.reload()
 					return
 				}
 				if (id === "run") {
-					this.#banner = await cronPort.run(j.id)
+					this.#setBanner(await cronPort.run(j.id))
 					await this.#refreshCronDetail()
 					return
 				}
 				if (id === "runs") {
 					await this.#refreshCronDetail()
-					this.#banner = "Runs refreshed"
+					this.#setBanner("Runs refreshed")
 					return
 				}
 				if (id === "remove") {
@@ -554,15 +569,15 @@ export class HermesPortListComponent implements Component {
 				const t = this.#tasks[this.#sel]
 				if (!t) return
 				const b = this.#boardSlug
-				if (id === "promote") this.#banner = await kanbanPort.promote([t.id], b)
-				else if (id === "complete") this.#banner = await kanbanPort.complete([t.id], b)
-				else if (id === "block") this.#banner = await kanbanPort.block([t.id], b)
-				else if (id === "unblock") this.#banner = await kanbanPort.unblock([t.id], b)
-				else if (id === "archive") this.#banner = await kanbanPort.archive([t.id], b)
+				if (id === "promote") this.#setBanner(await kanbanPort.promote([t.id], b))
+				else if (id === "complete") this.#setBanner(await kanbanPort.complete([t.id], b))
+				else if (id === "block") this.#setBanner(await kanbanPort.block([t.id], b))
+				else if (id === "unblock") this.#setBanner(await kanbanPort.unblock([t.id], b))
+				else if (id === "archive") this.#setBanner(await kanbanPort.archive([t.id], b))
 				await this.reload()
 			}
 		} catch (e) {
-			this.#banner = e instanceof Error ? e.message : String(e)
+			this.#setBanner(e instanceof Error ? e.message : String(e), true)
 		}
 		this.#paintLocal()
 	}
@@ -698,12 +713,14 @@ export class HermesPortListComponent implements Component {
 					this.#paintLocal()
 					return
 				}
-				this.#banner = await cronPort.create({
-					schedule,
-					prompt,
-					name: get("name") || undefined,
-					deliver: get("deliver") || undefined,
-				})
+				this.#setBanner(
+					await cronPort.create({
+						schedule,
+						prompt,
+						name: get("name") || undefined,
+						deliver: get("deliver") || undefined,
+					}),
+				)
 			} else if (f.kind === "cron_edit" && f.targetId) {
 				const schedule = get("schedule")
 				if (!schedule) {
@@ -711,12 +728,14 @@ export class HermesPortListComponent implements Component {
 					this.#paintLocal()
 					return
 				}
-				this.#banner = await cronPort.edit(f.targetId, {
-					schedule,
-					prompt: get("prompt") || undefined,
-					name: get("name") || undefined,
-					deliver: get("deliver") || undefined,
-				})
+				this.#setBanner(
+					await cronPort.edit(f.targetId, {
+						schedule,
+						prompt: get("prompt") || undefined,
+						name: get("name") || undefined,
+						deliver: get("deliver") || undefined,
+					}),
+				)
 			} else if (f.kind === "kanban_create") {
 				const title = get("title")
 				if (!title) {
@@ -724,15 +743,17 @@ export class HermesPortListComponent implements Component {
 					this.#paintLocal()
 					return
 				}
-				this.#banner = await kanbanPort.create({
-					title,
-					body: get("body") || undefined,
-					assignee: get("assignee") || undefined,
-					board: this.#boardSlug,
-				})
+				this.#setBanner(
+					await kanbanPort.create({
+						title,
+						body: get("body") || undefined,
+						assignee: get("assignee") || undefined,
+						board: this.#boardSlug,
+					}),
+				)
 			} else if (f.kind === "kanban_assign" && f.targetId) {
 				const who = get("assignee") || "unassigned"
-				this.#banner = await kanbanPort.assign(f.targetId, who, this.#boardSlug)
+				this.#setBanner(await kanbanPort.assign(f.targetId, who, this.#boardSlug))
 			} else if (f.kind === "kanban_comment" && f.targetId) {
 				const text = get("text")
 				if (!text) {
@@ -740,7 +761,7 @@ export class HermesPortListComponent implements Component {
 					this.#paintLocal()
 					return
 				}
-				this.#banner = await kanbanPort.comment(f.targetId, text, this.#boardSlug)
+				this.#setBanner(await kanbanPort.comment(f.targetId, text, this.#boardSlug))
 			} else if (f.kind === "kanban_board") {
 				const slug = get("slug")
 				if (!slug) {
@@ -748,7 +769,7 @@ export class HermesPortListComponent implements Component {
 					this.#paintLocal()
 					return
 				}
-				this.#banner = await kanbanPort.switchBoard(slug)
+				this.#setBanner(await kanbanPort.switchBoard(slug))
 				this.#boardSlug = slug
 			}
 			this.#form = null
@@ -857,16 +878,18 @@ export class HermesPortListComponent implements Component {
 						try {
 							if (this.#confirm === "remove_cron") {
 								const j = this.#jobs[this.#sel]
-								if (j) this.#banner = await cronPort.remove(j.id)
+								if (j) this.#setBanner(await cronPort.remove(j.id))
 							} else if (this.#confirm === "use_profile" && this.#confirmTarget) {
 								await profilePort.use(this.#confirmTarget, { confirmSessionEnd: true })
-								this.#banner = `Switched sticky profile → ${this.#confirmTarget}. Restart mtui / gateway to attach.`
+								this.#setBanner(
+									`Switched sticky profile → ${this.#confirmTarget}. Restart mtui / gateway to attach.`,
+								)
 							} else if (this.#confirm === "delete_profile" && this.#confirmTarget) {
 								await profilePort.delete(this.#confirmTarget, { confirmDestroy: true })
-								this.#banner = `Deleted profile ${this.#confirmTarget}`
+								this.#setBanner(`Deleted profile ${this.#confirmTarget}`)
 							}
 						} catch (e) {
-							this.#banner = e instanceof Error ? e.message : String(e)
+							this.#setBanner(e instanceof Error ? e.message : String(e), true)
 						}
 					}
 					this.#confirm = null
@@ -1536,7 +1559,7 @@ export class HermesPortListComponent implements Component {
 			out.push(topBorderSplit(w, this.#title(), sideW))
 			out.push(splitRow(fit(statusLine, sideW), fit(theme.fg("dim", "Detail"), bodyW), w, sideW))
 			if (this.#banner) {
-				out.push(splitRow(fit(theme.fg("accent", this.#banner.slice(0, sideW)), sideW), "", w, sideW))
+				out.push(splitRow(fit(this.#bannerFg(this.#banner.slice(0, sideW)), sideW), "", w, sideW))
 			}
 			out.push(dividerSplit(w, sideW))
 
@@ -1594,7 +1617,7 @@ export class HermesPortListComponent implements Component {
 		// Narrow: stacked table then detail snippet
 		out.push(topBorder(w, this.#title()))
 		out.push(row(statusLine, w))
-		if (this.#banner) out.push(row(theme.fg("accent", this.#banner.slice(0, w - 6)), w))
+		if (this.#banner) out.push(row(this.#bannerFg(this.#banner.slice(0, w - 6)), w))
 		out.push(divider(w))
 		const inner = Math.max(20, w - 4)
 		if (this.#kind === "cron") out.push(row(this.#renderCronHeader(inner), w))

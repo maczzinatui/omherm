@@ -3,7 +3,13 @@
  * Discoverable: Settings → Tasks → Open Sessions… · /sessions · /resume · app.session.resume
  */
 import type { Component, TUI } from "@oh-my-pi/pi-tui"
-import { matchesKey, routeSgrMouseInput, type SgrMouseEvent, visibleWidth } from "@oh-my-pi/pi-tui"
+import {
+	matchesKey,
+	routeSgrMouseInput,
+	truncateToWidth,
+	visibleWidth,
+	type SgrMouseEvent,
+} from "@oh-my-pi/pi-tui"
 import { sessionsPort, type HermesSessionRow } from "@omherm/hermes-bridge"
 import { theme } from "../theme/theme"
 import { bottomBorder, fit, row, topBorder } from "./overlay-box"
@@ -75,7 +81,65 @@ function pad(s: string, w: number): string {
 	const vw = visibleWidth(t)
 	if (vw === w) return t
 	if (vw < w) return t + " ".repeat(w - vw)
-	return fit(t, w)
+	return truncateToWidth(t, w)
+}
+
+/**
+ * One session table row for `innerW` content columns (row() already applies borders).
+ * Fixed left meta + flex title/preview + fixed right id — no middle pad bloat,
+ * so wide terminals show title/preview instead of empty gap and id is never clipped off.
+ */
+function formatSessionLine(
+	r: HermesSessionListRow,
+	innerW: number,
+	mark: string,
+	opts?: { header?: boolean },
+): string {
+	const whenW = 5
+	const msgsW = 4
+	const srcW = Math.min(12, Math.max(6, Math.floor(innerW * 0.12)))
+	// Short id always reserved on the right so resume identity stays visible.
+	const idRaw = (r.id || "").trim()
+	const idShow =
+		idRaw.length === 0 ? "—" : idRaw.length > 14 ? `${idRaw.slice(0, 12)}…` : idRaw
+	const idW = Math.min(16, Math.max(8, visibleWidth(idShow)))
+
+	if (opts?.header) {
+		const left = `${" ".repeat(1)} ${pad("when", whenW)} ${pad("msgs", msgsW)} ${pad("source", srcW)}`
+		const right = pad("id", idW)
+		const midBudget = Math.max(8, innerW - visibleWidth(left) - visibleWidth(right) - 2)
+		const mid = pad("title · preview", midBudget)
+		return fit(`${left} ${mid} ${right}`, innerW)
+	}
+
+	const when = pad(r.when || relTime(r.startedAt), whenW)
+	const msgs = pad(String(r.messageCount > 0 ? r.messageCount : "·"), msgsW)
+	const src = pad((r.source || "—").replace(/\s+/g, " ").trim().slice(0, srcW), srcW)
+	const left = `${mark} ${when} ${msgs} ${src}`
+	const right = pad(idShow, idW)
+	const gap = 2
+	const midBudget = Math.max(8, innerW - visibleWidth(left) - visibleWidth(right) - gap)
+
+	const title = (r.title || "(untitled)").replace(/\s+/g, " ").trim() || "(untitled)"
+	const preview = (r.preview || "").replace(/\s+/g, " ").trim()
+	let midPlain = title
+	// Only append preview when it still leaves title readable (≥ half mid or 12 cols).
+	if (preview && midBudget >= 20) {
+		const titleMax = Math.max(12, Math.floor(midBudget * 0.55))
+		const tBit = truncateToWidth(title, titleMax)
+		const rest = midBudget - visibleWidth(tBit) - 3
+		if (rest >= 8) {
+			midPlain = `${tBit} · ${truncateToWidth(preview, rest)}`
+		} else {
+			midPlain = truncateToWidth(title, midBudget)
+		}
+	} else {
+		midPlain = truncateToWidth(title, midBudget)
+	}
+	// Left-align mid; pad only the remainder so selection bg is full-width without a hollow center.
+	const midPad = Math.max(0, midBudget - visibleWidth(midPlain))
+	const mid = midPlain + (midPad > 0 ? " ".repeat(midPad) : "")
+	return fit(`${left} ${mid} ${right}`, innerW)
 }
 
 function relTime(ts: number): string {
@@ -198,9 +262,10 @@ export class HermesSessionsListComponent implements Component {
 
 	handleInput(data: string): void {
 		try {
-			if (data.startsWith("\x1b[<")) {
-				const ev = routeSgrMouseInput(data)
-				if (ev) this.#onMouse(ev)
+			// routeSgrMouseInput(data, handler) — second arg required (pi-tui).
+			// Old call site passed only data → TypeError: handler is not a function
+			// on any SGR mouse while the sessions overlay was open.
+			if (routeSgrMouseInput(data, (event) => this.#onMouse(event))) {
 				return
 			}
 			if (matchesSelectCancel(data) || data === "q") {
@@ -293,9 +358,12 @@ export class HermesSessionsListComponent implements Component {
 		}
 	}
 
-	#onMouse(ev: SgrMouseEvent): void {
+	/** Consume pi-tui SgrMouseEvent (motion / wheel / leftClick — not kind/button strings). */
+	#onMouse(ev: SgrMouseEvent): boolean {
 		try {
-			if (ev.kind === "move" || ev.kind === "drag") {
+			if (ev.release) return true
+
+			if (ev.motion) {
 				if (ev.row >= this.#tableStartRow && ev.row < this.#tableStartRow + this.#tableHitCount) {
 					const idx = this.#scroll + (ev.row - this.#tableStartRow)
 					if (idx >= 0 && idx < this.#rows.length && idx !== this.#hoverIdx) {
@@ -310,17 +378,30 @@ export class HermesSessionsListComponent implements Component {
 							}, 16)
 						}
 					}
+				} else if (this.#hoverIdx !== -1 || this.#pendingHoverIdx !== -1) {
+					this.#hoverIdx = -1
+					this.#pendingHoverIdx = -1
+					if (this.#hoverPaintTimer != null) {
+						clearTimeout(this.#hoverPaintTimer)
+						this.#hoverPaintTimer = null
+					}
+					this.#paint()
 				}
-				return
+				return true
 			}
-			if (ev.kind === "wheel") {
-				if (ev.button === "up") this.#sel = Math.max(0, this.#sel - 1)
-				else this.#sel = Math.min(this.#rows.length - 1, this.#sel + 1)
+
+			if (ev.wheel != null) {
+				const n = this.#rows.length
+				if (n === 0) return true
+				// wheel: -1 up, 1 down
+				if (ev.wheel < 0) this.#sel = Math.max(0, this.#sel - 1)
+				else this.#sel = Math.min(n - 1, this.#sel + 1)
 				this.#clamp()
 				this.#paint()
-				return
+				return true
 			}
-			if (ev.kind === "down" && ev.button === "left") {
+
+			if (ev.leftClick) {
 				if (ev.row >= this.#tableStartRow && ev.row < this.#tableStartRow + this.#tableHitCount) {
 					const idx = this.#scroll + (ev.row - this.#tableStartRow)
 					if (idx >= 0 && idx < this.#rows.length) {
@@ -328,47 +409,76 @@ export class HermesSessionsListComponent implements Component {
 						void this.#resumeSelected()
 					}
 				}
+				return true
 			}
 		} catch {
-			/* ignore */
+			/* never take down TUI */
 		}
+		return true
 	}
 
 	render(width: number): string[] {
 		try {
 			const w = Math.max(40, Math.floor(width) || 80)
 			const termRows = Math.max(12, process.stdout.rows || 24)
+			const inner = Math.max(20, w - 4)
 			const out: string[] = []
-			out.push(topBorder(fit(`Sessions (${this.#rows.length})${this.#loading ? " …" : ""}`, w - 4), w))
-			if (this.#sourceNote) out.push(row(safeFg("dim", fit(this.#sourceNote, w - 4)), w))
-			if (this.#error) out.push(row(safeFg("error", fit(this.#error, w - 4)), w))
-			if (this.#banner) out.push(row(safeFg("accent", fit(this.#banner, w - 4)), w))
-			out.push(row(safeFg("dim", "  when  msgs  source   title · id"), w))
+			// topBorder(width, title) — not (title, width)
+			out.push(topBorder(w, `Sessions (${this.#rows.length})${this.#loading ? " …" : ""}`))
+			if (this.#sourceNote) out.push(row(safeFg("dim", fit(this.#sourceNote, inner)), w))
+			if (this.#error) out.push(row(safeFg("error", fit(this.#error, inner)), w))
+			if (this.#banner) out.push(row(safeFg("accent", fit(this.#banner, inner)), w))
+			out.push(
+				row(
+					safeFg(
+						"dim",
+						formatSessionLine(
+							{
+								id: "",
+								title: "",
+								preview: "",
+								source: "",
+								messageCount: 0,
+								startedAt: 0,
+								when: "",
+							},
+							inner,
+							" ",
+							{ header: true },
+						),
+					),
+					w,
+				),
+			)
 
 			this.#tableStartRow = out.length
 			const bodyBudget = Math.max(4, termRows - out.length - 3)
-			this.#tableHitCount = bodyBudget
+			// Provisional hit height for scroll clamp; refined after paint for clicks.
+			this.#tableHitCount = Math.min(bodyBudget, Math.max(1, this.#rows.length))
 			this.#clamp()
 
 			if (this.#loading && this.#rows.length === 0) {
+				this.#tableHitCount = 0
 				out.push(row(safeFg("dim", "Loading Hermes sessions…"), w))
 			} else if (this.#rows.length === 0) {
+				this.#tableHitCount = 0
 				out.push(row(safeFg("dim", "No sessions found."), w))
 			} else {
 				const end = Math.min(this.#rows.length, this.#scroll + bodyBudget)
+				const paintedRows = Math.max(0, end - this.#scroll)
+				// Hit-test only real session rows (not empty chrome padding below).
+				this.#tableHitCount = paintedRows
 				for (let i = this.#scroll; i < end; i++) {
 					const r = this.#rows[i]!
 					const sel = i === this.#sel
 					const hover = i === this.#hoverIdx && !sel
 					const mark = sel ? "›" : hover ? "·" : " "
-					const when = pad(r.when || relTime(r.startedAt), 5)
-					const msgs = pad(String(r.messageCount || "·"), 4)
-					const src = pad((r.source || "—").slice(0, 8), 8)
-					const titleBit = fit(r.title || "(untitled)", Math.max(8, w - 42))
-					const idBit = safeFg("dim", fit(r.id, 18))
-					const line = `${mark} ${when}  ${msgs}  ${src}  ${titleBit}  ${idBit}`
-					const fitted = fit(line, w - 2)
-					out.push(row(sel ? safeBg(fitted) : hover ? safeFg("accent", fitted) : fitted, w))
+					const line = formatSessionLine(r, inner, mark)
+					out.push(row(sel ? safeBg(line) : hover ? safeFg("accent", line) : line, w))
+				}
+				// Pad remaining body so fullscreen isn't a floating short strip.
+				for (let p = paintedRows; p < bodyBudget && out.length < termRows - 2; p++) {
+					out.push(row("", w))
 				}
 			}
 			out.push(row(safeFg("dim", "↑↓ · Enter resume · R reload · Esc/q back"), w))
