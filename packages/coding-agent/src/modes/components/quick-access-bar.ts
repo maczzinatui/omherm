@@ -1,11 +1,9 @@
 /**
  * Top quick-access strip — footer-aesthetic, clickable chips with a fat hit box.
  *
- * Cadillac says coat owns chrome, Hermes owns turn. The v1 surface is one
- * Settings chip, but the registry is open so more chips (Tasks, Tools, etc.)
- * can land later without redesigning the chrome. Layout is dim-by-default,
- * accent-on-hover, matching the OMP bottom footer so it reads as part of the
- * coat, not foreign Herm chrome.
+ * Cadillac: coat owns chrome, Hermes owns turn. Chips deep-link coat overlays
+ * (settings hub, kanban/sessions ports, model hub) — they never start a turn.
+ * Layout is dim-by-default, accent-on-hover, matching the OMP bottom footer.
  *
  * Layout: optional leading spacer (host-pushed), one padded content row, one
  * trailing spacer. Hit-test accepts the content row plus half the trailing
@@ -28,9 +26,8 @@ export interface QuickAccessButton {
 }
 
 /**
- * Strip layout. The active button sits at the leftmost position and any
- * trailing buttons are dimmer so the eye reads the active affordance first.
- * "Settings" is the only shipped chip in v1.
+ * Strip layout. Chips left-to-right; overflow drops trailing chips on narrow
+ * terminals (see render width gate). Host ships Settings · Kanban · Sessions · Model.
  */
 export class QuickAccessBar implements Component {
 	/** Buttons in render order. Mutating the array re-renders on the next

@@ -116,4 +116,29 @@ describe("QuickAccessBar", () => {
 		expect(bar.getButtons().length).toBe(1);
 		expect(bar.getButtons()[0]!.id).toBe("tasks");
 	});
+
+	it("activates the correct chip among several by column", () => {
+		const bar = new QuickAccessBar();
+		const hits: string[] = [];
+		bar.setButtons([
+			{ id: "settings", label: "Settings", onActivate: () => hits.push("settings") },
+			{ id: "kanban", label: "Kanban", onActivate: () => hits.push("kanban") },
+			{ id: "sessions", label: "Sessions", onActivate: () => hits.push("sessions") },
+			{ id: "model", label: "Model", onActivate: () => hits.push("model") },
+		]);
+		const visible = bar.render(120)[0]!.replace(/\x1b\[[0-9;]*m/g, "");
+		const settingsAt = visible.indexOf("Settings");
+		const kanbanAt = visible.indexOf("Kanban");
+		const sessionsAt = visible.indexOf("Sessions");
+		const modelAt = visible.indexOf("Model");
+		expect(settingsAt).toBeGreaterThanOrEqual(0);
+		expect(kanbanAt).toBeGreaterThan(settingsAt);
+		expect(sessionsAt).toBeGreaterThan(kanbanAt);
+		expect(modelAt).toBeGreaterThan(sessionsAt);
+		expect(bar.handleClick(settingsAt + 1)).toBe("settings");
+		expect(bar.handleClick(kanbanAt + 1)).toBe("kanban");
+		expect(bar.handleClick(sessionsAt + 1)).toBe("sessions");
+		expect(bar.handleClick(modelAt + 1)).toBe("model");
+		expect(hits).toEqual(["settings", "kanban", "sessions", "model"]);
+	});
 });

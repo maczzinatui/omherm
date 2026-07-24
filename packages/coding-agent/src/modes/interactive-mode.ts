@@ -723,6 +723,21 @@ export class InteractiveMode implements InteractiveModeContext {
 				label: "Settings",
 				onActivate: () => this.showSettingsSelector(),
 			},
+			{
+				id: "kanban",
+				label: "Kanban",
+				onActivate: () => this.showHermesPortList("kanban"),
+			},
+			{
+				id: "sessions",
+				label: "Sessions",
+				onActivate: () => this.showSessionSelector(),
+			},
+			{
+				id: "model",
+				label: "Model",
+				onActivate: () => this.showModelSelector(),
+			},
 		]);
 		this.editor = new CustomEditor(getEditorTheme());
 		this.ui.enableScopedInputRender(this.editor);
