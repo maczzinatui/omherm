@@ -5,7 +5,7 @@ import {
   hermesIdentityToModel,
   mapHermesEffortToThinking,
   mapThinkingToHermesEffort,
-} from "../../../src/modes/hermes-coat-identity.ts"
+} from "../../src/modes/hermes-coat-identity.ts"
 
 describe("hermes coat identity", () => {
   test("footer name uses last path segment", () => {
