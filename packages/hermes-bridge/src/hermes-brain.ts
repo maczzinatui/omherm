@@ -1,14 +1,15 @@
 /**
- * HermesBrain — single agent-loop owner for the mtui product path.
+ * HermesBrain — single agent-loop owner for the omherm product path.
  *
  * Cadillac: Hermes owns the turn. Coat (InteractiveMode) only paints.
  * This port is the only place product code starts a Hermes turn.
  *
  * Debt (named): AgentSession still hosts coat chrome (settings store, !bash,
- * local session files). Those are coat-local. Turn text/tools never go through
- * OMP Agent.prompt when this brain is installed — no dual harness.
+ * local session files). Prefer CockpitSession for new coat call sites.
+ * Turn text/tools never go through OMP Agent.prompt when this brain is
+ * installed — no dual harness.
  *
- * Contract tests: hermes-brain.test.ts
+ * Contract tests: hermes-brain.test.ts · facade: cockpit-session.ts
  */
 
 import { HermesGateway } from "./client.ts"

@@ -33,7 +33,7 @@ Commits this arc (local): P2 overlays · perf TTL · board/sessions/slash pager 
 ### 1b Slash.exec
 - [ ] `/yolo` (or `/help` if safer) with **gateway up**
 - [ ] Short result → notice/status
-- [ ] Long result → **fullscreen pager** (↑↓ / Pg / Esc) + optional path under `~/.hermes/tmp/mtui-slash/`
+- [ ] Long result → **fullscreen pager** (↑↓ / Pg / Esc) + optional path under `~/.hermes/tmp/omherm-slash/` (legacy dir name `mtui-slash` still accepted if present)
 - [ ] Dead gateway → **warning** `slash.exec failed:…` (not silent)
 
 ### 1c Port mutation fail-loud
@@ -75,9 +75,9 @@ CLI ground truth: `hermes kanban boards list` / `boards show`
 - Key: **Ctrl+Shift+R** (app.session.resume)
 
 - [ ] Overlay lists Hermes sessions (gateway, not empty OMP coat files)
-- [ ] Enter / click resumes; notice shows title + live id
+- [ ] Enter / click resumes; notice shows title + live id; coat paints history when gateway returns messages
 - [ ] Further prompts stay on resumed Hermes session
-- [ ] Coat full history replay may still be incomplete (named debt) — prompts work
+- [ ] Empty history payload → honest notice + preview (not silent blank)
 
 Do **not** expect Herm React Sessions tab chrome; this is OMP coat + Hermes list.
 
@@ -86,7 +86,7 @@ Do **not** expect Herm React Sessions tab chrome; this is OMP coat + Hermes list
 ## 5. Image paste
 
 - [ ] Paste clipboard image into editor
-- [ ] Marker `[Attached image: ~/.hermes/tmp/mtui-paste/…]` appears
+- [ ] Marker `[Attached image: ~/.hermes/tmp/omherm-paste/…]` appears (legacy `mtui-paste` path may still appear until relaunch on new tip)
 - [ ] File exists on disk
 - [ ] Send turn — model may not “see” pixels (no gateway image RPC); path-only is expected
 
@@ -119,7 +119,7 @@ cd ~/omherm/packages/hermes-bridge && bun test
 hermes skills list | head
 hermes kanban boards list
 hermes sessions list --limit 5
-ls -la ~/.hermes/tmp/mtui-paste/ ~/.hermes/tmp/mtui-slash/ 2>/dev/null | tail
+ls -la ~/.hermes/tmp/omherm-paste/ ~/.hermes/tmp/omherm-slash/ ~/.hermes/tmp/mtui-paste/ ~/.hermes/tmp/mtui-slash/ 2>/dev/null | tail
 ```
 
 - Note: **key**, **overlay name**, **stderr**, whether Settings was open
@@ -131,8 +131,7 @@ ls -la ~/.hermes/tmp/mtui-paste/ ~/.hermes/tmp/mtui-slash/ 2>/dev/null | tail
 
 - Dual brain / Herm React tabs  
 - True multimodal vision paste  
-- Hermes sessions resume UI (port exists; wire open)  
-- Live `config.set` mid-session  
+- Full AgentSession removal (CockpitSession is the peel path)  
 - HMR (always relaunch)
 
 ---

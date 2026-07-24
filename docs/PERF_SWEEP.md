@@ -9,7 +9,7 @@
 |-------|----------|---------|
 | **Stream paint coalesce** | `setStreamPaintCoalesce(true)` on `agent_start`, `false` on `agent_end` | **On during turn only** — idle/stock TUI |
 | **Env coalesce** | `OMHERM_PAINT_COALESCE=1` / `MTUI_PERF=1` / `MTUI_PAINT_COALESCE=1` | Always-on when set; stream arm/disarm no-ops |
-| **Boot marks** | `bootMark(name)` → `[mtui-boot] name=+Nms` when perf env on | In-memory always; stderr when `MTUI_PERF`/`OMHERM_PERF` |
+| **Boot marks** | `bootMark(name)` → `[omherm-boot] name=+Nms` when perf env on | In-memory always; stderr when `MTUI_PERF`/`OMHERM_PERF` |
 | **Spinner contract** | Pending spinner only if renderer `animatedPendingPreview` **or** not static custom-tool | bash/github/static custom **do not** tick |
 | **Mid-stream dispose** | `HermesBrain.dispose` emits notice + `forceEnd` before kill | Fail-loud into EventController |
 
@@ -34,7 +34,7 @@ Marks currently stamped:
 Rolling paint line (every 5s while active):
 
 ```
-[mtui-perf] reason=tick window=5.0s forced=… scheduled=… scoped=…
+[omherm-perf] reason=tick window=5.0s forced=… scheduled=… scoped=…
 ```
 
 **Receipts to look for under live Hermes stream:**

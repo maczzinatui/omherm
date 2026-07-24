@@ -1,5 +1,5 @@
 /**
- * Hermes slash router for mtui product path.
+ * Hermes slash router for omherm product path.
  * Deep-link coat surfaces first; otherwise gateway slash.exec.
  */
 export type HermesPortDeepLink =

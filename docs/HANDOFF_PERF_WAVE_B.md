@@ -74,7 +74,7 @@ If the task is mesh cutover / LiteLLM / systemd slots → use **meshina HANDOFF 
    - Coat history after Hermes resume — `hermes-history-paint.ts`; sessions list passes full `messages`; paint via `addMessageToChat` (user + custom assistant/tool lines).
    - Context window — drop blind 128k when `session.info.usage.context_max` present (`resolveHermesContextWindow` → synthetic Model).
 5. **Named debt still open:**
-   - AgentSession host still constructed (chrome/`!bash`) — CockpitSession facade later
+   - AgentSession host still constructed (chrome/`!bash`) — **CockpitSession facade shipped**; migrate call sites / peel later
    - Voice STT/TTS settings multiselect
    - pi-tui overlay full-compose residual
    - Gateway may still omit history on some resume paths → notice + preview fallback

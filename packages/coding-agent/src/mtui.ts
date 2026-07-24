@@ -1,13 +1,12 @@
 #!/usr/bin/env bun
 /**
- * mtui — Hermes Agent cockpit (ONE product launch path).
+ * omh — Hermes Agent cockpit (ONE product launch path).
  *
  * Full OMP InteractiveMode chrome + themes + footer + settings.
- * Branding = Hermes. Brain = OMP AgentSession until Hermes is plugged under
- * this coat (bridge work is internal; not a second user-facing app).
+ * Branding = Hermes. Brain = HermesBrain under the coat (OMP AgentSession is host chrome only).
  *
  * Want stock OMP? Run `omp` — not this binary.
- * Experimental gateway shell: MESHINA_TUI_EXPERIMENTAL_BRIDGE=1 only (not advertised).
+ * Experimental gateway shell: OMHERM_EXPERIMENTAL_BRIDGE=1 / MESHINA_TUI_EXPERIMENTAL_BRIDGE=1 only.
  */
 import { applyHermesBrandEnv, PRODUCT_CLI, PRODUCT_VERSION } from "./hermes-brand.ts"
 
@@ -36,8 +35,8 @@ if (args.includes("-h") || args.includes("--help")) {
 	process.stdout.write(`${PRODUCT_CLI} — Hermes Agent cockpit
 
 Usage:
-  mtui              Hermes cockpit (full OMP chrome + themes + footer)
-  mtui --version
+  omh               Hermes cockpit (full OMP chrome + themes + footer)
+  omh --version
 
 Stock Oh-My-Pi: run \`omp\` separately. This binary is Hermes-only.
 

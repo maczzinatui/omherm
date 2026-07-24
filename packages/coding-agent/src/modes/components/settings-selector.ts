@@ -975,7 +975,7 @@ export class SettingsSelectorComponent implements Component {
 				})
 				.catch((err: unknown) => {
 					console.error(
-						`[mtui] hermes config set failed: ${err instanceof Error ? err.message : String(err)}`,
+						`[omh] hermes config set failed: ${err instanceof Error ? err.message : String(err)}`,
 					);
 				});
 			return;
@@ -1255,7 +1255,7 @@ export class SettingsSelectorComponent implements Component {
 						})
 						.catch((err: unknown) => {
 							const msg = err instanceof Error ? err.message : String(err);
-							console.error(`[mtui] hermes config set failed: ${msg}`);
+							console.error(`[omh] hermes config set failed: ${msg}`);
 							this.#textInputActive = false;
 							done();
 						});
@@ -1343,7 +1343,7 @@ export class SettingsSelectorComponent implements Component {
 				})
 				.catch((err: unknown) => {
 					const msg = err instanceof Error ? err.message : String(err);
-					console.error(`[mtui] hermes config set failed: ${msg}`);
+					console.error(`[omh] hermes config set failed: ${msg}`);
 				});
 			return;
 		}
@@ -1424,7 +1424,7 @@ export class SettingsSelectorComponent implements Component {
 						})
 						.catch((err: unknown) => {
 							console.error(
-								`[mtui] hermes config set failed: ${err instanceof Error ? err.message : String(err)}`,
+								`[omh] hermes config set failed: ${err instanceof Error ? err.message : String(err)}`,
 							);
 						});
 					return;

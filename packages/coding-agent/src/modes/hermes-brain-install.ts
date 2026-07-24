@@ -11,7 +11,9 @@
 
 import {
   HermesBrain,
+  createCockpitSession,
   isHermesBrainEnabled,
+  type CockpitSession,
   type HermesBrainEvent,
   type HermesDialogHost,
 } from "@omherm/hermes-bridge"
@@ -22,6 +24,8 @@ import { bootMark } from "./utils/perf-counters"
 
 export type HermesBrainHandle = {
   brain: HermesBrain
+  /** Narrow facade — prefer for new coat call sites over raw brain. */
+  cockpit: CockpitSession
   dispose: () => void
   setDialogHost: (host: HermesDialogHost | null) => void
   /** OMP InteractiveMode.setWorkingMessage — kaomoji / status line (not transcript). */
@@ -30,11 +34,16 @@ export type HermesBrainHandle = {
   invalidateChrome?: () => void
 }
 
-const BRAIN_KEY = Symbol.for("meshina.hermesBrain")
-const HANDLE_KEY = Symbol.for("meshina.hermesBrainHandle")
+const BRAIN_KEY = Symbol.for("omherm.hermesBrain")
+const HANDLE_KEY = Symbol.for("omherm.hermesBrainHandle")
+const COCKPIT_KEY = Symbol.for("omherm.cockpitSession")
 
 export function getInstalledHermesBrain(session: AgentSession): HermesBrain | undefined {
   return (session as unknown as Record<symbol, HermesBrain | undefined>)[BRAIN_KEY]
+}
+
+export function getInstalledCockpitSession(session: AgentSession): CockpitSession | undefined {
+  return (session as unknown as Record<symbol, CockpitSession | undefined>)[COCKPIT_KEY]
 }
 
 export function getHermesBrainHandle(session: AgentSession): HermesBrainHandle | undefined {
@@ -235,8 +244,11 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
     /* optional — settings still CLI */
   }
 
+  const cockpit = createCockpitSession(brain)
+
   const handle: HermesBrainHandle = {
     brain,
+    cockpit,
     setDialogHost: (host) => brain.setDialogHost(host),
     setWorkingMessage: undefined,
     dispose: () => {
@@ -264,11 +276,13 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
       }
       delete (session as unknown as Record<symbol, unknown>)[BRAIN_KEY]
       delete (session as unknown as Record<symbol, unknown>)[HANDLE_KEY]
+      delete (session as unknown as Record<symbol, unknown>)[COCKPIT_KEY]
     },
   }
 
   ;(session as unknown as Record<symbol, HermesBrain>)[BRAIN_KEY] = brain
   ;(session as unknown as Record<symbol, HermesBrainHandle>)[HANDLE_KEY] = handle
+  ;(session as unknown as Record<symbol, CockpitSession>)[COCKPIT_KEY] = cockpit
 
   // Surface model from gateway into notice once
   const info = brain.sessionInfo

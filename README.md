@@ -38,7 +38,6 @@ Optional install into `~/.bun/bin`:
 ```bash
 ln -sf "$(pwd)/scripts/omh" ~/.bun/bin/omh
 ln -sf "$(pwd)/scripts/omherm" ~/.bun/bin/omherm   # full name
-# do not install `mtui` on PATH — use `omh`
 ```
 
 | Command | What you get |
@@ -47,41 +46,28 @@ ln -sf "$(pwd)/scripts/omherm" ~/.bun/bin/omherm   # full name
 | `omherm` | Same product (full name) |
 | `omh --bridge` | Thin Hermes-gateway shell (experimental; not the dogfood default) |
 | `omp` | Stock Oh My Pi (separate binary from upstream packages) |
-| `mtui` | Legacy alias → `omh` |
 
-Default path is the **full coat**. Bridge-only was briefly the default and looked bare — that was a regression; do not make bare bridge the product face.
+Default path is the **full coat**. Do not make bare bridge the product face.
+
+After coat or bridge edits: **quit and relaunch** (no HMR).
 
 ## Configuration
 
 - On-disk settings still use the OMP layout (`.omp`) so coat settings work without a second schema war.
-- Product mode filters pi-agent-only settings keys unless you set `OMHERM_RAW_OMP_SETTINGS=1` (legacy: `MESHINA_TUI_RAW_OMP_SETTINGS=1`).
+- Product mode filters pi-agent-only settings keys unless you set `OMHERM_RAW_OMP_SETTINGS=1`.
 - Docs: `docs/SETTINGS_REMAP.md`, `docs/HERMES_OMP_SETTINGS_MAP.md`.
 
-Env (preferred / legacy):
+Env (preferred; older `MESHINA_TUI_*` aliases still work where wired):
 
-| Preferred | Legacy | Meaning |
-|-----------|--------|---------|
-| `OMHERM_ROOT` | `MESHINA_TUI_ROOT` | Repo root override for launcher |
-| `OMHERM_VERSION` | `MESHINA_TUI_VERSION` | Version string |
-| `OMHERM_PERF=1` | `MTUI_PERF=1` | Render counters |
-| `OMHERM_RAW_OMP_SETTINGS=1` | `MESHINA_TUI_RAW_OMP_SETTINGS=1` | Unfiltered OMP settings |
-| `OMHERM_EXPERIMENTAL_BRIDGE=1` | `MESHINA_TUI_EXPERIMENTAL_BRIDGE=1` | Thin bridge shell |
-
-## Documentation map
-
-| Doc | Topic |
-|-----|--------|
-| [`docs/CADILLAC.md`](docs/CADILLAC.md) | Quality bar — public scrutiny, named debt only |
-| [`docs/HERMES_GUT_PLAN.md`](docs/HERMES_GUT_PLAN.md) | Plug Hermes under InteractiveMode |
-| [`docs/HERMES_BRAIN.md`](docs/HERMES_BRAIN.md) | Brain install path |
-| [`docs/KANBAN_PORT.md`](docs/KANBAN_PORT.md) | Kanban port |
-| [`docs/CRON_PORT.md`](docs/CRON_PORT.md) | Cron port |
-| [`docs/PROFILE_PORT.md`](docs/PROFILE_PORT.md) | Profiles |
-| [`docs/INTEGRATION_CROSSOVERS.md`](docs/INTEGRATION_CROSSOVERS.md) | Integration edges |
-| [`docs/DOGFOOD_CHECKLIST.md`](docs/DOGFOOD_CHECKLIST.md) | Manual dogfood |
-| [`NOTICE`](NOTICE) | Third-party attributions |
-
-Engineering pride test: if you would not show the diff in public, do not merge it.
+| Preferred | Meaning |
+|-----------|---------|
+| `OMHERM_ROOT` | Repo root override for launcher |
+| `OMHERM_VERSION` | Version string |
+| `OMHERM_PERF=1` | Render / boot counters on stderr |
+| `OMHERM_PAINT_COALESCE=1` | Force paint coalesce |
+| `OMHERM_RAW_OMP_SETTINGS=1` | Unfiltered OMP settings schema |
+| `OMHERM_EXPERIMENTAL_BRIDGE=1` | Thin bridge shell |
+| `MESHINA_TUI_OMP_BRAIN=1` | Escape: OMP agent loop (coat-only dogfood) |
 
 ## Architecture (one screen)
 
@@ -92,13 +78,34 @@ Engineering pride test: if you would not show the diff in public, do not merge i
 │  │ OMP InteractiveMode coat (@oh-my-pi)  │  │
 │  │ themes · footer · settings · overlays │  │
 │  └───────────────┬───────────────────────┘  │
-│                  │ hermes-bridge ports      │
+│                  │ CockpitSession / ports   │
 │                  ▼                          │
-│         Hermes gateway / CLI                │
+│         HermesBrain → gateway / CLI         │
 └─────────────────────────────────────────────┘
 ```
 
+- **`HermesBrain`** — owns turns (`prompt` / `interrupt` / events).
+- **`CockpitSession`** — narrow facade for coat code (`info`, `onEvent`, `submit`, …). Prefer it over reaching into OMP `AgentSession` for Hermes facts.
+- OMP `AgentSession` still hosts coat chrome (`!bash`, settings shell) until that host is fully peeled.
+
 Internal packages may still be named `@oh-my-pi/*` — that is the coat. Upstream tip pin: `.omp-upstream-sha`.
+
+## Documentation map
+
+| Doc | Topic |
+|-----|--------|
+| [`docs/CADILLAC.md`](docs/CADILLAC.md) | Quality bar — public scrutiny, named debt only |
+| [`docs/HERMES_GUT_PLAN.md`](docs/HERMES_GUT_PLAN.md) | Plug Hermes under InteractiveMode |
+| [`docs/HERMES_BRAIN.md`](docs/HERMES_BRAIN.md) | Brain install + CockpitSession |
+| [`docs/KANBAN_PORT.md`](docs/KANBAN_PORT.md) | Kanban port |
+| [`docs/CRON_PORT.md`](docs/CRON_PORT.md) | Cron port |
+| [`docs/PROFILE_PORT.md`](docs/PROFILE_PORT.md) | Profiles |
+| [`docs/INTEGRATION_CROSSOVERS.md`](docs/INTEGRATION_CROSSOVERS.md) | Integration edges |
+| [`docs/DOGFOOD_CHECKLIST.md`](docs/DOGFOOD_CHECKLIST.md) | Manual dogfood |
+| [`docs/HANDOFF_PERF_WAVE_B.md`](docs/HANDOFF_PERF_WAVE_B.md) | Current product handoff |
+| [`NOTICE`](NOTICE) | Third-party attributions |
+
+Engineering pride test: if you would not show the diff in public, do not merge it.
 
 ## Contributing
 

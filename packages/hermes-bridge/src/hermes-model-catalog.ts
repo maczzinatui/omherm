@@ -1,4 +1,4 @@
-// Hermes model catalog for mtui picker — inventory API, not OMP registry.
+// Hermes model catalog for omherm picker — inventory API, not OMP registry.
 
 import { existsSync } from "node:fs"
 import { hermesAgentRoot } from "./client.ts"

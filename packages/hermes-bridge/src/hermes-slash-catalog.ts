@@ -1,4 +1,4 @@
-// Hermes slash + skills catalog for mtui autocomplete (product path).
+// Hermes slash + skills catalog for omherm autocomplete (product path).
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { homedir } from "node:os"
@@ -15,7 +15,7 @@ export type HermesSlashEntry = {
 
 /** Core Hermes slash names operators expect (forward later via gateway). */
 export const HERMES_BUILTIN_SLASH: readonly HermesSlashEntry[] = [
-  { name: "model", description: "Switch Hermes model (mtui picker)", source: "hermes-builtin" },
+  { name: "model", description: "Switch Hermes model (omherm picker)", source: "hermes-builtin" },
   { name: "settings", description: "Open settings (Hermes + coat)", source: "hermes-builtin" },
   { name: "skills", description: "List Hermes skills", source: "hermes-builtin" },
   { name: "reload-skills", description: "Rescan ~/.hermes/skills", source: "hermes-builtin" },

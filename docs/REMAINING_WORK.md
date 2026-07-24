@@ -56,7 +56,7 @@ Script: `docs/DOGFOOD_CHECKLIST.md` §1.
 | Live `config.set` hot keys (Herm lane) | **shipped** | `config-lane.ts` + ConfigPort.setGateway |
 | Coat full history after resume | **shipped** | `hermes-history-paint.ts` + sessions `onResumed` paints resume messages |
 | Synthetic 128k ctx on Hermes models | **shipped** | `resolveHermesContextWindow` ← `usage.context_max` into coat Model |
-| Boot OMP AgentSession bloat under brain | **partial** | coat-boot thins tools/MCP/ext; AgentSession host remains |
+| Boot OMP AgentSession bloat under brain | **partial** | coat-boot thins tools/MCP/ext; **CockpitSession facade shipped**; AgentSession host remains for chrome |
 | Status-line after usage | partial | revision path exists; ctx window now follows context_max |
 
 ---
@@ -65,7 +65,7 @@ Script: `docs/DOGFOOD_CHECKLIST.md` §1.
 
 | Done | Next | Non-goal |
 |------|------|----------|
-| Stream-scoped coalesce + boot + spinner | `MTUI_PERF=1` live receipt | lex fork, React, dual brain |
+| Stream-scoped coalesce + boot + spinner | `OMHERM_PERF=1` live receipt | lex fork, React, dual brain |
 
 ---
 

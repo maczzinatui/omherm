@@ -4,9 +4,9 @@
 
 This monorepo is **[omherm](https://github.com/maczzinatui/omherm)** — OMP InteractiveMode coat + Hermes brain ports.
 
-- CLI: `omh` (`scripts/omh`; full name `omherm`; legacy `mtui`)
+- CLI: `omh` (`scripts/omh`; full name `omherm`)
 - Coat packages remain `@oh-my-pi/*` (upstream Oh My Pi)
-- Bridge package: `@omherm/hermes-bridge`
+- Bridge package: `@omherm/hermes-bridge` (`HermesBrain`, `CockpitSession`, ports)
 - Attributions: `NOTICE` · License: MIT `LICENSE`
 - Prefer not to add dual-brain / Herm React tab strip as second coordinator
 

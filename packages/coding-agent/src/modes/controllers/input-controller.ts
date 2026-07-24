@@ -1510,7 +1510,7 @@ export class InputController {
 							: imageData.mimeType.includes("gif")
 								? "gif"
 								: "jpg";
-				const dir = path.join(process.env.HERMES_HOME?.trim() || path.join(process.env.HOME || "/tmp", ".hermes"), "tmp", "mtui-paste");
+				const dir = path.join(process.env.HERMES_HOME?.trim() || path.join(process.env.HOME || "/tmp", ".hermes"), "tmp", "omherm-paste");
 				await fs.mkdir(dir, { recursive: true });
 				const filePath = path.join(dir, `paste-${Date.now()}.${ext}`);
 				await fs.writeFile(filePath, Buffer.from(imageData.data, "base64"));
@@ -2082,9 +2082,10 @@ export class InputController {
 	 */
 	async #tryHermesSlash(text: string): Promise<boolean> {
 		try {
-			const { getInstalledHermesBrain } = await import("../hermes-brain-install.ts");
-			const brain = getInstalledHermesBrain(this.ctx.session);
-			if (!brain) return false;
+			const { getInstalledCockpitSession, getInstalledHermesBrain } = await import("../hermes-brain-install.ts");
+			const cockpit = getInstalledCockpitSession(this.ctx.session);
+			const brain = cockpit?.brain ?? getInstalledHermesBrain(this.ctx.session);
+			if (!brain && !cockpit) return false;
 
 			const { routeHermesSlash } = await import("@omherm/hermes-bridge");
 			const route = routeHermesSlash(text);
@@ -2105,7 +2106,9 @@ export class InputController {
 			if (route.type === "exec") {
 				this.ctx.showStatus(`Running ${route.command}…`);
 				try {
-					const { output, warning } = await brain.slashExec(route.command);
+					const { output, warning } = cockpit
+						? await cockpit.slashExec(route.command)
+						: await brain!.slashExec(route.command);
 					const body = [warning ? `warning: ${warning}` : "", output].filter(Boolean).join("\n").trim();
 					const text = body || "(no output)";
 					// Short → notice. Long → pager overlay (+ optional disk dump).
@@ -2118,7 +2121,7 @@ export class InputController {
 							const { mkdirSync, writeFileSync } = await import("node:fs");
 							const { join } = await import("node:path");
 							const { homedir } = await import("node:os");
-							const dir = join(homedir(), ".hermes", "tmp", "mtui-slash");
+							const dir = join(homedir(), ".hermes", "tmp", "omherm-slash");
 							mkdirSync(dir, { recursive: true });
 							const safe = route.command.replace(/[^\w.-]+/g, "_").slice(0, 40);
 							const path = join(dir, `slash-${Date.now()}-${safe}.txt`);

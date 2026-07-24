@@ -70,6 +70,7 @@ Every external system gets **one port**:
 | Port | Responsibility |
 |------|----------------|
 | `hermes-bridge` | Gateway connect, session create/prompt/interrupt, event map → UI |
+| `CockpitSession` | Narrow coat facade over `HermesBrain` (prefer for new call sites) |
 | `KanbanPort` (see `KANBAN_PORT.md`) | Board DTO + create/lifecycle/content edit ladder |
 | `CronPort` (see `CRON_PORT.md`) | Jobs list/detail, create/edit, pause/run, outputs via `cron.manage` + CLI |
 | `ProfilePort` (see `PROFILE_PORT.md`) | Profile list/active/sticky; use/create/delete via CLI; no .env leak |

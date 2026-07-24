@@ -126,14 +126,14 @@ const bootMarks = new Map<string, number>();
 
 /**
  * Stamp a named boot milestone. With `MTUI_PERF=1` / `OMHERM_PERF=1`, emits
- * `[mtui-boot] name=+Nms` on stderr. Safe no-op when perf is off (still records
+ * `[omherm-boot] name=+Nms` on stderr. Safe no-op when perf is off (still records
  * in-memory for tests via `bootTimelineSnapshot`).
  */
 export function bootMark(name: string): void {
 	const at = performance.now() - BOOT_T0;
 	bootMarks.set(name, at);
 	if (!isPerfOn()) return;
-	process.stderr.write(`[mtui-boot] ${name}=+${at.toFixed(1)}ms\n`);
+	process.stderr.write(`[omherm-boot] ${name}=+${at.toFixed(1)}ms\n`);
 }
 
 /** Test / diagnostics: ordered boot marks since process entry of this module. */
@@ -218,7 +218,7 @@ function makeCounters(): RenderCounters {
 		const windowMs = windowStart > 0 ? performance.now() - windowStart : 0;
 		const pad = (n: number): string => n.toString().padStart(5, " ");
 		process.stderr.write(
-			`[mtui-perf] reason=${reason} window=${(windowMs / 1000).toFixed(1)}s ` +
+			`[omherm-perf] reason=${reason} window=${(windowMs / 1000).toFixed(1)}s ` +
 				`forced=${pad(forced)} scheduled=${pad(scheduled)} scoped=${pad(componentScoped)}\n`,
 		);
 		forced = 0;

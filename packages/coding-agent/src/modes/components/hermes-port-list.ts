@@ -882,7 +882,7 @@ export class HermesPortListComponent implements Component {
 							} else if (this.#confirm === "use_profile" && this.#confirmTarget) {
 								await profilePort.use(this.#confirmTarget, { confirmSessionEnd: true })
 								this.#setBanner(
-									`Switched sticky profile → ${this.#confirmTarget}. Restart mtui / gateway to attach.`,
+									`Switched sticky profile → ${this.#confirmTarget}. Restart omh / gateway to attach.`,
 								)
 							} else if (this.#confirm === "delete_profile" && this.#confirmTarget) {
 								await profilePort.delete(this.#confirmTarget, { confirmDestroy: true })
@@ -1503,7 +1503,7 @@ export class HermesPortListComponent implements Component {
 				const j = this.#jobs[this.#sel]
 				warn = `Delete cron "${j?.name || j?.id || "?"}"? This cannot be undone.`
 			} else if (this.#confirm === "use_profile") {
-				warn = `Use profile "${this.#confirmTarget}"? Sticky default flips; current session ends. Restart mtui to attach.`
+				warn = `Use profile "${this.#confirmTarget}"? Sticky default flips; current session ends. Restart omh to attach.`
 			} else if (this.#confirm === "delete_profile") {
 				warn = `Delete profile "${this.#confirmTarget}"? Home dir destroyed. Cannot undo.`
 			} else {

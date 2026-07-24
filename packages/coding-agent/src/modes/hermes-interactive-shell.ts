@@ -1,6 +1,6 @@
 // Hermes interactive shell: OMP chrome pieces + Hermes gateway brain.
-// Experimental path: mtui --bridge
-// Product default remains full InteractiveMode (mtui) until Hermes is plugged under it.
+// Experimental path: omh --bridge
+// Product default remains full InteractiveMode (omh) with Hermes brain under it.
 //
 // Single brain only (Hermes). Reuses OMP ToolExecution + Markdown paint so the
 // coat look is not a LineBox regression while we deepen the InteractiveMode plug.

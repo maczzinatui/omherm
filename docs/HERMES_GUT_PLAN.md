@@ -73,6 +73,8 @@ interface CockpitSession {
 }
 ```
 
+**Shipped:** `packages/hermes-bridge/src/cockpit-session.ts` + `createCockpitSession(brain)` + install hangs `getInstalledCockpitSession(session)`. Coat still constructs OMP `AgentSession` for chrome/`!bash`; new Hermes-facing call sites should prefer the facade.
+
 Map gateway events → existing UI event controller shapes in  
 `modes/controllers/event-controller.ts` (prefer adapting at the edge over rewriting every component).
 

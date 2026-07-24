@@ -129,19 +129,19 @@ export class HermesInventoryListComponent implements Component {
 		try {
 			if (this.#kind === "skills") {
 				if (!skillsPort || typeof skillsPort.list !== "function") {
-					throw new Error("skillsPort unavailable — rebuild/relaunch mtui")
+					throw new Error("skillsPort unavailable — rebuild/relaunch omh")
 				}
 				this.#skills = await skillsPort.list()
 				if (this.#sel >= this.#skills.length) this.#sel = Math.max(0, this.#skills.length - 1)
 			} else if (this.#kind === "tools") {
 				if (!toolsPort || typeof toolsPort.list !== "function") {
-					throw new Error("toolsPort unavailable — rebuild/relaunch mtui")
+					throw new Error("toolsPort unavailable — rebuild/relaunch omh")
 				}
 				this.#tools = await toolsPort.list()
 				if (this.#sel >= this.#tools.length) this.#sel = Math.max(0, this.#tools.length - 1)
 			} else {
 				if (!memoryPort || typeof memoryPort.read !== "function") {
-					throw new Error("memoryPort unavailable — rebuild/relaunch mtui")
+					throw new Error("memoryPort unavailable — rebuild/relaunch omh")
 				}
 				const [files, st] = await Promise.all([
 					memoryPort.read(),

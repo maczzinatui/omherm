@@ -796,9 +796,9 @@ export class SelectorController {
 				/* ignore */
 			}
 			const msg = err instanceof Error ? err.message : String(err)
-			console.error(`[mtui] showHermesPortList(${kind}) failed: ${msg}`)
+			console.error(`[omh] showHermesPortList(${kind}) failed: ${msg}`)
 			try {
-				this.ctx.session?.emitNotice?.("error", `Port overlay failed (${kind}): ${msg}`, "mtui")
+				this.ctx.session?.emitNotice?.("error", `Port overlay failed (${kind}): ${msg}`, "omh")
 			} catch {
 				/* ignore */
 			}
@@ -834,7 +834,7 @@ export class SelectorController {
 			this.ctx.ui.requestRender()
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err)
-			console.error(`[mtui] showHermesTextOverlay failed: ${msg}`)
+			console.error(`[omh] showHermesTextOverlay failed: ${msg}`)
 			try {
 				this.ctx.session?.emitNotice?.(
 					"info",
@@ -928,13 +928,13 @@ export class SelectorController {
 			this.ctx.ui.requestRender()
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err)
-			console.error(`[mtui] showHermesSessionsList failed: ${msg}`)
+			console.error(`[omh] showHermesSessionsList failed: ${msg}`)
 			try {
 				opts?.onDismiss?.()
 			} catch {
 				/* ignore */
 			}
-			this.ctx.session?.emitNotice?.("error", `Sessions overlay failed: ${msg}`, "mtui")
+			this.ctx.session?.emitNotice?.("error", `Sessions overlay failed: ${msg}`, "omh")
 			this.focusActiveEditorArea()
 		}
 	}

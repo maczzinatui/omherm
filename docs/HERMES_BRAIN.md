@@ -12,7 +12,8 @@ Hermes owns the agent loop. OMP InteractiveMode is the coat. One launch: `omherm
 | Piece | Path | Role |
 |-------|------|------|
 | `HermesBrain` | `packages/hermes-bridge/src/hermes-brain.ts` | Port: bootstrap gateway, `prompt`/`interrupt`/`slashExec`, dialog host, map events via `GatewayTurnMapper` |
-| Install | `packages/coding-agent/src/modes/hermes-brain-install.ts` | Replaces session `prompt` / `followUp` / `abort` / `subscribe` fan-in / `isStreaming` |
+| `CockpitSession` | `packages/hermes-bridge/src/cockpit-session.ts` | Narrow coat facade over brain (`info`/`onEvent`/`submit`/…) — prefer for new call sites |
+| Install | `packages/coding-agent/src/modes/hermes-brain-install.ts` | Replaces session `prompt` / `followUp` / `abort` / `subscribe` fan-in / `isStreaming`; hangs `getInstalledCockpitSession` |
 | Wire | `packages/coding-agent/src/main.ts` | Before `runInteractiveMode` when brain enabled |
 | Dialog host | `interactive-mode.ts` `#attachHermesDialogHost` | clarify/approval → OMP ask-dialog |
 | Slash router | `hermes-slash-router.ts` + `input-controller` | deep-link `/settings` `/model` `/kanban` `/cron` `/profile`; else `slash.exec` |
@@ -45,7 +46,7 @@ Hermes owns the agent loop. OMP InteractiveMode is the coat. One launch: `omherm
 
 ## Named debt
 
-1. **Not a full AgentSession facade** — chrome still holds a real OMP session for settings/title/`!bash`. Exit: narrow `CockpitSession` interface.  
+1. **AgentSession still hosts coat chrome** — settings/title/`!bash` need a real OMP session object. **`CockpitSession` facade shipped** (`createCockpitSession` + `getInstalledCockpitSession`); migrate call sites gradually. Full peel of AgentSession = later.
 2. **Synthetic OMP prompts rejected** (plan/vibe auto-prompts) — fail loud notice until ported.  
 3. **followUp while streaming** = interrupt then new turn (no true Hermes `session.steer` yet) — dogfood may already use gateway steer path.  
 4. ~~Approvals / clarify notices only~~ **shipped** ask-dialog host (sudo/secret still missing).  
@@ -59,7 +60,7 @@ Hermes owns the agent loop. OMP InteractiveMode is the coat. One launch: `omherm
 12. ~~Kaomoji in transcript~~ **fixed 2026-07-23** — `thinking.delta` → `working_status` → OMP `setWorkingMessage` (loader above footer). Real model reason = `reasoning.delta` only.
 13. **Perf (2026-07-24 pass A)** — skills/tools list + memory status TTL cache (8s, invalidate on mutation); inventory hover coalesce; Hermes usage refresh bumps `contextUsageRevision` for status-line context%.
 14. ~~Role-model keyboard cycle OMP registry~~ **fixed 2026-07-24** — `cycleHermesModel` + `pickNextHermesModelRow`.
-15. ~~**Boot bloat**~~ **partial 2026-07-24** — interactive Hermes path applies `hermes-coat-boot.ts`: empty `toolNames` + `restrictToolNames`, MCP/LSP/IRC off, skip OMP extension discovery + model registry refresh. Still constructs AgentSession host for chrome/`!bash`. Next: smaller system prompt / CockpitSession facade.
+15. ~~**Boot bloat**~~ **partial 2026-07-24** — interactive Hermes path applies `hermes-coat-boot.ts`: empty `toolNames` + `restrictToolNames`, MCP/LSP/IRC off, skip OMP extension discovery + model registry refresh. Still constructs AgentSession host for chrome/`!bash`. **CockpitSession facade shipped** — migrate call sites; full peel later.
 16. ~~**Synthetic 128k contextWindow**~~ **fixed 2026-07-24** — `resolveHermesContextWindow` maps `usage.context_max` into coat Model.
 
 ## Dogfood gate

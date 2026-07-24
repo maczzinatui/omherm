@@ -73,6 +73,11 @@ export {
   type HermesDialogHost,
 } from "./hermes-brain.ts"
 export {
+  createCockpitSession,
+  isCockpitSession,
+  type CockpitSession,
+} from "./cockpit-session.ts"
+export {
 	parseHermesSlashLine,
 	routeHermesSlash,
 	type HermesSlashDeepLink,
