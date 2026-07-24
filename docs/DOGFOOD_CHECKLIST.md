@@ -3,7 +3,9 @@
 **After any coat/bridge edit: quit + relaunch `mtui` (no HMR).**  
 Binary: `/home/nixos/.bun/bin/mtui` · Repo: `~/meshina-tui` · Branch `main` (local commits; may be ahead of origin).
 
-Commits this arc (local): `e99cba2` P2 overlays · `4859f6f` perf TTL · **latest** board switch + slash pager + sessions debt.
+Commits this arc (local): P2 overlays · perf TTL · board/sessions/slash pager · quick-access chips · **`6b47bcd` perf height/frame/slash** · next: [`HANDOFF_PERF_WAVE_B.md`](./HANDOFF_PERF_WAVE_B.md).
+
+**Parallel sessions:** TUI work stays in `~/meshina-tui`. Do not thrash hub `~/meshina` HANDOFF/model lineup.
 
 ---
 
