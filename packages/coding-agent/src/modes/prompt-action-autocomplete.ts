@@ -127,12 +127,20 @@ function applyGithubRefCompletion(
 
 export class PromptActionAutocompleteProvider implements AutocompleteProvider {
 	#commands: SlashCommand[];
+	#commandByName: Map<string, SlashCommand>;
 	#baseProvider: CombinedAutocompleteProvider;
 	#actions: PromptActionDefinition[];
 	#basePath: string;
 
 	constructor(commands: SlashCommand[], basePath: string, actions: PromptActionDefinition[]) {
 		this.#commands = commands;
+		this.#commandByName = new Map();
+		for (const cmd of commands) {
+			this.#commandByName.set(cmd.name, cmd);
+			if (cmd.aliases) {
+				for (const a of cmd.aliases) this.#commandByName.set(a, cmd);
+			}
+		}
 		this.#baseProvider = new CombinedAutocompleteProvider(commands, basePath);
 		this.#basePath = basePath;
 		this.#actions = actions;
@@ -154,7 +162,7 @@ export class PromptActionAutocompleteProvider implements AutocompleteProvider {
 		const spaceIndex = commandText?.indexOf(" ") ?? -1;
 		if (commandText !== null && spaceIndex !== -1) {
 			const commandName = commandText.slice(1, spaceIndex);
-			const command = this.#commands.find(cmd => cmd.name === commandName || cmd.aliases?.includes(commandName));
+			const command = this.#commandByName.get(commandName);
 			if (command && (!("allowArgs" in command) || command.allowArgs !== false)) {
 				const argumentSuggestions = await this.#baseProvider.getSuggestions(lines, cursorLine, cursorCol);
 				if (argumentSuggestions) return argumentSuggestions;

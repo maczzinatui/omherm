@@ -43,6 +43,7 @@ import { humanizeToolName } from "../../tools/generic-tool-render";
 import { TODO_STRIKE_TOTAL_FRAMES, type TodoToolDetails } from "../../tools/todo";
 import { isFramedBlockComponent, markFramedBlockComponent, renderStatusLine, WidthAwareText } from "../../tui";
 import { sanitizeWithOptionalSixelPassthrough } from "../../utils/sixel";
+import { noteComponentHeight } from "../utils/component-height";
 import { renderDiff } from "./diff";
 
 /**
@@ -933,6 +934,7 @@ export class ToolExecutionComponent extends Container implements NativeScrollbac
 		// spurious `resetDisplay()`.
 		this.#firstResultViewportRepaintShapePainted = this.#needsFirstResultViewportRepaintAtRender();
 		this.#partialResultShapePainted = this.#result !== undefined && this.#isPartial;
+		noteComponentHeight(this, width, lines.length);
 		return lines;
 	}
 

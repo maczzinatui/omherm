@@ -217,6 +217,7 @@ import type {
 	TodoPhase,
 } from "./types";
 import { UiHelpers } from "./utils/ui-helpers";
+import { componentHeight } from "./utils/component-height";
 
 const STILL_CLOSING_DELAY_MS = 3_000;
 
@@ -4896,8 +4897,11 @@ export class InteractiveMode implements InteractiveModeContext {
 			}
 			const termRows = this.ui.terminal.rows;
 			// Bottom chrome height (editor + widgets + status) — chat is above it.
+			// Cache across clicks at same width; chrome height is stable between
+			// layout changes (editor multiline growth invalidates via width or
+			// next miss after content mutates and re-paints).
 			let bottomH = 0;
-			for (const child of [
+			const chromeKids = [
 				this.hookWidgetContainerBelow,
 				this.editorContainer,
 				this.hookWidgetContainerAbove,
@@ -4910,32 +4914,20 @@ export class InteractiveMode implements InteractiveModeContext {
 				this.subagentContainer,
 				this.todoContainer,
 				this.pendingMessagesContainer,
-			]) {
-				try {
-					bottomH += child.render(width).length;
-				} catch {
-					/* ignore */
-				}
+			];
+			for (const child of chromeKids) {
+				bottomH += componentHeight(child, width);
 			}
 			const chatBottomExclusive = Math.max(0, termRows - bottomH);
 			if (event.row >= chatBottomExclusive) {
 				consumed = true;
 				return true;
 			}
-			// Walk chat from the top of the visible stack. Native scrollback means
-			// only on-screen components participate; we approximate with last-render
-			// heights of live children (newest often near the end of the list).
-			let y = 0;
+			// Walk chat from the top of the visible stack. Prefer cached paint
+			// heights (assistant/tool note on render) so click does not re-lex
+			// markdown for every transcript child.
 			const kids = this.chatContainer.children;
-			// Prefer walking from the end: recent turns sit at the bottom of the
-			// viewport more often than the top.
-			const heights: number[] = kids.map(c => {
-				try {
-					return c.render(width).length;
-				} catch {
-					return 0;
-				}
-			});
+			const heights: number[] = kids.map(c => componentHeight(c, width));
 			let total = heights.reduce((a, b) => a + b, 0);
 			// Align the stack's bottom with chatBottomExclusive - 1.
 			let rowCursor = chatBottomExclusive - total;
@@ -4959,15 +4951,10 @@ export class InteractiveMode implements InteractiveModeContext {
 						consumed = true;
 						return true;
 					} else if (child instanceof Container) {
-						// ChatBlock / wrappers: recurse one level.
+						// ChatBlock / wrappers: recurse one level with height cache.
 						let innerY = 0;
 						for (const grand of child.children) {
-							let gh = 0;
-							try {
-								gh = grand.render(width).length;
-							} catch {
-								gh = 0;
-							}
+							const gh = componentHeight(grand, width);
 							if (local >= innerY && local < innerY + gh) {
 								if (grand instanceof AssistantMessageComponentClass) {
 									if (grand.handleThinkingHeaderClick(local - innerY)) {

@@ -99,11 +99,25 @@ export type FrameOptions = {
 	chrome?: number;
 };
 
+/** Small LRU for plain braille geometry (theme not applied here). */
+const FRAME_CACHE_MAX = 24;
+const frameCache = new Map<string, { lines: string[]; inner: Inner }>();
+
 /** Assemble the braille frame at terminal size. Rows are `w` columns wide. */
 export function frame(w: number, h: number, opts: FrameOptions = {}): { lines: string[]; inner: Inner } {
+	const chrome = opts.chrome ?? FRAME.ch;
+	const cacheKey = `${w}|${h}|${chrome}`;
+	const cached = frameCache.get(cacheKey);
+	if (cached) {
+		// Move to end (LRU touch)
+		frameCache.delete(cacheKey);
+		frameCache.set(cacheKey, cached);
+		return { lines: cached.lines, inner: { ...cached.inner } };
+	}
+
 	const { cw, tw, tv } = FRAME;
 	const chFull = FRAME.ch;
-	const ch = Math.max(1, Math.min(chFull, opts.chrome ?? chFull));
+	const ch = Math.max(1, Math.min(chFull, chrome));
 	const mw = w - 2 * cw;
 	const mh = h - 2 * ch;
 	const inner: Inner = { x: cw, y: ch, w: Math.max(0, mw), h: Math.max(0, mh) };
@@ -147,7 +161,13 @@ export function frame(w: number, h: number, opts: FrameOptions = {}): { lines: s
 	for (let i = 0; i < ch; i++) out.push(tl[i]! + t[i]! + tr[i]!);
 	for (let i = 0; i < mh; i++) out.push(l[i]! + mid + r[i]!);
 	for (let i = 0; i < ch; i++) out.push(bl[i]! + b[i]! + br[i]!);
-	return { lines: out, inner };
+	const result = { lines: out, inner };
+	if (frameCache.size >= FRAME_CACHE_MAX) {
+		const oldest = frameCache.keys().next().value;
+		if (oldest !== undefined) frameCache.delete(oldest);
+	}
+	frameCache.set(cacheKey, result);
+	return { lines: out, inner: { ...inner } };
 }
 
 /** Compact static HERM block wordmark (fits ~26–40 cols). */

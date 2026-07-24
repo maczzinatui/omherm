@@ -7,6 +7,7 @@ import { getMarkdownTheme, theme } from "../../modes/theme/theme";
 import { getPreviewLines, resolveImageOptions, TRUNCATE_LENGTHS } from "../../tools/render-utils";
 import { canonicalizeMessage, formatThinkingForDisplay, hasDisplayableThinking } from "../../utils/thinking-display";
 import { resolveAssistantErrorPresentation } from "../utils/transcript-render-helpers";
+import { noteComponentHeight } from "../utils/component-height";
 import { type CacheInvalidation, CacheInvalidationMarkerComponent } from "./cache-invalidation-marker";
 
 /**
@@ -299,7 +300,11 @@ export class AssistantMessageComponent extends Container {
 	override render(width: number): readonly string[] {
 		this.#lastRenderWidth = width;
 		const lines = super.render(width);
+		// Second child walk for thinking-header hits is L1-cheap after super.render
+		// (Markdown/Text instance caches). Still skip full markdown re-lex.
 		this.#rebuildThinkingHeaderHits(width);
+		// Mouse hit-tests read this instead of re-entering full chat paint.
+		noteComponentHeight(this, width, lines.length);
 		return lines;
 	}
 

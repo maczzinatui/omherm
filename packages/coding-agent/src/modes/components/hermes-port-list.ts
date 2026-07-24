@@ -41,10 +41,25 @@ import {
 
 export type HermesPortKind = "kanban" | "cron" | "profiles"
 
-/** Pad plain text to width (no ANSI). */
+/** Pad plain text to width (no ANSI). Fast path for ASCII labels. */
 function pad(s: string, w: number): string {
 	if (w <= 0) return ""
 	const t = s ?? ""
+	// Fast path: printable ASCII only — inventory/port labels are almost always this.
+	let ascii = true
+	for (let i = 0; i < t.length; i++) {
+		const c = t.charCodeAt(i)
+		if (c < 0x20 || c > 0x7e) {
+			ascii = false
+			break
+		}
+	}
+	if (ascii) {
+		if (t.length === w) return t
+		if (t.length < w) return t + " ".repeat(w - t.length)
+		if (w === 1) return "…"
+		return t.slice(0, w - 1) + "…"
+	}
 	const vw = visibleWidth(t)
 	if (vw === w) return t
 	if (vw < w) return t + " ".repeat(w - vw)
