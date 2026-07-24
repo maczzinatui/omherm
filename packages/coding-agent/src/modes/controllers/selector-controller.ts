@@ -1013,7 +1013,17 @@ export class SelectorController {
 							});
 							if (brain) {
 								try {
-									await brain.refreshInfo();
+									const { applyHermesIdentityToSession, syncCoatFromHermesBrain } = await import(
+										"../hermes-coat-identity.ts"
+									);
+									applyHermesIdentityToSession(this.ctx.session, brain.sessionInfo, {
+										provider: model.provider,
+										modelId: model.id,
+									});
+									await syncCoatFromHermesBrain(this.ctx.session, brain, {
+										provider: model.provider,
+										modelId: model.id,
+									});
 								} catch {
 									/* optional */
 								}
@@ -1136,7 +1146,17 @@ export class SelectorController {
 							});
 							if (brain) {
 								try {
-									await brain.refreshInfo();
+									const { applyHermesIdentityToSession, syncCoatFromHermesBrain } = await import(
+										"../hermes-coat-identity.ts"
+									);
+									applyHermesIdentityToSession(this.ctx.session, brain.sessionInfo, {
+										provider: model.provider,
+										modelId: model.id,
+									});
+									await syncCoatFromHermesBrain(this.ctx.session, brain, {
+										provider: model.provider,
+										modelId: model.id,
+									});
 								} catch {
 									/* footer optional */
 								}

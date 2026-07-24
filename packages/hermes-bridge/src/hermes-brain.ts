@@ -58,6 +58,7 @@ export class HermesBrain {
   readonly gateway: HermesGateway
   readonly mapper: GatewayTurnMapper
   #listeners = new Set<HermesBrainListener>()
+  #identityListeners = new Set<(info: SessionInfo) => void>()
   #unsubUi: (() => void) | null = null
   #streaming = false
   #bootstrapped = false
@@ -98,6 +99,12 @@ export class HermesBrain {
   /** Wire OMP ask-dialog (call after InteractiveMode builds ExtensionUiController). */
   setDialogHost(host: HermesDialogHost | null): void {
     this.#dialogHost = host
+  }
+
+  /** Coat paint: model/effort identity changed (session.info / refresh). */
+  onIdentity(listener: (info: SessionInfo) => void): () => void {
+    this.#identityListeners.add(listener)
+    return () => this.#identityListeners.delete(listener)
   }
 
   /** Subscribe to mapped OMP-shaped session events (EventController edge). */
@@ -247,6 +254,7 @@ export class HermesBrain {
     this.#unsubUi = null
     this.#dialogHost = null
     this.#listeners.clear()
+    this.#identityListeners.clear()
     for (const w of this.#turnWaiters) {
       clearTimeout(w.timer)
       w.reject(new Error("hermes brain disposed"))
@@ -276,6 +284,13 @@ export class HermesBrain {
   #onUi(ev: UiEvent): void {
     if (ev.kind === "info") {
       this.mapper.setIdentity(ev.info.model, ev.info.provider)
+      for (const l of this.#identityListeners) {
+        try {
+          l(ev.info)
+        } catch {
+          /* coat optional */
+        }
+      }
     }
     if (ev.kind === "error") {
       this.#streaming = true

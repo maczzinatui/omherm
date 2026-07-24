@@ -1856,6 +1856,30 @@ export class InputController {
 			this.ctx.showStatus("Model/thinking apply to the main session — press ←← to return first");
 			return;
 		}
+		void this.#cycleThinkingHermesAware();
+	}
+
+	async #cycleThinkingHermesAware(): Promise<void> {
+		try {
+			const { getInstalledHermesBrain } = await import("../hermes-brain-install.ts");
+			const brain = getInstalledHermesBrain(this.ctx.session);
+			if (brain) {
+				const { cycleHermesThinking } = await import("../hermes-coat-identity.ts");
+				const newLevel = await cycleHermesThinking(this.ctx.session, brain);
+				if (newLevel === undefined) {
+					this.ctx.showStatus("Could not cycle Hermes reasoning effort");
+				} else {
+					this.ctx.statusLine.invalidate();
+					this.ctx.updateEditorBorderColor();
+					this.ctx.showStatus(`Hermes reasoning → ${newLevel}`);
+				}
+				return;
+			}
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			this.ctx.showWarning(`Hermes reasoning cycle failed: ${msg.slice(0, 160)}`);
+			return;
+		}
 		const newLevel = this.ctx.session.cycleThinkingLevel();
 		if (newLevel === undefined) {
 			this.ctx.showStatus("Current model does not support thinking");

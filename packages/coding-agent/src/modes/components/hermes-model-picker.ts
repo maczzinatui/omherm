@@ -33,11 +33,11 @@ const HEIGHT_FRACTION = 0.45
 export function hermesRowToModel(row: HermesModelRow): Model {
   return buildModel({
     id: row.id,
-    name: row.id,
+    name: row.id.includes("/") ? row.id.split("/").pop() || row.id : row.id,
     provider: row.provider,
     api: "openai-completions",
     baseUrl: "",
-    reasoning: false,
+    reasoning: true,
     input: ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 128_000,

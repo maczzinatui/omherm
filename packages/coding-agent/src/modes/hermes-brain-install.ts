@@ -26,6 +26,8 @@ export type HermesBrainHandle = {
   setDialogHost: (host: HermesDialogHost | null) => void
   /** OMP InteractiveMode.setWorkingMessage — kaomoji / status line (not transcript). */
   setWorkingMessage?: (message?: string) => void
+  /** Invalidate footer/status after Hermes identity (model/effort) changes. */
+  invalidateChrome?: () => void
 }
 
 const BRAIN_KEY = Symbol.for("meshina.hermesBrain")
@@ -202,12 +204,36 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
     },
   })
 
+  // Surface Hermes identity into OMP coat (footer model · thinking).
+  // session.model stays MiniMax/etc. until we poke agent.setModel — paint only.
+  const { applyHermesIdentityToSession, syncCoatFromHermesBrain } = await import(
+    "./hermes-coat-identity.ts"
+  )
+  applyHermesIdentityToSession(session, brain.sessionInfo)
+  const unsubIdentity = brain.onIdentity(info => {
+    applyHermesIdentityToSession(session, info)
+    try {
+      getHermesBrainHandle(session)?.invalidateChrome?.()
+    } catch {
+      /* IM may not be up yet */
+    }
+  })
+  const unsubInfo = brain.subscribe((ev: HermesBrainEvent) => {
+    if (ev.type === "turn_end" || ev.type === "agent_end") {
+      void syncCoatFromHermesBrain(session, brain).catch(() => {})
+    }
+  })
+  // Initial async refresh (gateway config may lag session.create info)
+  void syncCoatFromHermesBrain(session, brain).catch(() => {})
+
   const handle: HermesBrainHandle = {
     brain,
     setDialogHost: (host) => brain.setDialogHost(host),
     setWorkingMessage: undefined,
     dispose: () => {
       unsubUsage()
+      unsubInfo()
+      unsubIdentity()
       brain.dispose()
       session.subscribe = origSubscribe
       session.prompt = origPrompt

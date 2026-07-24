@@ -892,6 +892,10 @@ export class InteractiveMode implements InteractiveModeContext {
 				this.ensureLoadingAnimation();
 				this.setWorkingMessage(message);
 			};
+			handle.invalidateChrome = () => {
+				this.statusLine.invalidate();
+				this.updateEditorBorderColor();
+			};
 			handle.setDialogHost({
 				clarify: async (req) => {
 					const optionLabels =
