@@ -65,13 +65,19 @@ CLI ground truth: `hermes kanban boards list` / `boards show`
 
 ---
 
-## 4. Sessions SoT (named debt)
+## 4. Sessions picker (Hermes SoT)
 
-- [ ] Open session picker under Hermes brain
-- [ ] **Warning** appears: coat bookmarks only — does **not** switch gateway session
-- [ ] Resume still may change coat chrome; Hermes turns stay on gateway session
+**Where to find it (was missing from menu):**
+- Settings → **Tasks** → group **Sessions** → **Open Sessions…**
+- Slash: `/sessions` or bare `/resume`
+- Key: **Ctrl+Shift+R** (app.session.resume)
 
-Do **not** file a bug if resume doesn’t swap Hermes transcript — that’s debt, not regression.
+- [ ] Overlay lists Hermes sessions (gateway, not empty OMP coat files)
+- [ ] Enter / click resumes; notice shows title + live id
+- [ ] Further prompts stay on resumed Hermes session
+- [ ] Coat full history replay may still be incomplete (named debt) — prompts work
+
+Do **not** expect Herm React Sessions tab chrome; this is OMP coat + Hermes list.
 
 ---
 

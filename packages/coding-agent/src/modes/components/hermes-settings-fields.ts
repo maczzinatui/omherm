@@ -20,6 +20,7 @@ export const HERMES_OPEN_SKILLS_PATH = "hermes:action.open_skills" as SettingPat
 export const HERMES_OPEN_TOOLS_PATH = "hermes:action.open_tools" as SettingPath;
 export const HERMES_OPEN_MEMORY_PATH = "hermes:action.open_memory" as SettingPath;
 export const HERMES_OPEN_SUBAGENTS_PATH = "hermes:action.open_subagents" as SettingPath;
+export const HERMES_OPEN_SESSIONS_PATH = "hermes:action.open_sessions" as SettingPath;
 
 export type HermesPortAction =
 	| "kanban"
@@ -29,6 +30,7 @@ export type HermesPortAction =
 	| "tools"
 	| "memory"
 	| "subagents"
+	| "sessions"
 	| "model_hub";
 
 export function hermesPortActionFromPath(path: string): HermesPortAction | null {
@@ -40,6 +42,7 @@ export function hermesPortActionFromPath(path: string): HermesPortAction | null 
 	if (path === HERMES_OPEN_TOOLS_PATH) return "tools";
 	if (path === HERMES_OPEN_MEMORY_PATH) return "memory";
 	if (path === HERMES_OPEN_SUBAGENTS_PATH) return "subagents";
+	if (path === HERMES_OPEN_SESSIONS_PATH) return "sessions";
 	return null;
 }
 
@@ -154,6 +157,16 @@ function portLauncherDefs(): SettingDef[] {
 			description: "Live subagent.* / browser.progress trail for this session.",
 			tab: "tasks",
 			group: "Subagents",
+			type: "enum",
+			values: ["open"],
+		},
+		{
+			path: HERMES_OPEN_SESSIONS_PATH,
+			label: "Open Sessions…",
+			description:
+				"Hermes session store (gateway session.list / resume). Same surface as Herm’s Sessions tab — not OMP coat files.",
+			tab: "tasks",
+			group: "Sessions",
 			type: "enum",
 			values: ["open"],
 		},

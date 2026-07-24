@@ -18,6 +18,8 @@ describe("hermes slash router", () => {
 		expect(routeHermesSlash("/tools")).toEqual({ type: "port", port: "tools" })
 		expect(routeHermesSlash("/memory")).toEqual({ type: "port", port: "memory" })
 		expect(routeHermesSlash("/subagents")).toEqual({ type: "port", port: "subagents" })
+		expect(routeHermesSlash("/sessions")).toEqual({ type: "port", port: "sessions" })
+		expect(routeHermesSlash("/resume")).toEqual({ type: "port", port: "sessions" })
 	})
 
 	test("exec with args", () => {
@@ -29,6 +31,7 @@ describe("hermes slash router", () => {
 		expect(routeHermesSlash("/compress")).toEqual({ type: "exec", command: "/compress" })
 		expect(routeHermesSlash("/goal")).toEqual({ type: "exec", command: "/goal" })
 		expect(routeHermesSlash("/browser")).toEqual({ type: "exec", command: "/browser" })
+		expect(routeHermesSlash("/resume abc")).toEqual({ type: "exec", command: "/resume abc" })
 		expect(routeHermesSlash("/some-skill")).toEqual({ type: "exec", command: "/some-skill" })
 	})
 })

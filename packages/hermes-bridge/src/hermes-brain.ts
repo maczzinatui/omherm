@@ -186,6 +186,24 @@ export class HermesBrain {
     return this.gateway.slashExec(command)
   }
 
+  async listSessions(limit = 80) {
+    if (!this.#bootstrapped) await this.bootstrap()
+    return this.gateway.listSessions(limit)
+  }
+
+  async resumeSession(sessionId: string) {
+    if (!this.#bootstrapped) await this.bootstrap()
+    // End any in-flight turn before rebinding.
+    if (this.#streaming) {
+      try {
+        await this.interrupt()
+      } catch {
+        /* best effort */
+      }
+    }
+    return this.gateway.resumeSession(sessionId)
+  }
+
   dispose(): void {
     this.#unsubUi?.()
     this.#unsubUi = null

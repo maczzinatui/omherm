@@ -91,6 +91,8 @@ import {
 } from "../components/hermes-inventory-list";
 import { SubagentTrailComponent, getOrCreateSubagentTrailStore } from "../components/subagent-trail";
 import { HermesTextOverlayComponent } from "../components/hermes-text-overlay";
+import { HermesSessionsListComponent } from "../components/hermes-sessions-list";
+import { getInstalledHermesBrain } from "../hermes-brain-install";
 import { isHermesProductSettings } from "../../config/settings-product-manifest";
 import { OAuthSelectorComponent } from "../components/oauth-selector";
 import { PluginSelectorComponent } from "../components/plugin-selector";
@@ -679,9 +681,13 @@ export class SelectorController {
 
 	/** Settings → Tasks Hermes ports (Kanban / Cron / Profiles / Skills / Tools / Memory / Subagents). */
 	showHermesPortList(
-		kind: "kanban" | "cron" | "profiles" | "skills" | "tools" | "memory" | "subagents",
+		kind: "kanban" | "cron" | "profiles" | "skills" | "tools" | "memory" | "subagents" | "sessions",
 		opts?: { onDismiss?: () => void },
 	): void {
+		if (kind === "sessions") {
+			this.showHermesSessionsList(opts)
+			return
+		}
 		let overlayHandle: OverlayHandle | undefined
 		let closed = false
 		const done = () => {
@@ -776,6 +782,82 @@ export class SelectorController {
 			} catch {
 				/* ignore */
 			}
+			this.focusActiveEditorArea()
+		}
+	}
+
+	/**
+	 * Hermes sessions picker (gateway session.list / resume).
+	 * Prefer this under Hermes brain — not OMP coat bookmarks.
+	 */
+	showHermesSessionsList(opts?: { onDismiss?: () => void }): void {
+		let overlayHandle: OverlayHandle | undefined
+		let closed = false
+		const done = () => {
+			if (closed) return
+			closed = true
+			if (opts?.onDismiss) opts.onDismiss()
+			overlayHandle?.hide()
+			if (!opts?.onDismiss) this.focusActiveEditorArea()
+		}
+		try {
+			const brain = getInstalledHermesBrain(this.ctx.session)
+			const panel = new HermesSessionsListComponent(this.ctx.ui, done, {
+				brain: brain
+					? {
+							listSessions: (n) => brain.listSessions(n),
+							resumeSession: (id) => brain.resumeSession(id),
+							sessionId: brain.sessionId ?? null,
+						}
+					: null,
+				onResumed: (info) => {
+					try {
+						this.ctx.clearTransientSessionUi?.()
+					} catch {
+						/* optional */
+					}
+					const preview =
+						info.previewLines.length > 0
+							? `\nRecent:\n${info.previewLines.slice(-6).join("\n")}`
+							: ""
+					this.ctx.session.emitNotice?.(
+						"info",
+						`Hermes session resumed · ${info.title} · live ${info.sessionId} · ${info.messageCount} msgs in payload.${preview}\n(Coat chat chrome may not replay full history yet — prompts continue on this Hermes session.)`,
+						"hermes-sessions",
+					)
+					this.ctx.showStatus(`Resumed Hermes · ${info.title}`)
+					this.ctx.statusLine?.invalidate?.()
+					// Optional: open pager with preview if long
+					if (info.previewLines.length > 4) {
+						try {
+							this.showHermesTextOverlay(
+								`Resumed · ${info.title}`,
+								info.previewLines.join("\n"),
+							)
+						} catch {
+							/* optional */
+						}
+					}
+				},
+			})
+			overlayHandle = this.ctx.ui.showOverlay(panel, {
+				anchor: "top-left",
+				width: "100%",
+				maxHeight: "100%",
+				margin: 0,
+				fullscreen: true,
+			})
+			this.ctx.ui.setFocus(panel)
+			this.ctx.ui.requestRender()
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err)
+			console.error(`[mtui] showHermesSessionsList failed: ${msg}`)
+			try {
+				opts?.onDismiss?.()
+			} catch {
+				/* ignore */
+			}
+			this.ctx.session?.emitNotice?.("error", `Sessions overlay failed: ${msg}`, "mtui")
 			this.focusActiveEditorArea()
 		}
 	}
@@ -1530,17 +1612,15 @@ export class SelectorController {
 	}
 
 	async showSessionSelector(): Promise<void> {
-		// Cadillac: under Hermes brain, OMP session files are coat bookmarks only.
-		// Fail-loud so we never claim Hermes transcript switched.
+		// Under Hermes brain: open Hermes gateway session picker (Cadillac SoT).
 		try {
-			const { getInstalledHermesBrain } = await import("../hermes-brain-install.ts");
-			if (getInstalledHermesBrain(this.ctx.session)) {
-				this.ctx.showWarning(
-					"Hermes brain ON: session list is coat bookmarks only — does not switch gateway session (see REMAINING_WORK §Sessions SoT).",
-				);
+			const brain = getInstalledHermesBrain(this.ctx.session)
+			if (brain) {
+				this.showHermesSessionsList()
+				return
 			}
 		} catch {
-			/* optional */
+			/* fall through to OMP coat picker */
 		}
 		const sessions = await SessionManager.list(
 			this.ctx.sessionManager.getCwd(),

@@ -421,6 +421,67 @@ export class HermesGateway extends EventEmitter {
     }
   }
 
+  /** Hermes session inventory (gateway SoT). */
+  async listSessions(limit = 80): Promise<
+    Array<{
+      id: string
+      title: string
+      preview: string
+      started_at: number
+      message_count: number
+      source: string
+    }>
+  > {
+    const res = await this.request<{ sessions?: unknown[] }>("session.list", { limit })
+    const rows = Array.isArray(res?.sessions) ? res.sessions : []
+    return rows
+      .map((raw) => {
+        const s = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>
+        return {
+          id: String(s.id ?? ""),
+          title: String(s.title ?? ""),
+          preview: String(s.preview ?? ""),
+          started_at: typeof s.started_at === "number" ? s.started_at : Number(s.started_at) || 0,
+          message_count:
+            typeof s.message_count === "number" ? s.message_count : Number(s.message_count) || 0,
+          source: String(s.source ?? ""),
+        }
+      })
+      .filter((s) => s.id)
+  }
+
+  /**
+   * Bind this gateway client to a stored Hermes session.
+   * Returns display messages when the gateway includes them (for coat paint later).
+   */
+  async resumeSession(sessionId: string): Promise<{
+    session_id: string
+    resumed?: string
+    messages?: unknown[]
+    info?: SessionInfo
+    raw: Record<string, unknown>
+  }> {
+    const id = sessionId.trim()
+    if (!id) throw new Error("session_id required")
+    const res = await this.request<Record<string, unknown>>("session.resume", {
+      session_id: id,
+      cols: process.stdout.columns || 80,
+    })
+    const sid = String(res?.session_id ?? "")
+    if (sid) this.sid = sid
+    if (res?.info && typeof res.info === "object") {
+      this.info = { ...this.info, ...(res.info as SessionInfo) }
+      this.emitUi({ kind: "info", info: this.info })
+    }
+    return {
+      session_id: sid || id,
+      resumed: res?.resumed != null ? String(res.resumed) : undefined,
+      messages: Array.isArray(res?.messages) ? res.messages : undefined,
+      info: this.info,
+      raw: res || {},
+    }
+  }
+
   kill() {
     try {
       this.proc?.kill()

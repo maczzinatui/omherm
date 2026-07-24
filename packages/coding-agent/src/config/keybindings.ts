@@ -171,8 +171,8 @@ export const KEYBINDINGS = {
 		description: "Fork session",
 	},
 	"app.session.resume": {
-		defaultKeys: [],
-		description: "Resume session",
+		defaultKeys: ["ctrl+shift+r"],
+		description: "Resume / pick Hermes session",
 	},
 	"app.agents.hub": {
 		defaultKeys: "alt+a",
