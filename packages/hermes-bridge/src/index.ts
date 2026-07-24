@@ -103,3 +103,16 @@ export {
   type SkillSource,
   type SkillTrust,
 } from "./skills-port.ts"
+export {
+  createToolsPort,
+  toolsPort,
+  parseToolsListOutput,
+  parseToolRow,
+  formatToolLabel,
+  formatToolDescription,
+  type Tool,
+  type ToolPort,
+  type ToolPlatform,
+  type ToolStatus,
+  type ToolKind,
+} from "./tools-port.ts"
