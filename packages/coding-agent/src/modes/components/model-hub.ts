@@ -102,6 +102,16 @@ export interface ModelHubCallbacks {
 export interface ModelHubOptions {
 	/** Preselect this provider's sidebar entry (e.g. when reopening after /login). */
 	initialProviderId?: string;
+	/**
+	 * Display names for provider sidebar rows (slug → "Nous Portal").
+	 * Used when the hub is fed Hermes inventory via scopedModels.
+	 */
+	providerLabels?: Readonly<Record<string, string>>;
+	/**
+	 * When true, skip OMP registry provider refresh (Hermes catalog is SoT).
+	 * Scoped models already skip offline full refresh; this blocks per-provider F5 storms.
+	 */
+	hermesCatalog?: boolean;
 }
 
 interface SidebarEntry {
@@ -183,6 +193,8 @@ export class ModelHubComponent implements Component {
 	#availableItems: ModelBrowserItem[] = [];
 	#recentItems: ModelBrowserItem[] = [];
 	#configError: string | undefined;
+	#providerLabels: Readonly<Record<string, string>> = {};
+	#hermesCatalog = false;
 
 	#entries: SidebarEntry[] = [];
 	// Sidebar sections from the last registry sync; #composeEntries assembles
@@ -243,6 +255,8 @@ export class ModelHubComponent implements Component {
 		this.#registry = registry;
 		this.#scopedModels = scopedModels;
 		this.#callbacks = callbacks;
+		this.#providerLabels = options.providerLabels ?? {};
+		this.#hermesCatalog = options.hermesCatalog === true;
 		enableOverlayScopedPaint(this.#tui, this);
 
 		this.#browser = new ModelBrowser(settings, {
@@ -396,11 +410,11 @@ export class ModelHubComponent implements Component {
 		const providerEntry = (providerId: string, isLocked: boolean): SidebarEntry => ({
 			id: `provider:${providerId}`,
 			kind: "provider",
-			label: providerId,
+			label: this.#providerLabels[providerId] ?? providerId,
 			providerId,
 			locked: isLocked,
 			annotation: isLocked ? undefined : String(availableCounts.get(providerId) ?? 0),
-			oauth: oauthIds.has(providerId),
+			oauth: !this.#hermesCatalog && oauthIds.has(providerId),
 			catalogCount: catalogCounts.get(providerId) ?? 0,
 		});
 

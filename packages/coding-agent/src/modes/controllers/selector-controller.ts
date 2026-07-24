@@ -82,6 +82,8 @@ import { ModelHubComponent, type ModelRoleSelectionScope } from "../components/m
 import { ModelPickerComponent } from "../components/model-picker";
 import {
 	defaultHermesModelPick,
+	hermesCatalogToScopedModels,
+	hermesProviderLabels,
 	HermesModelPickerComponent,
 } from "../components/hermes-model-picker";
 import { HermesPortListComponent } from "../components/hermes-port-list";
@@ -670,13 +672,71 @@ export class SelectorController {
 	}
 
 	showModelSelector(options?: { temporaryOnly?: boolean }): void {
-		// Product path: keep the OMP model hub/picker chrome (clean UX).
-		// Hermes global default is dual-written on default-role assign (see onAssign).
+		// Product path: OMP hub/picker chrome, Hermes inventory as SoT when brand=hermes.
+		// Keep the OMP path fully synchronous so existing unit tests (and Esc/key
+		// handlers) still see the overlay on the same tick. Hermes catalog load is
+		// the only async open.
 		if (options?.temporaryOnly) {
-			this.#showModelPicker();
+			if (!isHermesProductSettings()) {
+				void this.#showModelPicker(null);
+				return;
+			}
+			void (async () => {
+				this.ctx.showStatus("Loading Hermes model catalog…");
+				const hermes = await this.#loadHermesScopedCatalog();
+				await this.#showModelPicker(hermes);
+			})();
 			return;
 		}
-		this.#showModelHub({});
+		if (!isHermesProductSettings()) {
+			void this.#showModelHub({}, null);
+			return;
+		}
+		void (async () => {
+			this.ctx.showStatus("Loading Hermes model catalog…");
+			const hermes = await this.#loadHermesScopedCatalog();
+			await this.#showModelHub({}, hermes);
+		})();
+	}
+
+	/**
+	 * Load Hermes inventory when product settings are Hermes-branded.
+	 * Fail-loud notice + OMP registry fallback if catalog CLI dies.
+	 */
+	async #loadHermesScopedCatalog(): Promise<{
+		scoped: import("../components/model-hub").ScopedModelItem[];
+		providerLabels: Record<string, string>;
+		hermesCatalog: boolean;
+		currentSelector?: string;
+		summary?: string;
+	} | null> {
+		if (!isHermesProductSettings()) return null;
+		try {
+			const { loadHermesModelCatalog } = await import("@omherm/hermes-bridge");
+			const cat = await loadHermesModelCatalog();
+			const scoped = hermesCatalogToScopedModels(cat);
+			if (scoped.length === 0) {
+				this.ctx.showError("Hermes model catalog returned 0 authenticated models");
+				return null;
+			}
+			const currentSelector =
+				cat.rows.find(r => r.isCurrentModel)?.selector ||
+				(cat.provider && cat.model ? `${cat.provider}/${cat.model}` : undefined);
+			const summary = `Hermes · ${cat.providers.length} providers · ${cat.rows.length} models${
+				currentSelector ? ` · current ${currentSelector}` : ""
+			}`;
+			return {
+				scoped,
+				providerLabels: hermesProviderLabels(cat),
+				hermesCatalog: true,
+				currentSelector,
+				summary,
+			};
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			this.ctx.showError(`Hermes model catalog failed (falling back to OMP registry): ${msg}`);
+			return null;
+		}
 	}
 
 	/** Settings → Tasks Hermes ports (Kanban / Cron / Profiles / Skills / Tools / Memory / Subagents). */
@@ -914,12 +974,19 @@ export class SelectorController {
 	 * Compact session-only model picker (alt+p / `/switch`): a floating
 	 * bottom-anchored overlay over the transcript. The current model is
 	 * highlighted and preselected; a leading `@` searches ctrl+p quick roles.
+	 * Hermes product: inventory from Hermes catalog (Nous Portal, etc.).
 	 */
-	#showModelPicker(): void {
+	async #showModelPicker(
+		hermes: Awaited<ReturnType<SelectorController["#loadHermesScopedCatalog"]>> | null = null,
+	): Promise<void> {
 		const currentContextTokens = this.ctx.session.getContextUsage()?.tokens ?? 0;
 		const current = this.ctx.session.model;
 		const quickRoleOrder = this.ctx.settings.get("cycleOrder");
 		const quickRoleCycle = this.ctx.session.getRoleModelCycle(quickRoleOrder);
+		const scopedModels = hermes?.scoped ?? this.ctx.session.scopedModels;
+		const currentSelector =
+			hermes?.currentSelector ?? (current ? `${current.provider}/${current.id}` : undefined);
+		if (hermes?.summary) this.ctx.showStatus(hermes.summary);
 		let overlayHandle: OverlayHandle | undefined;
 		let closed = false;
 		const done = () => {
@@ -933,10 +1000,21 @@ export class SelectorController {
 			this.ctx.ui,
 			this.ctx.settings,
 			this.ctx.session.modelRegistry,
-			this.ctx.session.scopedModels,
+			scopedModels,
 			{
 				onPick: async (model, selector) => {
 					try {
+						if (hermes?.hermesCatalog) {
+							const { applyHermesModelGlobal } = await import("@omherm/hermes-bridge");
+							await applyHermesModelGlobal(model.provider, model.id);
+							this.ctx.statusLine.invalidate();
+							this.ctx.updateEditorBorderColor();
+							this.ctx.showStatus(
+								`Hermes default → ${selector} (config.yaml; next turn / new session)`,
+							);
+							done();
+							return;
+						}
 						// Session-only: update agent state but don't persist the model to settings.
 						const roleThinkingLevel = this.ctx.session.resolveTemporaryModelThinkingLevel(model);
 						await this.ctx.session.setModelTemporary(model, roleThinkingLevel);
@@ -969,10 +1047,12 @@ export class SelectorController {
 			},
 			{
 				currentContextTokens,
-				currentSelector: current ? `${current.provider}/${current.id}` : undefined,
-				quickRoles: quickRoleCycle?.models,
-				quickRoleOrder,
-				currentQuickRole: quickRoleCycle?.models[quickRoleCycle.currentIndex]?.role,
+				currentSelector,
+				quickRoles: hermes?.hermesCatalog ? undefined : quickRoleCycle?.models,
+				quickRoleOrder: hermes?.hermesCatalog ? undefined : quickRoleOrder,
+				currentQuickRole: hermes?.hermesCatalog
+					? undefined
+					: quickRoleCycle?.models[quickRoleCycle.currentIndex]?.role,
 			},
 		);
 		overlayHandle = this.ctx.ui.showOverlay(picker, {
@@ -990,9 +1070,15 @@ export class SelectorController {
 	 * overlay enables mouse tracking for its lifetime and the transcript stays
 	 * untouched underneath. `initialProviderId` preselects a provider's sidebar
 	 * entry — used when reopening the hub after a /login round-trip.
+	 * Hermes product: same OMP chrome, Hermes inventory (Nous Portal, …).
 	 */
-	#showModelHub(hubOptions: { initialProviderId?: string }): void {
+	async #showModelHub(
+		hubOptions: { initialProviderId?: string },
+		hermes: Awaited<ReturnType<SelectorController["#loadHermesScopedCatalog"]>> | null = null,
+	): Promise<void> {
 		const currentContextTokens = this.ctx.session.getContextUsage()?.tokens ?? 0;
+		const scopedModels = hermes?.scoped ?? this.ctx.session.scopedModels;
+		if (hermes?.summary) this.ctx.showStatus(hermes.summary);
 		let overlayHandle: OverlayHandle | undefined;
 		let hub: ModelHubComponent | undefined;
 		let closed = false;
@@ -1010,7 +1096,7 @@ export class SelectorController {
 			this.ctx.ui,
 			this.ctx.settings,
 			this.ctx.session.modelRegistry,
-			this.ctx.session.scopedModels,
+			scopedModels,
 			{
 				onAssign: async (model, role, thinkingLevel, selector, scope?: ModelRoleSelectionScope) => {
 					const releaseDefaultMutation = role === "default" ? await this.#acquireDefaultRoleMutation() : undefined;
@@ -1026,6 +1112,25 @@ export class SelectorController {
 						configuredStorage === "project" ? `${targetScope === "project" ? "Project" : "Global"} ` : "";
 					const defaultStatusLabel = configuredStorage === "project" ? `${scopeLabel}default` : "Default";
 					try {
+						// Hermes inventory hub: config.yaml is SoT. OMP setModel needs OMP auth
+						// (missing for nous/etc.) — do not require it for default.
+						if (hermes?.hermesCatalog && role === "default") {
+							const { applyHermesModelGlobal } = await import("@omherm/hermes-bridge");
+							await applyHermesModelGlobal(model.provider, model.id);
+							this.ctx.settings.setModelRole(
+								"default",
+								formatModelSelectorValue(selectorValue, concreteThinking),
+							);
+							if (isAuto) {
+								this.ctx.settings.set("defaultThinkingLevel", AUTO_THINKING);
+							}
+							this.ctx.statusLine.invalidate();
+							this.ctx.updateEditorBorderColor();
+							this.ctx.showStatus(
+								`${defaultStatusLabel} model: ${selectorValue} · Hermes config.yaml updated (next turn / session)`,
+							);
+							return;
+						}
 						if (role === "default") {
 							const effectiveProvenance = this.ctx.settings.getModelRoleProvenance("default");
 							const shadowedGlobal =
@@ -1218,6 +1323,12 @@ export class SelectorController {
 				},
 
 				onLoginRequest: providerId => {
+					if (hermes?.hermesCatalog) {
+						this.ctx.showStatus(
+							`Provider "${providerId}" is from Hermes inventory — use \`hermes auth\` / config, not OMP login`,
+						);
+						return;
+					}
 					done();
 					void this.#loginThenReopenModelHub(providerId);
 				},
@@ -1235,6 +1346,8 @@ export class SelectorController {
 			},
 			{
 				initialProviderId: hubOptions.initialProviderId,
+				providerLabels: hermes?.providerLabels,
+				hermesCatalog: hermes?.hermesCatalog === true,
 			},
 		);
 		overlayHandle = this.ctx.ui.showOverlay(hub, {
@@ -1252,7 +1365,12 @@ export class SelectorController {
 	async #loginThenReopenModelHub(providerId: string): Promise<void> {
 		const succeeded = await this.#handleOAuthLogin(providerId);
 		if (succeeded) {
-			this.#showModelHub({ initialProviderId: providerId });
+			if (!isHermesProductSettings()) {
+				void this.#showModelHub({ initialProviderId: providerId }, null);
+				return;
+			}
+			const hermes = await this.#loadHermesScopedCatalog();
+			void this.#showModelHub({ initialProviderId: providerId }, hermes);
 		}
 	}
 

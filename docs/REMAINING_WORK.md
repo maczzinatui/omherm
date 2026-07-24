@@ -54,6 +54,7 @@ Dogfood script: `docs/DOGFOOD_CHECKLIST.md` §1.
 | Item | Status | Exit condition |
 |------|--------|----------------|
 | Sessions list + gateway resume | **shipped** | — |
+| **Model hub → Hermes inventory** | **shipped** | OMP chrome + `loadHermesModelCatalog` scoped feed (Nous Portal, xAI OAuth, mesh, …) · default assign → `config.yaml` |
 | Coat full history replay after resume | **named debt** | implement coat inject from resume payload **or** document notice-only forever |
 | Live `config.set` hot keys | open | ConfigPort only |
 | Status-line invalidate after usage | partial | revision path |
