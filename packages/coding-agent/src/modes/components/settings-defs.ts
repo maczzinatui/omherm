@@ -222,6 +222,11 @@ export function getAllSettingDefs(): SettingDef[] {
 
 	const defs: SettingDef[] = [];
 	for (const tab of SETTING_TABS) {
+		// Product Hermes rows (hermes:… + port launchers) must resolve via getSettingDef
+		// for search tab-sync / search onChange — coat-only cache omitted them.
+		if (isHermesProductSettings()) {
+			defs.push(...getHermesSettingDefsForTab(tab));
+		}
 		for (const path of getPathsForTab(tab)) {
 			const def = pathToSettingDef(path);
 			if (def) defs.push(def);

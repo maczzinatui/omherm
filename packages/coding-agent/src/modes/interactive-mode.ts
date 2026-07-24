@@ -792,6 +792,78 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#focusController = new SessionFocusController(this);
 		this.#inputController = new InputController(this);
 		this.#observerRegistry = new SessionObserverRegistry();
+
+		// Hermes brain: attach ask-dialog host now that ExtensionUiController exists
+		void this.#attachHermesDialogHost();
+	}
+
+	async #attachHermesDialogHost(): Promise<void> {
+		try {
+			const { getHermesBrainHandle } = await import("./hermes-brain-install.ts");
+			const { APPROVAL_LABELS } = await import("@meshina/hermes-bridge");
+			const handle = getHermesBrainHandle(this.session);
+			if (!handle) return;
+			const ui = this.#extensionUiController;
+			handle.setDialogHost({
+				clarify: async (req) => {
+					const optionLabels =
+						req.choices && req.choices.length
+							? req.choices.map((c) => ({ label: c, description: "" }))
+							: [{ label: "Type answer…", description: "free text" }];
+					const result = await ui.showAskDialog(
+						[
+							{
+								id: req.id || "clarify",
+								question: req.question,
+								header: "Hermes clarify",
+								options: optionLabels,
+							},
+						],
+						undefined,
+					);
+					if (!result || result.kind !== "submit") return undefined;
+					const a = result.results[0];
+					if (!a) return undefined;
+					if (a.customInput) return a.customInput;
+					return a.selectedOptions?.[0];
+				},
+				approval: async (req) => {
+					const choices = req.choices.length
+						? req.choices
+						: ["once", "session", "always", "deny"];
+					const labels = choices.map((c) => ({
+						label: (APPROVAL_LABELS as Record<string, string>)[c] || c,
+						description: c,
+					}));
+					const result = await ui.showAskDialog(
+						[
+							{
+								id: "approval",
+								question: `${req.description}\n\n${req.command}`.trim(),
+								header: "Hermes approval",
+								options: labels,
+							},
+						],
+						undefined,
+					);
+					if (!result || result.kind !== "submit") return "deny";
+					const a = result.results[0];
+					if (!a) return "deny";
+					if (a.customInput) {
+						const raw = a.customInput.trim().toLowerCase();
+						if (choices.includes(raw)) return raw;
+					}
+					const picked = a.selectedOptions?.[0];
+					if (!picked) return "deny";
+					const byLabel = choices.find(
+						(c) => ((APPROVAL_LABELS as Record<string, string>)[c] || c) === picked,
+					);
+					return byLabel || (choices.includes(picked) ? picked : "deny");
+				},
+			});
+		} catch {
+			/* brain not installed */
+		}
 	}
 
 	#handleMcpConnectionStatusEvent(event: McpConnectionStatusEvent): void {
@@ -4546,6 +4618,10 @@ export class InteractiveMode implements InteractiveModeContext {
 	// Selector handling
 	showSettingsSelector(): void {
 		this.#selectorController.showSettingsSelector();
+	}
+
+	showHermesPortList(kind: "kanban" | "cron" | "profiles"): void {
+		this.#selectorController.showHermesPortList(kind);
 	}
 
 	showAdvisorConfigure(): void {

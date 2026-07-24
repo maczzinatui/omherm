@@ -952,6 +952,8 @@ export class ToolExecutionComponent extends Container implements NativeScrollbac
 		// Non-self-framing tools (custom/extension renderers and the generic
 		// fallback) get a padded, state-tinted block — built-ins that draw their
 		// own frame opt out below via the framed-component mark.
+		// Keep OMP tool slabs on Hermes product path — operator dogfood 2026-07-23:
+		// flat (no bg) looked worse than stock OMP/pi agent chrome.
 		const stateBgKey = this.#isPartial ? "toolPendingBg" : this.#result?.isError ? "toolErrorBg" : "toolSuccessBg";
 		const stateBgFn = (t: string) => theme.bg(stateBgKey, t);
 

@@ -651,26 +651,26 @@ export class SelectorController {
 		this.#showModelHub({});
 	}
 
-	/** Settings → Tasks port inventory (Kanban / Cron / Profiles). */
+	/** Settings → Tasks Hermes ports (Kanban / Cron / Profiles) — full-width table+detail. */
 	showHermesPortList(kind: "kanban" | "cron" | "profiles"): void {
-		let overlayHandle: OverlayHandle | undefined;
-		let closed = false;
+		let overlayHandle: OverlayHandle | undefined
+		let closed = false
 		const done = () => {
-			if (closed) return;
-			closed = true;
-			overlayHandle?.hide();
-			this.focusActiveEditorArea();
-			this.ctx.ui.requestRender();
-		};
-		const panel = new HermesPortListComponent(this.ctx.ui, kind, done);
+			if (closed) return
+			closed = true
+			overlayHandle?.hide()
+			this.focusActiveEditorArea()
+			this.ctx.ui.requestRender()
+		}
+		const panel = new HermesPortListComponent(this.ctx.ui, kind, done)
 		overlayHandle = this.ctx.ui.showOverlay(panel, {
-			anchor: "bottom-center",
+			anchor: "center",
 			width: "100%",
-			maxHeight: "80%",
+			maxHeight: "95%",
 			margin: 0,
-		});
-		this.ctx.ui.setFocus(panel);
-		this.ctx.ui.requestRender();
+		})
+		this.ctx.ui.setFocus(panel)
+		this.ctx.ui.requestRender()
 	}
 
 	/**

@@ -936,6 +936,24 @@ export class SettingsSelectorComponent implements Component {
 	#onSearchSettingChange(path: SettingPath, newValue: string): void {
 		const def = getSettingDef(path);
 		if (!def) return;
+		if (isHermesSettingsPath(path)) {
+			if (path === HERMES_OPEN_MODEL_HUB_PATH || isHermesActionPath(path)) {
+				// Action rows shouldn't cycle from search; host opens via tab path.
+				return;
+			}
+			void setHermesSetting(path, def.type === "boolean" ? newValue === "true" : newValue)
+				.then(() => {
+					this.callbacks.onChange(path, getHermesCurrentValue(path));
+					this.#setSearchQuery(this.#searchQuery);
+					this.context.requestRender?.();
+				})
+				.catch((err: unknown) => {
+					console.error(
+						`[mtui] hermes config set failed: ${err instanceof Error ? err.message : String(err)}`,
+					);
+				});
+			return;
+		}
 		if (def.type === "boolean") {
 			const boolValue = newValue === "true";
 			settings.set(path, boolValue as never);
@@ -977,14 +995,24 @@ export class SettingsSelectorComponent implements Component {
 				};
 
 			case "enum":
-				return {
-					id: def.path,
-					label: def.label,
-					description: def.description,
-					currentValue: String(currentValue ?? ""),
-					values: [...def.values],
-					changed,
-				};
+						{
+							const raw = String(currentValue ?? "");
+							const values = [...def.values];
+							// Live Hermes config can return a value outside the curated cycle list
+							// (e.g. approvals.mode=smart vs older allowlist). Keep it displayable
+							// and cycleable — Herm schema is the authority, not OMP.
+							if (raw && !values.includes(raw)) {
+								values.unshift(raw);
+							}
+							return {
+								id: def.path,
+								label: def.label,
+								description: def.description,
+								currentValue: raw,
+								values,
+								changed,
+							};
+						}
 
 			case "submenu":
 				return {
@@ -1176,12 +1204,37 @@ export class SettingsSelectorComponent implements Component {
 			this.#textInputActive = false;
 			done(value);
 		};
+		// Hermes rows are NOT OMP schema paths — never settings.get("hermes:…")
+		// (SETTING_PATH_SEGMENTS miss → getByPath iterates undefined → hard crash).
+		// Mirror Herm TUI: value SoT is HermesConfigPort / live cache.
+		const seed = isHermesSettingsPath(def.path)
+			? getHermesCurrentValue(def.path)
+			: settings.get(def.path);
 		return new TextInputSubmenu(
 			def.label,
 			def.description,
-			this.#formatTextInputEditValue(def.path, settings.get(def.path)),
+			this.#formatTextInputEditValue(def.path, seed),
 			def.secret,
 			value => {
+				if (isHermesSettingsPath(def.path)) {
+					void setHermesSetting(def.path, value)
+						.then(() => {
+							const next = getHermesCurrentValue(def.path);
+							this.callbacks.onChange(def.path, next);
+							wrappedDone(this.#formatTextInputValue(def, next));
+							if (this.#currentTabId !== "plugins") {
+								this.#refreshCurrentTabItems(getSettingsForTab(this.#currentTabId));
+							}
+							this.context.requestRender?.();
+						})
+						.catch((err: unknown) => {
+							const msg = err instanceof Error ? err.message : String(err);
+							console.error(`[mtui] hermes config set failed: ${msg}`);
+							this.#textInputActive = false;
+							done();
+						});
+					return;
+				}
 				// Empty string clears the setting; undefined-typed string settings
 				// store "" which the browser.ts expandPath ignores (no-op fallback).
 				this.#setSettingValue(def.path, value);

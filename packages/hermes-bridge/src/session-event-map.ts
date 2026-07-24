@@ -114,14 +114,26 @@ function applyGatewayUsage(u?: Usage) {
 }
 
 function parseArgs(raw?: string): Record<string, unknown> {
-	if (!raw) return {};
+	if (!raw) return {}
 	try {
-		const v = JSON.parse(raw);
-		if (v && typeof v === "object" && !Array.isArray(v)) return v as Record<string, unknown>;
-		return { input: v };
+		const v = JSON.parse(raw)
+		if (v && typeof v === "object" && !Array.isArray(v)) return v as Record<string, unknown>
+		return { input: v }
 	} catch {
-		return { input: raw };
+		return { input: raw }
 	}
+}
+
+/** Herm turnReducer.sameText — trim equality for complete vs streamed. */
+function sameText(a: string, b: string): boolean {
+	return a.trim() === b.trim()
+}
+
+function joinMappedText(content: MappedContent[]): string {
+	return content
+		.filter((c): c is Extract<MappedContent, { type: "text" }> => c.type === "text")
+		.map((c) => c.text)
+		.join("")
 }
 
 /**
@@ -208,19 +220,21 @@ export class GatewayTurnMapper {
 	}
 
 	private closeText(): MappedAgentSessionEvent[] {
-		if (this.textIndex === null) return [];
-		const idx = this.textIndex;
-		const content = this.textBuf;
-		this.textIndex = null;
-		const msg = this.snapshot();
-		return [
-			{
-				type: "message_update",
-				message: msg,
-				assistantMessageEvent: { type: "text_end", contentIndex: idx, content, partial: msg },
-			},
-		];
-	}
+			if (this.textIndex === null) return []
+			const idx = this.textIndex
+			const content = this.textBuf
+			this.textIndex = null
+			// Keep sealed text in content[]; clear stream cursor only (Herm seal).
+			// textBuf stays until a new segment opens so complete-only de-dupe can see it.
+			const msg = this.snapshot()
+			return [
+				{
+					type: "message_update",
+					message: msg,
+					assistantMessageEvent: { type: "text_end", contentIndex: idx, content, partial: msg },
+				},
+			]
+		}
 
 	/** Feed one UiEvent; returns zero or more mapped OMP events. */
 	feedUi(ev: UiEvent): MappedAgentSessionEvent[] {
@@ -316,81 +330,130 @@ export class GatewayTurnMapper {
 	}
 
 	private onText(text: string, done?: boolean): MappedAgentSessionEvent[] {
-		const out = this.ensureAgentTurn();
-		out.push(...this.closeThinking());
+		const out = this.ensureAgentTurn()
+		out.push(...this.closeThinking())
 
-		if (done && text && !this.textBuf) {
-			// complete-only payload with full text
-			this.textIndex = this.content.length;
-			this.textBuf = text;
-			this.content.push({ type: "text", text });
-			const msg = this.snapshot();
+		// Herm turnReducer.finalize for message.complete — never double-append final.
+		if (done) {
+			const joined = joinMappedText(this.content)
+			const open = this.textIndex !== null ? this.textBuf : ""
+			const final = (text && text.length ? text : open) || ""
+			const dupPart =
+				!!final && this.content.some((c) => c.type === "text" && sameText(c.text, final))
+			const dupJoin = !!final && (sameText(joined, final) || (!!open && sameText(open, final)))
+
+			if (this.textIndex !== null) {
+				// Seal open stream. Take final only when it extends the open buffer
+				// (cumulative complete) or open is empty; never replace with a shorter restate.
+				if (final) {
+					if (!this.textBuf.trim()) {
+						this.textBuf = final
+					} else if (final.startsWith(this.textBuf) && final.length > this.textBuf.length) {
+						this.textBuf = final
+					} else if (sameText(this.textBuf, final) || dupJoin || dupPart) {
+						// keep streamed buffer
+					} else if (this.textBuf.startsWith(final)) {
+						// complete is a prefix of stream — keep longer stream
+					} else {
+						// Different body on same open segment (rare): keep longer of the two
+						if (final.length > this.textBuf.length) this.textBuf = final
+					}
+				}
+				const block = this.content[this.textIndex]
+				if (block?.type === "text") block.text = this.textBuf
+				out.push(...this.closeText())
+				return out
+			}
+
+			// No open stream: append final only if not already present (Herm finalize).
+			if (!final.trim() || dupPart || dupJoin) {
+				return out
+			}
+			this.textIndex = this.content.length
+			this.textBuf = final
+			this.content.push({ type: "text", text: final })
+			const msg = this.snapshot()
 			out.push({
 				type: "message_update",
 				message: msg,
 				assistantMessageEvent: { type: "text_start", contentIndex: this.textIndex, partial: msg },
-			});
+			})
 			out.push({
 				type: "message_update",
 				message: msg,
 				assistantMessageEvent: {
 					type: "text_delta",
 					contentIndex: this.textIndex,
-					delta: text,
+					delta: final,
 					partial: msg,
 				},
-			});
-			out.push(...this.closeText());
-			return out;
+			})
+			out.push(...this.closeText())
+			return out
 		}
 
+		// Streaming deltas (message.delta)
 		if (this.textIndex === null) {
-			this.textIndex = this.content.length;
-			this.textBuf = "";
-			this.content.push({ type: "text", text: "" });
-			const msg = this.snapshot();
+			this.textIndex = this.content.length
+			this.textBuf = ""
+			this.content.push({ type: "text", text: "" })
+			const msg = this.snapshot()
 			out.push({
 				type: "message_update",
 				message: msg,
 				assistantMessageEvent: { type: "text_start", contentIndex: this.textIndex, partial: msg },
-			});
+			})
 		}
 
-		if (!done) {
-			this.textBuf += text;
-			const block = this.content[this.textIndex!];
-			if (block?.type === "text") block.text = this.textBuf;
-			const msg = this.snapshot();
-			out.push({
-				type: "message_update",
-				message: msg,
-				assistantMessageEvent: {
-					type: "text_delta",
-					contentIndex: this.textIndex!,
-					delta: text,
-					partial: msg,
-				},
-			});
+		// Cumulative full-buffer ticks vs true token deltas
+		let delta = text
+		if (text && this.textBuf && text.startsWith(this.textBuf) && text.length >= this.textBuf.length) {
+			delta = text.slice(this.textBuf.length)
+			this.textBuf = text
 		} else {
-			if (text) this.textBuf = text;
-			const block = this.content[this.textIndex!];
-			if (block?.type === "text") block.text = this.textBuf;
-			out.push(...this.closeText());
+			this.textBuf += text
 		}
-		return out;
+		const block = this.content[this.textIndex!]
+		if (block?.type === "text") block.text = this.textBuf
+		const msg = this.snapshot()
+		out.push({
+			type: "message_update",
+			message: msg,
+			assistantMessageEvent: {
+				type: "text_delta",
+				contentIndex: this.textIndex!,
+				delta,
+				partial: msg,
+			},
+		})
+		return out
 	}
 
 	private onToolStart(id: string, name: string, argsText?: string): MappedAgentSessionEvent[] {
-		const out = this.ensureAgentTurn();
-		out.push(...this.closeThinking());
-		out.push(...this.closeText());
-		const args = parseArgs(argsText);
-		const toolId = id || `tool_${this.toolMeta.size + 1}`;
-		this.lastToolId = toolId;
-		this.toolMeta.set(toolId, { name, args });
-		this.content.push({ type: "toolCall", id: toolId, name, arguments: args });
-		out.push({ type: "tool_execution_start", toolCallId: toolId, toolName: name, args });
-		return out;
+		const out = this.ensureAgentTurn()
+		out.push(...this.closeThinking())
+		out.push(...this.closeText())
+		// Clean stream cursor so next text is a new part (Herm appendPart close=true).
+		this.textBuf = ""
+		const args = parseArgs(argsText)
+		const toolId = (id && String(id).trim()) || `tool_${this.toolMeta.size + 1}`
+		// De-dupe duplicate tool.start for same id
+		if (this.toolMeta.has(toolId)) {
+			this.lastToolId = toolId
+			const prev = this.toolMeta.get(toolId)!
+			if (argsText) {
+				this.toolMeta.set(toolId, {
+					name: name || prev.name,
+					args: Object.keys(args).length ? args : prev.args,
+				})
+			}
+			return out
+		}
+		this.lastToolId = toolId
+		this.toolMeta.set(toolId, { name, args })
+		this.content.push({ type: "toolCall", id: toolId, name, arguments: args })
+		out.push({ type: "tool_execution_start", toolCallId: toolId, toolName: name, args })
+		return out
 	}
 
 	private onToolUpdate(id: string, preview?: string): MappedAgentSessionEvent[] {

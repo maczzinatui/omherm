@@ -365,8 +365,26 @@ export class HermesGateway extends EventEmitter {
     await this.request("clarify.respond", { request_id: requestId, answer })
   }
 
-  async respondApproval(allow: boolean): Promise<void> {
-    await this.request("approval.respond", { allow })
+  /**
+   * Gateway approval slot — choice is once|session|always|deny (not a boolean).
+   * See hermes-agent tui_gateway approval.respond + resolve_gateway_approval.
+   */
+  async respondApproval(choice: string, resolveAll = false): Promise<void> {
+    await this.request("approval.respond", { choice, all: resolveAll })
+  }
+
+  /** Run a Hermes slash command in the live gateway session. Returns pager text. */
+  async slashExec(command: string): Promise<{ output: string; warning?: string }> {
+    const cmd = command.trim()
+    if (!cmd) return { output: "" }
+    const full = cmd.startsWith("/") ? cmd : `/${cmd}`
+    const res = await this.request<{ output?: string; warning?: string }>("slash.exec", {
+      command: full,
+    })
+    return {
+      output: typeof res?.output === "string" ? res.output : "(no output)",
+      warning: typeof res?.warning === "string" ? res.warning : undefined,
+    }
   }
 
   kill() {

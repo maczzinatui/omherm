@@ -24,6 +24,7 @@ export class UserMessageComponent extends Container {
 
 	constructor(text: string, synthetic = false, imageLinks?: readonly (string | undefined)[]) {
 		super();
+		// Match stock OMP user bubble (userMessageBg) — Hermes product keeps coat paint.
 		const bgColor = (value: string) => theme.bg("userMessageBg", value);
 		// Paint the magic keywords ("ultrathink"/"orchestrate"/"workflowz") inside the rendered
 		// bubble too — matching the live editor glow. The Markdown component routes code spans and

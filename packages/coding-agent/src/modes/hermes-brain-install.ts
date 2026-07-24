@@ -13,6 +13,7 @@ import {
   HermesBrain,
   isHermesBrainEnabled,
   type HermesBrainEvent,
+  type HermesDialogHost,
 } from "@meshina/hermes-bridge"
 import type { AgentSession, AgentSessionEvent, PromptOptions } from "../session/agent-session.ts"
 import { logger } from "@oh-my-pi/pi-utils"
@@ -20,12 +21,18 @@ import { logger } from "@oh-my-pi/pi-utils"
 export type HermesBrainHandle = {
   brain: HermesBrain
   dispose: () => void
+  setDialogHost: (host: HermesDialogHost | null) => void
 }
 
 const BRAIN_KEY = Symbol.for("meshina.hermesBrain")
+const HANDLE_KEY = Symbol.for("meshina.hermesBrainHandle")
 
 export function getInstalledHermesBrain(session: AgentSession): HermesBrain | undefined {
   return (session as unknown as Record<symbol, HermesBrain | undefined>)[BRAIN_KEY]
+}
+
+export function getHermesBrainHandle(session: AgentSession): HermesBrainHandle | undefined {
+  return (session as unknown as Record<symbol, HermesBrainHandle | undefined>)[HANDLE_KEY]
 }
 
 /**
@@ -82,7 +89,11 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
     await brain.prompt(text)
   }
 
-  session.abort = async (options?: { reason?: string; goalReason?: "interrupted" | "internal"; preserveCompaction?: boolean }) => {
+  session.abort = async (options?: {
+    reason?: string
+    goalReason?: "interrupted" | "internal"
+    preserveCompaction?: boolean
+  }) => {
     await brain.interrupt()
     // Still run OMP abort to clear local streaming flags / queues without starting tools.
     try {
@@ -108,27 +119,37 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
     },
   })
 
+  const handle: HermesBrainHandle = {
+    brain,
+    setDialogHost: (host) => brain.setDialogHost(host),
+    dispose: () => {
+      brain.dispose()
+      session.subscribe = origSubscribe
+      session.prompt = origPrompt
+      session.followUp = origFollowUp
+      session.abort = origAbort
+      if (origIsStreamingDesc) {
+        Object.defineProperty(session, "isStreaming", origIsStreamingDesc)
+      }
+      delete (session as unknown as Record<symbol, unknown>)[BRAIN_KEY]
+      delete (session as unknown as Record<symbol, unknown>)[HANDLE_KEY]
+    },
+  }
+
   ;(session as unknown as Record<symbol, HermesBrain>)[BRAIN_KEY] = brain
+  ;(session as unknown as Record<symbol, HermesBrainHandle>)[HANDLE_KEY] = handle
 
   // Surface model from gateway into notice once
   const info = brain.sessionInfo
   if (info.model) {
-    session.emitNotice?.("info", `Hermes brain · ${info.model}${info.reasoning_effort ? ` · ${info.reasoning_effort}` : ""}`, "hermes-brain")
+    session.emitNotice?.(
+      "info",
+      `Hermes brain · ${info.model}${info.reasoning_effort ? ` · ${info.reasoning_effort}` : ""}`,
+      "hermes-brain",
+    )
   }
 
-  const dispose = () => {
-    brain.dispose()
-    session.subscribe = origSubscribe
-    session.prompt = origPrompt
-    session.followUp = origFollowUp
-    session.abort = origAbort
-    if (origIsStreamingDesc) {
-      Object.defineProperty(session, "isStreaming", origIsStreamingDesc)
-    }
-    delete (session as unknown as Record<symbol, unknown>)[BRAIN_KEY]
-  }
-
-  return { brain, dispose }
+  return handle
 }
 
 export { isHermesBrainEnabled }

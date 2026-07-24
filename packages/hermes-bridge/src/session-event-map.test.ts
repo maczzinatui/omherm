@@ -70,4 +70,44 @@ describe("GatewayTurnMapper", () => {
 		expect(out).toContain("message_update");
 		expect(out).toContain("agent_end");
 	});
+
+	test("message.complete does not triple-paste already streamed text", () => {
+		const m = new GatewayTurnMapper();
+		const body = "The full Black Speech is only sparsely recorded.";
+		m.feedUi({ kind: "text", text: body.slice(0, 10) });
+		m.feedUi({ kind: "text", text: body.slice(10) });
+		const afterStream = m.feedUi({ kind: "text", text: body, done: true });
+		const end = afterStream.find((e) => e.type === "message_end" || e.type === "message_update");
+		// After complete, content should have exactly one text block equal to body
+		const turn = m.feedUi({ kind: "turn_end" });
+		const te = turn.find((e) => e.type === "turn_end");
+		expect(te && te.type === "turn_end").toBe(true);
+		if (te && te.type === "turn_end") {
+			const texts = te.message.content.filter((c) => c.type === "text").map((c) => (c as { text: string }).text);
+			expect(texts.length).toBe(1);
+			expect(texts[0]).toBe(body);
+		}
+		void end;
+	});
+
+	test("tool.start de-dupes same tool_id", () => {
+		const m = new GatewayTurnMapper();
+		const a = m.feedUi({ kind: "tool_start", id: "t1", name: "skill_view", args: '{"name":"x"}' });
+		const b = m.feedUi({ kind: "tool_start", id: "t1", name: "skill_view", args: '{"name":"x"}' });
+		const starts = [...a, ...b].filter((e) => e.type === "tool_execution_start");
+		expect(starts.length).toBe(1);
+	});
+
+	test("cumulative delta snapshots do not double buffer", () => {
+		const m = new GatewayTurnMapper();
+		m.feedUi({ kind: "text", text: "Hel" });
+		m.feedUi({ kind: "text", text: "Hello" }); // cumulative
+		const fin = m.feedUi({ kind: "text", text: "Hello world", done: true });
+		const te = [...fin, ...m.feedUi({ kind: "turn_end" })].find((e) => e.type === "turn_end");
+		expect(te && te.type === "turn_end").toBe(true);
+		if (te && te.type === "turn_end") {
+			const t = te.message.content.find((c) => c.type === "text") as { text: string };
+			expect(t.text).toBe("Hello world");
+		}
+	});
 });

@@ -1,30 +1,40 @@
 import { describe, expect, test } from "bun:test"
-import { parseKanbanListOutput } from "./kanban-port.ts"
-import { parseCronListOutput } from "./cron-port.ts"
+import {
+	formatKanbanLabel,
+	mapKanbanJsonRow,
+	parseKanbanListJson,
+	parseKanbanListOutput,
+} from "./kanban-port.ts"
 
 describe("kanban list parse", () => {
-  test("parses hermes kanban list lines", () => {
-    const sample = `
-▶ t_b7088a12  ready     (unassigned)          M1′: OMP UI + Hermes backend
-✓ t_30bc6e40  done      (auditor)             Inventory live fork
+	test("parses hermes kanban list lines", () => {
+		const text = `
+▶ t_b7088a12  ready     (unassigned)          M1′: meshina-tui dogfood
+✓ t_deadbeef  done      (herm)                shipped coat
 `
-    const tasks = parseKanbanListOutput(sample)
-    expect(tasks.length).toBe(2)
-    expect(tasks[0].id).toBe("t_b7088a12")
-    expect(tasks[0].status).toBe("ready")
-    expect(tasks[0].assignee).toBeNull()
-    expect(tasks[0].title).toContain("M1")
-    expect(tasks[1].assignee).toBe("auditor")
-  })
-})
+		const tasks = parseKanbanListOutput(text)
+		expect(tasks.length).toBe(2)
+		expect(tasks[0].id).toBe("t_b7088a12")
+		expect(tasks[0].status).toBe("ready")
+		expect(tasks[0].assignee).toBe(null)
+		expect(tasks[0].title).toContain("meshina-tui")
+		expect(tasks[1].assignee).toBe("herm")
+	})
 
-describe("cron list parse", () => {
-  test("skips headers and keeps raw", () => {
-    const sample = `
-NAME     SCHEDULE    STATUS
-abc123   every 2h    enabled
-`
-    const jobs = parseCronListOutput(sample)
-    expect(jobs.some((j) => j.id === "abc123")).toBe(true)
-  })
+	test("parses json list", () => {
+		const tasks = parseKanbanListJson(
+			JSON.stringify([
+				{ id: "t_aaaa1111", title: "x", status: "todo", assignee: null, priority: 10 },
+			]),
+		)
+		expect(tasks).toHaveLength(1)
+		expect(tasks[0].priority).toBe(10)
+		expect(formatKanbanLabel(tasks[0])).toContain("t_aaaa1111")
+	})
+
+	test("map row", () => {
+		const t = mapKanbanJsonRow({ id: "t_1", title: "a", status: "blocked", assignee: "p" })
+		expect(t.assignee).toBe("p")
+		expect(t.status).toBe("blocked")
+	})
 })

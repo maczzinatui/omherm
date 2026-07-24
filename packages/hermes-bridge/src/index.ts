@@ -50,21 +50,43 @@ export {
 export {
   HermesBrain,
   isHermesBrainEnabled,
+  APPROVAL_LABELS,
   type HermesBrainEvent,
   type HermesBrainListener,
   type HermesBrainOptions,
+  type HermesDialogHost,
 } from "./hermes-brain.ts"
+export {
+  parseHermesSlashLine,
+  routeHermesSlash,
+  type HermesSlashDeepLink,
+} from "./hermes-slash-router.ts"
 export {
   createKanbanPort,
   kanbanPort,
   parseKanbanListOutput,
+  parseKanbanListJson,
+  mapKanbanJsonRow,
+  formatKanbanLabel,
+  formatKanbanDescription,
   type KanbanPort,
   type KanbanTask,
+  type KanbanDetail,
+  type KanbanCreateInput,
 } from "./kanban-port.ts"
 export {
   createCronPort,
   cronPort,
   parseCronListOutput,
+  parseCronStatusOutput,
+  parseCronRunsOutput,
+  normalizeCronJob,
+  formatCronJobLabel,
+  formatCronJobDescription,
   type CronPort,
   type CronJob,
+  type CronSchedulerStatus,
+  type CronRunRow,
+  type CronCreateInput,
+  type CronEditInput,
 } from "./cron-port.ts"

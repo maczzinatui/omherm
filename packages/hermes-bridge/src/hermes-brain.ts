@@ -22,6 +22,20 @@ export type HermesBrainEvent = MappedAgentSessionEvent
 
 export type HermesBrainListener = (event: HermesBrainEvent) => void
 
+/** Coat-side ask dialogs for gateway clarify / approval (InteractiveMode). */
+export type HermesDialogHost = {
+  clarify: (req: {
+    id: string
+    question: string
+    choices: string[] | null
+  }) => Promise<string | undefined>
+  approval: (req: {
+    command: string
+    description: string
+    choices: string[]
+  }) => Promise<string | undefined>
+}
+
 export type HermesBrainOptions = {
   /** Injected gateway (tests). Default: new HermesGateway(). */
   gateway?: HermesGateway
@@ -33,6 +47,13 @@ export type HermesBrainOptions = {
 
 const DEFAULT_TURN_MS = 600_000
 
+export const APPROVAL_LABELS: Record<string, string> = {
+  once: "Allow once",
+  session: "Allow for session",
+  always: "Always allow",
+  deny: "Deny",
+}
+
 export class HermesBrain {
   readonly gateway: HermesGateway
   readonly mapper: GatewayTurnMapper
@@ -41,6 +62,8 @@ export class HermesBrain {
   #streaming = false
   #bootstrapped = false
   #turnTimeoutMs: number
+  #dialogHost: HermesDialogHost | null = null
+  #dialogBusy = false
   #turnWaiters: Array<{
     resolve: () => void
     reject: (e: Error) => void
@@ -70,6 +93,11 @@ export class HermesBrain {
 
   get sessionId(): string | null {
     return this.gateway.sessionId
+  }
+
+  /** Wire OMP ask-dialog (call after InteractiveMode builds ExtensionUiController). */
+  setDialogHost(host: HermesDialogHost | null): void {
+    this.#dialogHost = host
   }
 
   /** Subscribe to mapped OMP-shaped session events (EventController edge). */
@@ -109,7 +137,6 @@ export class HermesBrain {
       await this.gateway.submit(trimmed)
       await wait
     } catch (e) {
-      // Ensure UI leaves streaming state
       for (const ev of this.mapper.forceEnd("error")) this.#emit(ev)
       throw e
     } finally {
@@ -133,9 +160,16 @@ export class HermesBrain {
     return this.gateway.refreshInfo()
   }
 
+  /** slash.exec on the live gateway session (not a user turn). */
+  async slashExec(command: string): Promise<{ output: string; warning?: string }> {
+    if (!this.#bootstrapped) await this.bootstrap()
+    return this.gateway.slashExec(command)
+  }
+
   dispose(): void {
     this.#unsubUi?.()
     this.#unsubUi = null
+    this.#dialogHost = null
     this.#listeners.clear()
     for (const w of this.#turnWaiters) {
       clearTimeout(w.timer)
@@ -159,8 +193,16 @@ export class HermesBrain {
       this.mapper.setIdentity(ev.info.model, ev.info.provider)
     }
     if (ev.kind === "error") {
-      this.#streaming = true // ensure waiters see a turn attempt
+      this.#streaming = true
     }
+
+    if (ev.kind === "clarify" || ev.kind === "approval") {
+      if (this.#dialogHost && !this.#dialogBusy) {
+        void this.#runDialog(ev)
+        return
+      }
+    }
+
     const mapped = this.mapper.feedUi(ev)
     for (const e of mapped) {
       this.#emit(e)
@@ -171,6 +213,59 @@ export class HermesBrain {
       if (e.type === "agent_start") {
         this.#streaming = true
       }
+    }
+  }
+
+  async #runDialog(ev: Extract<UiEvent, { kind: "clarify" | "approval" }>): Promise<void> {
+    const host = this.#dialogHost
+    if (!host) return
+    this.#dialogBusy = true
+    try {
+      if (ev.kind === "clarify") {
+        this.#emit({
+          type: "notice",
+          level: "info",
+          message: `Clarify: ${ev.question}`,
+          source: "hermes-gateway",
+        } as HermesBrainEvent)
+        const answer = await host.clarify({
+          id: ev.id,
+          question: ev.question,
+          choices: ev.choices,
+        })
+        await this.gateway.respondClarify(ev.id, answer ?? "")
+      } else {
+        const choices = ev.choices?.length
+          ? ev.choices
+          : ["once", "session", "always", "deny"]
+        this.#emit({
+          type: "notice",
+          level: "warning",
+          message: `Approval: ${ev.description || ev.command}`,
+          source: "hermes-gateway",
+        } as HermesBrainEvent)
+        const choice = await host.approval({
+          command: ev.command,
+          description: ev.description,
+          choices,
+        })
+        await this.gateway.respondApproval(choice || "deny")
+      }
+    } catch (e) {
+      this.#emit({
+        type: "notice",
+        level: "error",
+        message: `Dialog failed: ${e instanceof Error ? e.message : String(e)}`,
+        source: "hermes-gateway",
+      } as HermesBrainEvent)
+      try {
+        if (ev.kind === "approval") await this.gateway.respondApproval("deny")
+        else await this.gateway.respondClarify(ev.id, "")
+      } catch {
+        /* */
+      }
+    } finally {
+      this.#dialogBusy = false
     }
   }
 
@@ -206,7 +301,6 @@ export class HermesBrain {
 }
 
 export function isHermesBrainEnabled(): boolean {
-  // Product default ON when branded hermes; escape hatch keeps OMP AgentSession loop.
   if (process.env.MESHINA_TUI_OMP_BRAIN === "1" || process.env.MESHINA_TUI_OMP_BRAIN === "true") {
     return false
   }

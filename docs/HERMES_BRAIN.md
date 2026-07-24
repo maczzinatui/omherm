@@ -1,7 +1,7 @@
 # Hermes brain under InteractiveMode
 
-**Stamp:** 2026-07-24 · **Cadillac:** `CADILLAC.md`  
-**Companion:** `HERMES_GUT_PLAN.md` P2, `INTEGRATION_CROSSOVERS.md` §9–10
+**Stamp:** 2026-07-23 · **Cadillac:** `CADILLAC.md`  
+**Companion:** `HERMES_GUT_PLAN.md` P2, `INTEGRATION_CROSSOVERS.md` §9–10, `TUI_PARITY_AUDIT.md`
 
 ## Product sentence
 
@@ -11,9 +11,12 @@ Hermes owns the agent loop. OMP InteractiveMode is the coat. One launch: `mtui`.
 
 | Piece | Path | Role |
 |-------|------|------|
-| `HermesBrain` | `packages/hermes-bridge/src/hermes-brain.ts` | Port: bootstrap gateway, `prompt`/`interrupt`, map events via `GatewayTurnMapper` |
+| `HermesBrain` | `packages/hermes-bridge/src/hermes-brain.ts` | Port: bootstrap gateway, `prompt`/`interrupt`/`slashExec`, dialog host, map events via `GatewayTurnMapper` |
 | Install | `packages/coding-agent/src/modes/hermes-brain-install.ts` | Replaces session `prompt` / `followUp` / `abort` / `subscribe` fan-in / `isStreaming` |
 | Wire | `packages/coding-agent/src/main.ts` | Before `runInteractiveMode` when brain enabled |
+| Dialog host | `interactive-mode.ts` `#attachHermesDialogHost` | clarify/approval → OMP ask-dialog |
+| Slash router | `hermes-slash-router.ts` + `input-controller` | deep-link `/settings` `/model` `/kanban` `/cron` `/profile`; else `slash.exec` |
+| Port forms | `hermes-port-list.ts` | Cron create/edit · Kanban create/assign |
 | Edge mapper | `session-event-map.ts` | UiEvent → EventController subset (tested) |
 
 ## Enablement
@@ -34,25 +37,35 @@ Hermes owns the agent loop. OMP InteractiveMode is the coat. One launch: `mtui`.
 | Optimistic user bubble | InteractiveMode (coat) |
 | `!` bash / local python | Coat local (not Hermes tools) |
 | Settings chrome | Coat + HermesConfigPort / ports |
+| Slash deep-links | Coat selectors/port overlays |
+| Other slash | Gateway `slash.exec` via brain |
+| Approvals / clarify | OMP ask-dialog → `approval.respond` / `clarify.respond` |
 | OMP AgentSession.prompt | **Never called** for user turns |
-| Transcript of record | Hermes session store (OMP session files = coat bookmarks only — do not dual-write turns) |
+| Transcript of record | Hermes session store (OMP session files = coat bookmarks only) |
 
 ## Named debt
 
-1. **Not a full AgentSession facade** — chrome still holds a real OMP session for settings/title/`!bash`. Exit: narrow `CockpitSession` interface + delete unused AgentSession surface on product path.  
+1. **Not a full AgentSession facade** — chrome still holds a real OMP session for settings/title/`!bash`. Exit: narrow `CockpitSession` interface.  
 2. **Synthetic OMP prompts rejected** (plan/vibe auto-prompts) — fail loud notice until ported.  
-3. **followUp while streaming** = interrupt then new turn (no true Hermes steer queue yet).  
-4. **Approvals / clarify** map to notices only — wire OMP ask-dialog next.  
-5. **Slash execution** — autocomplete lists Hermes skills; OMP builtins still local; remaining `/foo` should reach Hermes as text (verify dogfood).  
-6. **Port panels** — Kanban/Cron/Profiles are **inventory** overlays (CLI read); create/edit editors are next slices per port docs.
+3. **followUp while streaming** = interrupt then new turn (no true Hermes `session.steer` yet).  
+4. ~~Approvals / clarify notices only~~ **shipped** ask-dialog host (sudo/secret still missing).  
+5. ~~Slash execution~~ **shipped** router + `slash.exec` (skill names may still need dogfood).  
+6. ~~Port create/edit~~ **shipped** basic field forms; rich Herm cron-editor fields (skills/toolsets/script multi-line) next; Profiles still inventory.  
+7. **Config write lane (Herm parity)** — Herm TUI routes hot keys via gateway `config.set` RPC aliases; mtui HermesConfigPort is **CLI-only**. Live mid-session apply for reasoning/display needs gateway RPC.  
+8. **Settings text rows** — never call OMP `settings.get/set` on `hermes:*` paths. Values: HermesConfigPort cache only.  
+9. **slash.exec output** — currently notice + status; pager overlay like Herm is nicer for long help.  
+10. **Sessions list/resume** still OMP chrome — wire gateway session.* next.
 
 ## Dogfood gate
 
 1. `mtui`  
-2. Notice or log: hermes-brain installed + model  
-3. One real user message → assistant stream + tools in full OMP chrome  
+2. Notice: hermes-brain installed + model  
+3. One real user message → assistant stream + tools  
 4. Esc interrupts Hermes turn  
-5. `/settings` → Tasks → Open Kanban/Cron/Profiles lists load without crash  
+5. `/settings` · `/kanban` · `/cron` · `/profile` open coat surfaces  
+6. `/status` or `/help` via slash.exec without starting a chat turn  
+7. Forced approval (if tools require) opens ask-dialog, not silent deny  
+8. Cron `n` new job form · Kanban `n` new task form  
 
 Escape if gateway down: set `MESHINA_TUI_OMP_BRAIN=1` and file the failure.
 
@@ -62,4 +75,4 @@ Escape if gateway down: set `MESHINA_TUI_OMP_BRAIN=1` and file the failure.
 bun test packages/hermes-bridge
 ```
 
-Includes mapper, brain feed path, kanban/cron parsers, config/profile ports.
+Includes mapper, brain feed path, slash router, kanban/cron parsers, config/profile ports.

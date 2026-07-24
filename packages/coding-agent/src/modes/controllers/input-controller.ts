@@ -701,6 +701,16 @@ export class InputController {
 				}
 			}
 
+			// Hermes brain: coat deep-links + gateway slash.exec (not OMP builtins)
+			if (text?.startsWith("/")) {
+				const hermesHandled = await this.#tryHermesSlash(text);
+				if (hermesHandled) {
+					if (!shouldSkipHistory(text)) this.ctx.editor.addToHistory(text);
+					this.ctx.editor.setText("");
+					return;
+				}
+			}
+
 			// Collab guest: prompts execute on the host; local slash/skill/bash/
 			// python execution is host-only (builtins are gated inside
 			// executeBuiltinSlashCommand, which already consumed allowed ones).
@@ -1991,6 +2001,59 @@ export class InputController {
 					});
 				}
 			});
+		}
+	}
+
+	/**
+	 * Hermes product path: deep-link coat surfaces or gateway slash.exec.
+	 * Returns true if the slash was fully handled (do not prompt Hermes).
+	 */
+	async #tryHermesSlash(text: string): Promise<boolean> {
+		try {
+			const { getInstalledHermesBrain } = await import("../hermes-brain-install.ts");
+			const brain = getInstalledHermesBrain(this.ctx.session);
+			if (!brain) return false;
+
+			const { routeHermesSlash } = await import("@meshina/hermes-bridge");
+			const route = routeHermesSlash(text);
+			if (route.type === "none") return false;
+
+			if (route.type === "settings") {
+				this.ctx.showSettingsSelector();
+				return true;
+			}
+			if (route.type === "model") {
+				this.ctx.showModelSelector();
+				return true;
+			}
+			if (route.type === "port") {
+				this.ctx.showHermesPortList(route.port);
+				return true;
+			}
+			if (route.type === "exec") {
+				this.ctx.showStatus(`Running ${route.command}…`);
+				try {
+					const { output, warning } = await brain.slashExec(route.command);
+					const body = [warning ? `warning: ${warning}` : "", output].filter(Boolean).join("\n").trim();
+					// Paint as a coat notice so we don't start a Hermes user turn
+					this.ctx.session.emitNotice?.(
+						"info",
+						body.length > 4000 ? `${body.slice(0, 4000)}\n…(truncated)` : body || "(no output)",
+						"hermes-slash",
+					);
+					if (body.length > 200) {
+						// Also dump multi-line into chat as a simple status for readability
+						this.ctx.showStatus(body.split("\n")[0] || "slash done");
+					}
+				} catch (e) {
+					const msg = e instanceof Error ? e.message : String(e);
+					this.ctx.showWarning(`slash.exec failed: ${msg}`);
+				}
+				return true;
+			}
+			return false;
+		} catch {
+			return false;
 		}
 	}
 }

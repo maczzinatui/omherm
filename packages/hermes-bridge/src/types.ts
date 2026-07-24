@@ -126,7 +126,15 @@ export type UiEvent =
   | { kind: "tool_end"; id: string; name: string; summary?: string; error?: string }
   | { kind: "error"; text: string }
   | { kind: "clarify"; id: string; question: string; choices: string[] | null }
-  | { kind: "approval"; command: string; description: string }
+  | {
+      kind: "approval"
+      command: string
+      description: string
+      /** once|session|always|deny — gateway default set when missing */
+      choices?: string[]
+      pattern_keys?: string[]
+      smart_denied?: boolean
+    }
   | { kind: "turn_end"; usage?: Usage }
 
 export function mapGatewayToUi(ev: GatewayEvent): UiEvent | UiEvent[] | null {
@@ -189,12 +197,31 @@ export function mapGatewayToUi(ev: GatewayEvent): UiEvent | UiEvent[] | null {
         question: ev.payload.question,
         choices: ev.payload.choices,
       }
-    case "approval.request":
+    case "approval.request": {
+      const p = ev.payload as {
+        command?: string
+        description?: string
+        choices?: string[]
+        pattern_keys?: string[]
+        smart_denied?: boolean
+        allow_permanent?: boolean
+      }
+      let choices = Array.isArray(p.choices) ? p.choices.map(String) : undefined
+      if (!choices?.length) {
+        if (p.smart_denied) choices = ["once", "deny"]
+        else if (p.allow_permanent === false) choices = ["once", "session", "deny"]
+        else if ("allow_permanent" in p) choices = ["once", "session", "always", "deny"]
+        else choices = ["once", "session", "always", "deny"]
+      }
       return {
         kind: "approval",
-        command: ev.payload.command,
-        description: ev.payload.description,
+        command: String(p.command ?? ""),
+        description: String(p.description ?? p.command ?? "Approval required"),
+        choices,
+        pattern_keys: p.pattern_keys,
+        smart_denied: p.smart_denied,
       }
+    }
     case "error":
       return { kind: "error", text: ev.payload?.message || "error" }
     default:
