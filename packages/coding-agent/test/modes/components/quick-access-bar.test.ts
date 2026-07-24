@@ -128,11 +128,11 @@ describe("QuickAccessBar", () => {
 		]);
 		const visible = bar.render(120)[0]!.replace(/\x1b\[[0-9;]*m/g, "");
 		// Glyphs use fullwidth 〔〕 — string index ≠ terminal col. Probe by
-		// scanning handleClick across the content width instead.
+		// scanning hitTestAt (no activate) across the content width.
 		const found = new Set<string>();
 		const firstCol: Record<string, number> = {};
 		for (let col = 0; col < 80; col++) {
-			const id = bar.handleClick(col);
+			const id = bar.hitTestAt(col);
 			if (id && !found.has(id)) {
 				found.add(id);
 				firstCol[id] = col;

@@ -99,6 +99,11 @@ export class QuickAccessBar implements Component {
 		return btn.id;
 	}
 
+	/** Hit-test only — no activate (tests / hover probes). */
+	hitTestAt(col: number): string | undefined {
+		return this.#hitTest(col)?.id;
+	}
+
 	/**
 	 * Convenience: dispatch an SGR mouse event through the strip's
 	 * hover/click handlers. Returns true when the event was consumed
