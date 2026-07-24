@@ -186,6 +186,29 @@ export class HermesBrain {
     return this.gateway.slashExec(command)
   }
 
+  /**
+   * Live model switch via gateway `/model … --global` (agent.switch_model +
+   * config persist). Config-only writes leave the running session on the old model.
+   */
+  async switchModel(
+    provider: string,
+    modelId: string,
+    opts?: { global?: boolean },
+  ): Promise<{ mode: "gateway" | "config"; command?: string; output?: string }> {
+    if (!this.#bootstrapped) await this.bootstrap()
+    const { applyHermesModelLive } = await import("./hermes-model-catalog.ts")
+    const r = await applyHermesModelLive(provider, modelId, {
+      slashExec: cmd => this.gateway.slashExec(cmd),
+      global: opts?.global,
+    })
+    try {
+      await this.refreshInfo()
+    } catch {
+      /* footer optional */
+    }
+    return r
+  }
+
   async listSessions(limit = 80) {
     if (!this.#bootstrapped) await this.bootstrap()
     return this.gateway.listSessions(limit)

@@ -1005,12 +1005,25 @@ export class SelectorController {
 				onPick: async (model, selector) => {
 					try {
 						if (hermes?.hermesCatalog) {
-							const { applyHermesModelGlobal } = await import("@omherm/hermes-bridge");
-							await applyHermesModelGlobal(model.provider, model.id);
+							const brain = getInstalledHermesBrain(this.ctx.session);
+							const { applyHermesModelLive } = await import("@omherm/hermes-bridge");
+							const live = await applyHermesModelLive(model.provider, model.id, {
+								slashExec: brain ? cmd => brain.slashExec(cmd) : undefined,
+								global: true,
+							});
+							if (brain) {
+								try {
+									await brain.refreshInfo();
+								} catch {
+									/* optional */
+								}
+							}
 							this.ctx.statusLine.invalidate();
 							this.ctx.updateEditorBorderColor();
 							this.ctx.showStatus(
-								`Hermes default → ${selector} (config.yaml; next turn / new session)`,
+								live.mode === "gateway"
+									? `Hermes live → ${selector}`
+									: `Hermes config → ${selector} (no live gateway)`,
 							);
 							done();
 							return;
@@ -1112,11 +1125,22 @@ export class SelectorController {
 						configuredStorage === "project" ? `${targetScope === "project" ? "Project" : "Global"} ` : "";
 					const defaultStatusLabel = configuredStorage === "project" ? `${scopeLabel}default` : "Default";
 					try {
-						// Hermes inventory hub: config.yaml is SoT. OMP setModel needs OMP auth
-						// (missing for nous/etc.) — do not require it for default.
+						// Hermes inventory hub: live gateway /model --global (agent switch + config).
+						// config.yaml CLI alone does NOT change the running session.
 						if (hermes?.hermesCatalog && role === "default") {
-							const { applyHermesModelGlobal } = await import("@omherm/hermes-bridge");
-							await applyHermesModelGlobal(model.provider, model.id);
+							const brain = getInstalledHermesBrain(this.ctx.session);
+							const { applyHermesModelLive } = await import("@omherm/hermes-bridge");
+							const live = await applyHermesModelLive(model.provider, model.id, {
+								slashExec: brain ? cmd => brain.slashExec(cmd) : undefined,
+								global: true,
+							});
+							if (brain) {
+								try {
+									await brain.refreshInfo();
+								} catch {
+									/* footer optional */
+								}
+							}
 							this.ctx.settings.setModelRole(
 								"default",
 								formatModelSelectorValue(selectorValue, concreteThinking),
@@ -1126,9 +1150,21 @@ export class SelectorController {
 							}
 							this.ctx.statusLine.invalidate();
 							this.ctx.updateEditorBorderColor();
+							const via =
+								live.mode === "gateway"
+									? "live Hermes session + config.yaml"
+									: "config.yaml only (no live gateway — relaunch if still wrong)";
+							const warn = live.warning ? ` · ${live.warning.slice(0, 120)}` : "";
 							this.ctx.showStatus(
-								`${defaultStatusLabel} model: ${selectorValue} · Hermes config.yaml updated (next turn / session)`,
+								`${defaultStatusLabel} model: ${selectorValue} · ${via}${warn}`,
 							);
+							if (live.mode === "config") {
+								this.ctx.session?.emitNotice?.(
+									"warning",
+									`Model wrote config.yaml but no live Hermes gateway was available to switch the running agent. Next omh launch / new session uses ${selectorValue}.`,
+									"hermes-model",
+								);
+							}
 							return;
 						}
 						if (role === "default") {
@@ -1183,20 +1219,23 @@ export class SelectorController {
 								this.ctx.updateEditorBorderColor();
 							}
 							this.ctx.showStatus(`${defaultStatusLabel} model: ${selector ?? model.id}`);
-							// Product path: keep Hermes config.yaml in lockstep with OMP default role
-							if (isHermesProductSettings()) {
+							// Dual-write Hermes when not already on Hermes-catalog path
+							if (isHermesProductSettings() && !hermes?.hermesCatalog) {
 								void import("@omherm/hermes-bridge")
-									.then(({ applyHermesModelGlobal }) =>
-										applyHermesModelGlobal(model.provider, model.id),
-									)
-									.then(() => {
+									.then(async ({ applyHermesModelLive }) => {
+										const brain = getInstalledHermesBrain(this.ctx.session);
+										return applyHermesModelLive(model.provider, model.id, {
+											slashExec: brain ? cmd => brain.slashExec(cmd) : undefined,
+										});
+									})
+									.then(live => {
 										this.ctx.showStatus(
-											`${defaultStatusLabel} model: ${selector ?? model.id} · Hermes config updated`,
+											`${defaultStatusLabel} model: ${selector ?? model.id} · Hermes ${live.mode}`,
 										);
 									})
 									.catch((err: unknown) => {
 										const msg = err instanceof Error ? err.message : String(err);
-										this.ctx.showError(`OMP model set; Hermes config failed: ${msg}`);
+										this.ctx.showError(`OMP model set; Hermes switch failed: ${msg}`);
 									});
 							}
 						} else {

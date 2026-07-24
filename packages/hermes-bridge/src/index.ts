@@ -37,9 +37,13 @@ export {
 export {
   loadHermesModelCatalog,
   applyHermesModelGlobal,
+  applyHermesModelLive,
+  formatHermesModelSlash,
+  bareModelId,
   flattenCatalog,
   type HermesModelCatalog,
   type HermesModelRow,
+  type ApplyHermesModelLiveResult,
 } from "./hermes-model-catalog.ts"
 export {
   buildHermesSlashCatalog,

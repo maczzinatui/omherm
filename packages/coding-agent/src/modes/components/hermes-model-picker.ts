@@ -7,7 +7,6 @@ import type { Model } from "@oh-my-pi/pi-ai"
 import { buildModel } from "@oh-my-pi/pi-catalog/build"
 import type { Component, TUI } from "@oh-my-pi/pi-tui"
 import {
-  applyHermesModelGlobal,
   loadHermesModelCatalog,
   type HermesModelCatalog,
   type HermesModelRow,
@@ -158,6 +157,7 @@ export class HermesModelPickerComponent implements Component {
 }
 
 export async function defaultHermesModelPick(row: HermesModelRow): Promise<string> {
-  await applyHermesModelGlobal(row.provider, row.id)
+  const { applyHermesModelLive } = await import("@omherm/hermes-bridge")
+  await applyHermesModelLive(row.provider, row.id)
   return `${row.provider}/${row.id}`
 }

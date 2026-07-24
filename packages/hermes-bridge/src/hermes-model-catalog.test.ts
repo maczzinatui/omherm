@@ -33,6 +33,31 @@ describe("hermes model catalog", () => {
       throw e
     }
   })
+
+  test("formatHermesModelSlash builds gateway /model --global", async () => {
+    const { formatHermesModelSlash, bareModelId } = await import("./hermes-model-catalog.ts")
+    expect(bareModelId("nous", "nous/foo")).toBe("foo")
+    expect(bareModelId("nous", "laguna-xs-2.1:free")).toBe("laguna-xs-2.1:free")
+    expect(formatHermesModelSlash("nous", "laguna-xs-2.1:free")).toBe(
+      "/model laguna-xs-2.1:free --provider nous --global",
+    )
+    expect(formatHermesModelSlash("xai-oauth", "grok-4", { global: false })).toBe(
+      "/model grok-4 --provider xai-oauth",
+    )
+  })
+
+  test("applyHermesModelLive prefers slashExec", async () => {
+    const { applyHermesModelLive, formatHermesModelSlash } = await import("./hermes-model-catalog.ts")
+    const calls: string[] = []
+    const r = await applyHermesModelLive("nous", "hermes-3", {
+      slashExec: async cmd => {
+        calls.push(cmd)
+        return { output: "ok switched" }
+      },
+    })
+    expect(r.mode).toBe("gateway")
+    expect(calls[0]).toBe(formatHermesModelSlash("nous", "hermes-3"))
+  })
 })
 
 describe("hermes slash catalog", () => {

@@ -139,18 +139,11 @@ export async function loadHermesModelCatalog(
 export async function applyHermesModelGlobal(
   provider: string,
   modelId: string,
-  run: RunCatalog = defaultRun,
+  _run: RunCatalog = defaultRun,
 ): Promise<void> {
   // Use CLI: config set model.default + model.provider
   // bare model id without provider prefix for default when provider-specific
-  const bare = modelId.includes("/") && modelId.startsWith(`${provider}/`)
-    ? modelId.slice(provider.length + 1)
-    : modelId.includes("/")
-      ? modelId.split("/").slice(1).join("/")
-      : modelId
-  const root = hermesAgentRoot()
-  const py = existsSync(`${root}/venv/bin/python`) ? `${root}/venv/bin/python` : "python3"
-  // Prefer hermes CLI if on PATH
+  const bare = bareModelId(provider, modelId)
   const set = async (key: string, value: string) => {
     const proc = Bun.spawn(["hermes", "config", "set", key, value], {
       stdout: "pipe",
@@ -166,4 +159,74 @@ export async function applyHermesModelGlobal(
   }
   await set("model.provider", provider)
   await set("model.default", bare)
+}
+
+/** Strip provider prefix from model id when present. */
+export function bareModelId(provider: string, modelId: string): string {
+  if (modelId.includes("/") && modelId.startsWith(`${provider}/`)) {
+    return modelId.slice(provider.length + 1)
+  }
+  if (modelId.includes("/")) return modelId.split("/").slice(1).join("/")
+  return modelId
+}
+
+/**
+ * Gateway `/model` args that hit tui_gateway `_apply_model_switch` (live agent +
+ * optional config persist). `--global` writes config.yaml the same way the
+ * stock Hermes TUI does — config-only CLI is not enough for a running session
+ * (session model_override / in-memory agent ignore bare config.yaml).
+ */
+export function formatHermesModelSlash(
+  provider: string,
+  modelId: string,
+  opts?: { global?: boolean },
+): string {
+  const bare = bareModelId(provider, modelId)
+  const g = opts?.global === false ? "" : " --global"
+  return `/model ${bare} --provider ${provider}${g}`
+}
+
+export type ApplyHermesModelLiveResult = {
+  mode: "gateway" | "config"
+  command?: string
+  output?: string
+  warning?: string
+}
+
+/**
+ * Prefer live gateway slash.exec so the *running* Hermes session actually
+ * switches. Falls back to config.yaml CLI when no gateway handle is passed.
+ */
+export async function applyHermesModelLive(
+  provider: string,
+  modelId: string,
+  opts?: {
+    /** Live gateway slash.exec (HermesBrain / HermesGateway). */
+    slashExec?: (command: string) => Promise<{ output: string; warning?: string }>
+    /** Persist to config.yaml (default true). */
+    global?: boolean
+  },
+): Promise<ApplyHermesModelLiveResult> {
+  const global = opts?.global !== false
+  const command = formatHermesModelSlash(provider, modelId, { global })
+  if (opts?.slashExec) {
+    const r = await opts.slashExec(command)
+    const blob = `${r.output ?? ""}\n${r.warning ?? ""}`.toLowerCase()
+    // Fail loud on known busy / hard failures so coat doesn't green-check a no-op.
+    if (
+      blob.includes("session busy") ||
+      blob.includes("model switch") && blob.includes("failed") ||
+      blob.includes("could not switch")
+    ) {
+      throw new Error((r.output || r.warning || "gateway model switch failed").trim().slice(0, 500))
+    }
+    return {
+      mode: "gateway",
+      command,
+      output: r.output,
+      warning: r.warning,
+    }
+  }
+  await applyHermesModelGlobal(provider, modelId)
+  return { mode: "config", command }
 }
