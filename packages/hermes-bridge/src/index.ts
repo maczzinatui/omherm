@@ -83,6 +83,7 @@ export {
   normalizeCronJob,
   formatCronJobLabel,
   formatCronJobDescription,
+  formatCronRunLine,
   type CronPort,
   type CronJob,
   type CronSchedulerStatus,

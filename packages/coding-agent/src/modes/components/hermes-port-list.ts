@@ -11,8 +11,10 @@ import {
 	cronPort,
 	kanbanPort,
 	profilePort,
+	formatCronRunLine,
 	type CronJob,
 	type CronSchedulerStatus,
+	type CronRunRow,
 	type KanbanDetail,
 	type KanbanTask,
 	type ProfileInfo,
@@ -93,10 +95,10 @@ const STATUS_ORDER = [
 	"archived",
 ] as const
 
-type ConfirmKind = "remove_cron" | null
+type ConfirmKind = "remove_cron" | "use_profile" | "delete_profile" | null
 
 type FormField = { key: string; label: string; value: string; help?: string }
-type FormKind = "cron_create" | "cron_edit" | "kanban_create" | "kanban_assign"
+type FormKind = "cron_create" | "cron_edit" | "kanban_create" | "kanban_assign" | "kanban_comment"
 
 type FormState = {
 	kind: FormKind
@@ -131,7 +133,9 @@ export class HermesPortListComponent implements Component {
 	#detail: KanbanDetail | CronJob | null = null
 	#detailLines: string[] = []
 	#profiles: ProfileInfo[] = []
-	#runsPreview: string[] = []
+	#runsPreview: CronRunRow[] = []
+	/** target profile name for confirm dialogs */
+	#confirmTarget = ""
 
 	/** Cached layout from last render */
 	#tableRows = 12
@@ -259,15 +263,18 @@ export class HermesPortListComponent implements Component {
 		if (!j) return
 		const sel = this.#sel
 		cronPort
-			.runs(j.id, 8)
+			.runs(j.id, 12)
 			.then((rows) => {
 				if (sel !== this.#sel) return
-				this.#runsPreview = rows.map((r) => r.raw)
+				this.#runsPreview = rows
 				this.#paintLocal()
 			})
-			.catch(() => {
+			.catch((e) => {
 				if (sel !== this.#sel) return
 				this.#runsPreview = []
+				// Fail-loud: don't hide runs CLI death
+				this.#banner = e instanceof Error ? e.message : String(e)
+				this.#paintLocal()
 			})
 	}
 
@@ -279,12 +286,19 @@ export class HermesPortListComponent implements Component {
 	}
 
 	#cronKv(j: CronJob): string[] {
+		const lastBits = [
+			j.last_run ? agoLabel(j.last_run) : "",
+			j.last_status ?? "",
+			j.last_error ? `err: ${j.last_error.slice(0, 80)}` : "",
+		]
+			.filter(Boolean)
+			.join(" · ")
 		const rows: [string, string][] = [
 			["ID", j.id],
 			["State", j.enabled ? "active" : "paused"],
 			["Schedule", j.schedule || "—"],
 			["Deliver", j.deliver || "local"],
-			["Last", j.last_run ? `${agoLabel(j.last_run)} · ${j.last_status ?? "?"}` : "never"],
+			["Last", lastBits || "never"],
 			["Next", j.enabled ? untilLabel(j.next_run) : "paused"],
 			["Repeat", j.repeat != null ? String(j.repeat) : ""],
 			["Provider", j.provider || ""],
@@ -372,6 +386,7 @@ export class HermesPortListComponent implements Component {
 			if (!t) return base
 			return [
 				{ id: "create", label: "New task…", desc: "n" },
+				{ id: "comment", label: "Comment…", desc: "m" },
 				{ id: "assign", label: "Assign…", desc: "a" },
 				{ id: "promote", label: "Promote → ready", desc: "u" },
 				{ id: "complete", label: "Complete", desc: "c" },
@@ -382,9 +397,27 @@ export class HermesPortListComponent implements Component {
 				back,
 			]
 		}
+		const p = this.#profiles[this.#sel]
+		const backP = { id: "close", label: "Back to Settings", desc: "Esc/q" }
+		if (!p) {
+			return [
+				{ id: "reload", label: "Reload", desc: "R" },
+				backP,
+			]
+		}
 		return [
+			{
+				id: "use_profile",
+				label: p.is_active ? "Active (sticky)" : `Use ${p.name}…`,
+				desc: "Enter",
+			},
+			{
+				id: "delete_profile",
+				label: p.name === "default" ? "Delete (blocked)" : "Delete profile…",
+				desc: "d",
+			},
 			{ id: "reload", label: "Reload", desc: "R" },
-			{ id: "close", label: "Back", desc: "Esc/q" },
+			backP,
 		]
 	}
 
@@ -411,6 +444,40 @@ export class HermesPortListComponent implements Component {
 			if (id === "assign" && this.#kind === "kanban") {
 				this.#openKanbanAssign()
 				return
+			}
+			if (id === "comment" && this.#kind === "kanban") {
+				this.#openKanbanComment()
+				return
+			}
+			if (this.#kind === "profiles") {
+				const p = this.#profiles[this.#sel]
+				if (!p) return
+				if (id === "use_profile") {
+					if (p.is_active) {
+						this.#banner = `Already on profile ${p.name}`
+						this.#paintLocal()
+						return
+					}
+					this.#confirm = "use_profile"
+					this.#confirmTarget = p.name
+					this.#focus = "confirm"
+					this.#actionSel = 0
+					this.#paintLocal()
+					return
+				}
+				if (id === "delete_profile") {
+					if (p.name === "default") {
+						this.#banner = "cannot delete default profile"
+						this.#paintLocal()
+						return
+					}
+					this.#confirm = "delete_profile"
+					this.#confirmTarget = p.name
+					this.#focus = "confirm"
+					this.#actionSel = 0
+					this.#paintLocal()
+					return
+				}
 			}
 			if (this.#kind === "cron") {
 				const j = this.#jobs[this.#sel]
@@ -525,6 +592,27 @@ export class HermesPortListComponent implements Component {
 		this.#paintLocal()
 	}
 
+	#openKanbanComment(): void {
+		const t = this.#tasks[this.#sel]
+		if (!t) return
+		this.#form = {
+			kind: "kanban_comment",
+			targetId: t.id,
+			idx: 0,
+			editing: true,
+			fields: [
+				{
+					key: "text",
+					label: "Comment",
+					value: "",
+					help: "required — append note on task",
+				},
+			],
+		}
+		this.#focus = "form"
+		this.#paintLocal()
+	}
+
 	async #submitForm(): Promise<void> {
 		const f = this.#form
 		if (!f) return
@@ -577,6 +665,14 @@ export class HermesPortListComponent implements Component {
 			} else if (f.kind === "kanban_assign" && f.targetId) {
 				const who = get("assignee") || "unassigned"
 				this.#banner = await kanbanPort.assign(f.targetId, who)
+			} else if (f.kind === "kanban_comment" && f.targetId) {
+				const text = get("text")
+				if (!text) {
+					f.error = "comment required"
+					this.#paintLocal()
+					return
+				}
+				this.#banner = await kanbanPort.comment(f.targetId, text)
 			}
 			this.#form = null
 			this.#focus = "table"
@@ -680,17 +776,24 @@ export class HermesPortListComponent implements Component {
 			}
 			if (matchesKey(data, "enter") || matchesKey(data, "return") || data === "\n") {
 				void (async () => {
-					if (this.#actionSel === 1 && this.#confirm === "remove_cron") {
-						const j = this.#jobs[this.#sel]
-						if (j) {
-							try {
-								this.#banner = await cronPort.remove(j.id)
-							} catch (e) {
-								this.#banner = e instanceof Error ? e.message : String(e)
+					if (this.#actionSel === 1) {
+						try {
+							if (this.#confirm === "remove_cron") {
+								const j = this.#jobs[this.#sel]
+								if (j) this.#banner = await cronPort.remove(j.id)
+							} else if (this.#confirm === "use_profile" && this.#confirmTarget) {
+								await profilePort.use(this.#confirmTarget, { confirmSessionEnd: true })
+								this.#banner = `Switched sticky profile → ${this.#confirmTarget}. Restart mtui / gateway to attach.`
+							} else if (this.#confirm === "delete_profile" && this.#confirmTarget) {
+								await profilePort.delete(this.#confirmTarget, { confirmDestroy: true })
+								this.#banner = `Deleted profile ${this.#confirmTarget}`
 							}
+						} catch (e) {
+							this.#banner = e instanceof Error ? e.message : String(e)
 						}
 					}
 					this.#confirm = null
+					this.#confirmTarget = ""
 					this.#focus = "table"
 					await this.reload()
 				})()
@@ -715,6 +818,22 @@ export class HermesPortListComponent implements Component {
 		}
 		if (data === "a" && this.#kind === "kanban") {
 			this.#openKanbanAssign()
+			return
+		}
+		if (data === "m" && this.#kind === "kanban") {
+			this.#openKanbanComment()
+			return
+		}
+		if (data === "d" && this.#kind === "profiles") {
+			void this.#runAction("delete_profile")
+			return
+		}
+		if (
+			(matchesKey(data, "enter") || matchesKey(data, "return") || data === "\n") &&
+			this.#kind === "profiles" &&
+			this.#focus === "table"
+		) {
+			void this.#runAction("use_profile")
 			return
 		}
 		if (data === "	") {
@@ -1126,11 +1245,23 @@ export class HermesPortListComponent implements Component {
 		if (this.#kind === "cron" && this.#runsPreview.length) {
 			if (lines.length < maxLines - 2) {
 				lines.push("")
-				lines.push(theme.fg("dim", "Recent runs"))
+				lines.push(theme.fg("dim", `Recent runs (${this.#runsPreview.length})`))
 				for (const r of this.#runsPreview) {
 					if (lines.length >= maxLines) break
-					lines.push(fit(theme.fg("dim", r), bodyW))
+					const line = formatCronRunLine(r, Math.max(24, bodyW - 2))
+					const color =
+						r.status === "error"
+							? "error"
+							: r.status === "ok"
+								? "success"
+								: "dim"
+					lines.push(fit(theme.fg(color as "dim", line), bodyW))
 				}
+			}
+		} else if (this.#kind === "cron" && this.#jobs[this.#sel]) {
+			if (lines.length < maxLines - 1) {
+				lines.push("")
+				lines.push(theme.fg("dim", "Recent runs · Tab → Refresh runs"))
 			}
 		}
 		// Keep detail clean — keys live on the FULL-WIDTH footer (not split).
@@ -1162,9 +1293,9 @@ export class HermesPortListComponent implements Component {
 			return `↑↓ · n new · e edit · !/r run · p pause · d delete · R reload · Tab actions · ${back}`
 		}
 		if (this.#kind === "kanban") {
-			return `↑↓ · n new · a assign · r archive · c complete · u promote · R reload · Tab actions · ${back}`
+			return `↑↓ · n new · m comment · a assign · r archive · c complete · u promote · R reload · Tab actions · ${back}`
 		}
-		return `↑↓ · R reload · Tab actions · ${back}`
+		return `↑↓ · Enter use profile · d delete · R reload · Tab actions · ${back}`
 	}
 
 	render(width: number): string[] {
@@ -1242,13 +1373,37 @@ export class HermesPortListComponent implements Component {
 		}
 
 		if (this.#focus === "confirm") {
-			out.push(topBorder(w, "Confirm delete"))
-			const j = this.#jobs[this.#sel]
-			out.push(row(theme.fg("warning", `Delete "${j?.name || j?.id || "?"}"? This cannot be undone.`), w))
+			const title =
+				this.#confirm === "use_profile"
+					? "Confirm profile switch"
+					: this.#confirm === "delete_profile"
+						? "Confirm delete profile"
+						: "Confirm delete"
+			out.push(topBorder(w, title))
+			let warn = ""
+			if (this.#confirm === "remove_cron") {
+				const j = this.#jobs[this.#sel]
+				warn = `Delete cron "${j?.name || j?.id || "?"}"? This cannot be undone.`
+			} else if (this.#confirm === "use_profile") {
+				warn = `Use profile "${this.#confirmTarget}"? Sticky default flips; current session ends. Restart mtui to attach.`
+			} else if (this.#confirm === "delete_profile") {
+				warn = `Delete profile "${this.#confirmTarget}"? Home dir destroyed. Cannot undo.`
+			} else {
+				warn = "Confirm?"
+			}
+			out.push(row(theme.fg("warning", warn), w))
 			out.push(row("", w))
 			this.#confirmRows = { cancel: out.length, yes: out.length + 1 }
+			const yesLabel =
+				this.#confirm === "use_profile"
+					? "Yes, switch profile"
+					: this.#confirm === "delete_profile"
+						? "Yes, delete permanently"
+						: "Yes, delete permanently"
 			out.push(row((this.#actionSel === 0 ? theme.fg("accent", "▸ ") : "  ") + "Cancel", w))
-			out.push(row((this.#actionSel === 1 ? theme.fg("error", "▸ ") : "  ") + theme.fg("error", "Yes, delete permanently"), w))
+			out.push(
+				row((this.#actionSel === 1 ? theme.fg("error", "▸ ") : "  ") + theme.fg("error", yesLabel), w),
+			)
 			out.push(row(theme.fg("dim", "↑↓  Enter  Esc · click"), w))
 			out.push(bottomBorder(w))
 			return out

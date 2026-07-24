@@ -104,11 +104,8 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
   }
 
   session.followUp = async (text: string): Promise<void> => {
-    // Mid-stream follow-up: Hermes interrupt+queue not fully wired — submit as next turn.
-    if (brain.streaming) {
-      await brain.interrupt()
-    }
-    await brain.prompt(text)
+    // Mid-stream: prefer session.steer RPC; else interrupt+prompt (Hermes only).
+    await brain.steer(text)
   }
 
   session.abort = async (options?: {
@@ -124,6 +121,34 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
       /* OMP may not be streaming */
     }
   }
+
+  const origGetContextUsage = session.getContextUsage.bind(session)
+  session.getContextUsage = (options?: { contextWindow?: number }) => {
+    const u = brain.sessionInfo.usage
+    if (u && (u.context_percent != null || (u.context_used != null && u.context_max != null))) {
+      const contextWindow =
+        (u.context_max && u.context_max > 0 ? u.context_max : undefined) ??
+        options?.contextWindow ??
+        session.model?.contextWindow ??
+        0
+      const tokens =
+        u.context_used ??
+        u.total_tokens ??
+        (u.input_tokens ?? 0) + (u.output_tokens ?? 0)
+      const percent =
+        u.context_percent ??
+        (contextWindow > 0 ? (tokens / contextWindow) * 100 : 0)
+      return { tokens, contextWindow, percent }
+    }
+    return origGetContextUsage(options)
+  }
+
+  // Refresh gateway usage after each mapped turn so status line % stays live.
+  const unsubUsage = brain.subscribe((ev) => {
+    if (ev.type === "turn_end" || ev.type === "agent_end") {
+      void brain.refreshInfo().catch(() => {})
+    }
+  })
 
   Object.defineProperty(session, "isStreaming", {
     configurable: true,
@@ -146,11 +171,13 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
     setDialogHost: (host) => brain.setDialogHost(host),
     setWorkingMessage: undefined,
     dispose: () => {
+      unsubUsage()
       brain.dispose()
       session.subscribe = origSubscribe
       session.prompt = origPrompt
       session.followUp = origFollowUp
       session.abort = origAbort
+      session.getContextUsage = origGetContextUsage
       if (origIsStreamingDesc) {
         Object.defineProperty(session, "isStreaming", origIsStreamingDesc)
       }

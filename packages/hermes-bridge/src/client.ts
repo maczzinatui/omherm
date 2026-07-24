@@ -94,6 +94,25 @@ export class HermesGateway extends EventEmitter {
 
   private emitUi(ev: UiEvent) {
     if (ev.kind === "info") this.info = { ...this.info, ...ev.info }
+    if (ev.kind === "turn_end" && ev.usage) {
+      const u = ev.usage
+      const mapped = {
+        input_tokens: u.input_tokens,
+        output_tokens: u.output_tokens,
+        total_tokens: u.total_tokens ?? ((u.input_tokens ?? 0) + (u.output_tokens ?? 0) || undefined),
+        cost_usd: u.cost_usd,
+        context_used: u.context_used,
+        context_max: u.context_max,
+        context_percent: u.context_percent,
+        compressions: u.compressions,
+      }
+      const cleaned = Object.fromEntries(
+        Object.entries(mapped).filter(([, v]) => v !== undefined && v !== null),
+      ) as SessionInfo["usage"]
+      if (cleaned && Object.keys(cleaned).length) {
+        this.info = { ...this.info, usage: { ...this.info.usage, ...cleaned } }
+      }
+    }
     for (const cb of this.uiListeners) cb(ev)
   }
 
@@ -309,6 +328,21 @@ export class HermesGateway extends EventEmitter {
 
   async interrupt(): Promise<void> {
     await this.request("session.interrupt", {})
+  }
+
+  /**
+   * Mid-stream steer. Prefer gateway `session.steer` when present; otherwise
+   * fail loud so coat can fall back to interrupt+queue without silent dual paths.
+   */
+  async steer(text: string): Promise<{ mode: "steer" | "unsupported" }> {
+    const trimmed = text.trim()
+    if (!trimmed) return { mode: "unsupported" }
+    try {
+      await this.request("session.steer", { text: trimmed })
+      return { mode: "steer" }
+    } catch {
+      return { mode: "unsupported" }
+    }
   }
 
   /**

@@ -48,6 +48,12 @@ export type CronSchedulerStatus = {
 export type CronRunRow = {
 	raw: string
 	job_id?: string
+	/** ok | error | running | unknown */
+	status?: string
+	/** relative or absolute time fragment from CLI */
+	when?: string
+	/** truncated stdout/result snippet when present */
+	output?: string
 }
 
 export type CronCreateInput = {
@@ -246,12 +252,57 @@ export function parseCronRunsOutput(text: string): CronRunRow[] {
 	const out: CronRunRow[] = []
 	for (const line of text.split("\n")) {
 		const t = line.trim()
-		if (!t || /^JOB|^---|^id\b/i.test(t)) continue
+		if (!t || /^JOB|^---|^id\b|^#/i.test(t)) continue
 		if (/no (runs|history|attempts)/i.test(t)) continue
 		const idM = t.match(/\b([a-f0-9-]{8,})\b/i)
-		out.push({ raw: t, job_id: idM?.[1] })
+		// status tokens common in hermes cron runs
+		const statusM = t.match(/\b(ok|error|fail(?:ed)?|success|running|timeout)\b/i)
+		// time-ish: ISO, relative (1s ago / 24s), clock
+		const whenM =
+			t.match(/\b(\d{4}-\d{2}-\d{2}[T ][\d:.+-]+Z?)\b/) ||
+			t.match(/\b(\d+[smhd])\s*ago\b/i) ||
+			t.match(/\b(in\s+\d+[smhd])\b/i) ||
+			t.match(/\b(\d{1,2}:\d{2}(?::\d{2})?)\b/)
+		// after status, remainder often is output / reason
+		let output: string | undefined
+		if (statusM && statusM.index != null) {
+			const after = t.slice(statusM.index + statusM[0].length).trim()
+			// drop pure id/when leftovers
+			const cleaned = after
+				.replace(idM?.[0] ?? "", "")
+				.replace(whenM?.[0] ?? "", "")
+				.replace(/\s{2,}/g, " ")
+				.trim()
+			if (cleaned.length > 2 && !/^[a-f0-9-]{8,}$/i.test(cleaned)) {
+				output = cleaned.slice(0, 160)
+			}
+		}
+		const status = statusM
+			? /fail|error|timeout/i.test(statusM[1]!)
+				? "error"
+				: /run/i.test(statusM[1]!)
+					? "running"
+					: "ok"
+			: undefined
+		out.push({
+			raw: t,
+			job_id: idM?.[1],
+			status,
+			when: whenM?.[1],
+			output,
+		})
 	}
 	return out
+}
+
+/** One-line paint helper for overlays */
+export function formatCronRunLine(r: CronRunRow, max = 96): string {
+	const mark =
+		r.status === "error" ? "!" : r.status === "ok" ? "✓" : r.status === "running" ? "…" : "·"
+	const when = r.when ? ` ${r.when}` : ""
+	const out = r.output ? ` · ${r.output}` : ""
+	const body = `${mark}${when}${out}`.trim() || r.raw
+	return body.length > max ? body.slice(0, max - 1) + "…" : body
 }
 
 function readJobsJson(): CronJob[] {

@@ -155,6 +155,26 @@ export class HermesBrain {
     }
   }
 
+  /**
+   * Mid-stream steer when gateway supports it; else interrupt + new prompt
+   * (named debt — not dual brain, still Hermes-only).
+   */
+  async steer(text: string): Promise<void> {
+    if (!this.#bootstrapped) await this.bootstrap()
+    const trimmed = text.trim()
+    if (!trimmed) return
+    if (this.#streaming) {
+      const r = await this.gateway.steer(trimmed)
+      if (r.mode === "steer") {
+        // Turn continues; refresh usage opportunistically.
+        void this.refreshInfo().catch(() => {})
+        return
+      }
+      await this.interrupt()
+    }
+    await this.prompt(trimmed)
+  }
+
   async refreshInfo(): Promise<SessionInfo> {
     if (!this.#bootstrapped) await this.bootstrap()
     return this.gateway.refreshInfo()

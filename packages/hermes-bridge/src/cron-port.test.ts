@@ -60,7 +60,10 @@ describe("cron normalize + runs", () => {
 	})
 
 	test("runs parse keeps lines", () => {
-		const rows = parseCronRunsOutput("JOB  TIME\n----\nabc123  ok  1s\n")
+		const rows = parseCronRunsOutput("JOB  TIME\n----\nabc123  ok  1s ago  hello world\n")
 		expect(rows.some((r) => r.raw.includes("abc123"))).toBe(true)
+		const hit = rows.find((r) => r.raw.includes("abc123"))
+		expect(hit?.status).toBe("ok")
+		expect(hit?.when).toBeTruthy()
 	})
 })
