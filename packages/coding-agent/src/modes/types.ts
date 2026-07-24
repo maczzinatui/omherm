@@ -268,6 +268,12 @@ export interface InteractiveModeContext {
 	flushPendingBashComponents(): void;
 	flushPendingModelSwitch(): Promise<void>;
 	setWorkingMessage(message?: string): void;
+	/**
+	 * Arm/release coat paint coalesce for the active Hermes/OMP agent turn.
+	 * Idle launch stays stock TUI; stream bursts get microtask coalesce without
+	 * requiring OMHERM_PAINT_COALESCE=1. Env-forced coalesce is left alone.
+	 */
+	setStreamPaintCoalesce(active: boolean): void;
 	applyPendingWorkingMessage(): void;
 	ensureLoadingAnimation(): void;
 	startPendingSubmission(input: {

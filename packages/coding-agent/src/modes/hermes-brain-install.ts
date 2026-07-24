@@ -18,6 +18,7 @@ import {
 import type { AgentSession, AgentSessionEvent, PromptOptions } from "../session/agent-session.ts"
 import { logger } from "@oh-my-pi/pi-utils"
 import { getOrCreateSubagentTrailStore } from "./components/subagent-trail"
+import { bootMark } from "./utils/perf-counters"
 
 export type HermesBrainHandle = {
   brain: HermesBrain
@@ -44,7 +45,9 @@ export function getHermesBrainHandle(session: AgentSession): HermesBrainHandle |
  */
 export async function installHermesBrain(session: AgentSession): Promise<HermesBrainHandle> {
   const brain = new HermesBrain()
+  bootMark("hermes_brain_bootstrap_start")
   await brain.bootstrap()
+  bootMark("hermes_brain_bootstrap_done")
 
   const origSubscribe = session.subscribe.bind(session)
   const origPrompt = session.prompt.bind(session)

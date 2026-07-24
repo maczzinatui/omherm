@@ -660,13 +660,22 @@ export class ToolExecutionComponent extends Container implements NativeScrollbac
 			| undefined;
 		const pendingAnimation = renderer?.animatedPendingPreview;
 		const partialAnimation = renderer?.animatedPartialResult;
+		// Custom tools with renderResult-only paint a static tool-name Text while
+		// pending (no spinner glyph). Do not inherit genericToolRenderer's
+		// animatedPendingPreview:true via name fallback.
+		const staticPendingCustomTool =
+			this.#tool != null &&
+			typeof (this.#tool as { renderCall?: unknown }).renderCall !== "function" &&
+			typeof (this.#tool as { renderResult?: unknown }).renderResult === "function";
 		const pendingCallConsumesSpinner =
 			this.#result === undefined &&
+			!staticPendingCustomTool &&
 			(typeof pendingAnimation === "function"
 				? pendingAnimation(this.#args)
-				: pendingAnimation === true ||
-					// generic framed path and default tools: spinner while pending
-					true);
+				: // Only renderers that opt in (eval, generic framed, vibe, …).
+					// Default false — headerless bash / github / static custom labels
+					// must not run the shared spinner interval (spinner unit contract).
+					pendingAnimation === true);
 		const partialResultConsumesSpinner =
 			this.#result !== undefined &&
 			(typeof partialAnimation === "function"

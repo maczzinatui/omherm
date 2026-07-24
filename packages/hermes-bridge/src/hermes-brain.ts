@@ -205,6 +205,21 @@ export class HermesBrain {
   }
 
   dispose(): void {
+    // Mid-stream dispose must fail loud into the coat (seal tools, drop
+    // stream coalesce, clear loader) — not leave EventController half-armed.
+    if (this.#streaming) {
+      try {
+        this.#emit({
+          type: "notice",
+          level: "warning",
+          message: "Hermes brain disposed mid-stream — turn aborted.",
+          source: "hermes-brain",
+        } as HermesBrainEvent)
+        for (const ev of this.mapper.forceEnd("error")) this.#emit(ev)
+      } catch {
+        /* coat may already be tearing down */
+      }
+    }
     this.#unsubUi?.()
     this.#unsubUi = null
     this.#dialogHost = null
@@ -222,7 +237,16 @@ export class HermesBrain {
   /** Test / inject: feed a UiEvent as if from gateway. */
   feedUiForTest(ev: UiEvent): HermesBrainEvent[] {
     const out = this.mapper.feedUi(ev)
-    for (const e of out) this.#emit(e)
+    for (const e of out) {
+      this.#emit(e)
+      if (e.type === "agent_end") {
+        this.#streaming = false
+        this.#settleTurnWaiters()
+      }
+      if (e.type === "agent_start") {
+        this.#streaming = true
+      }
+    }
     return out
   }
 

@@ -441,6 +441,8 @@ export class EventController {
 		}
 		this.#cancelIdleCompaction();
 		this.#cancelIdleRecap();
+		// Stream-scoped coat paint coalesce (idle stays stock TUI).
+		this.ctx.setStreamPaintCoalesce?.(true);
 		this.ctx.statusLine.markActivityStart();
 		this.#setTerminalProgress(true);
 		this.ctx.ensureLoadingAnimation();
@@ -1207,6 +1209,7 @@ export class EventController {
 		this.ctx.statusLine.markActivityEnd();
 		this.#streamingReveal.stop();
 		this.#toolArgsReveal.flushAll();
+		this.ctx.setStreamPaintCoalesce?.(false);
 		if (this.ctx.loadingAnimation) {
 			this.ctx.loadingAnimation.stop();
 			this.ctx.loadingAnimation = undefined;

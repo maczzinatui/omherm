@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import type { Component } from "@oh-my-pi/pi-tui";
 import {
+	bootMark,
+	bootTimelineSnapshot,
 	coalesceTuiPaint,
 	createRenderCounters,
 	instrumentedTuiOptions,
@@ -188,5 +190,18 @@ describe("coalesceTuiPaint", () => {
 		tui.requestRender(true);
 		expect(tui.calls).toBe(2);
 		restore();
+	});
+});
+
+describe("bootMark", () => {
+	it("records timeline entries without requiring PERF env", () => {
+		bootMark("test_mark_a");
+		bootMark("test_mark_b");
+		const snap = bootTimelineSnapshot();
+		expect(snap.some(m => m.name === "test_mark_a")).toBe(true);
+		expect(snap.some(m => m.name === "test_mark_b")).toBe(true);
+		const a = snap.find(m => m.name === "test_mark_a")!;
+		const b = snap.find(m => m.name === "test_mark_b")!;
+		expect(b.ms).toBeGreaterThanOrEqual(a.ms);
 	});
 });

@@ -220,7 +220,7 @@ import type {
 } from "./types";
 import { UiHelpers } from "./utils/ui-helpers";
 import { componentHeight } from "./utils/component-height";
-import { coalesceTuiPaint, createRenderCounters, instrumentedTuiOptions } from "./utils/perf-counters";
+import { bootMark, coalesceTuiPaint, createRenderCounters, instrumentedTuiOptions } from "./utils/perf-counters";
 
 function envOn(name: string): boolean {
 	const v = process.env[name];
@@ -557,8 +557,13 @@ export class InteractiveMode implements InteractiveModeContext {
 	#perfCounters?: ReturnType<typeof createRenderCounters>;
 	/**
 	 * B2.4 opt-in paint coalesce restorer. Default off — see isPaintCoalesceEnabled.
+	 * Stream turns can arm a temporary wrapper via setStreamPaintCoalesce.
 	 */
 	#restorePaintCoalesce?: () => void;
+	/** True when #restorePaintCoalesce was installed by setStreamPaintCoalesce (not env). */
+	#streamPaintCoalesceOwned = false;
+	/** Env forced coalesce at construct — stream arm/disarm must not tear it down. */
+	#envPaintCoalesce = false;
 	/**
 	 * Sticky top quick-access strip (viewport overlay). Always painted at row 0
 	 * so chips stay usable after transcript commits to native scrollback.
@@ -742,10 +747,12 @@ export class InteractiveMode implements InteractiveModeContext {
 		// Order: counters on raw TUI first; coalesce outer when enabled.
 		this.#perfCounters = createRenderCounters();
 		this.#perfCounters?.wrap(this.ui);
-		if (isPaintCoalesceEnabled()) {
+		this.#envPaintCoalesce = isPaintCoalesceEnabled();
+		if (this.#envPaintCoalesce) {
 			const paintCoalesce = coalesceTuiPaint(this.ui);
 			this.#restorePaintCoalesce = paintCoalesce.restore;
 		}
+		bootMark("tui_constructed");
 		this.ui.setMaxInlineImages(settings.get("tui.maxInlineImages"));
 		this.ui.setScrollbackRebuild(settings.get("tui.scrollbackRebuild"));
 		// OSC 66 text-sizing is Kitty-only; resolve the setting against the terminal's
@@ -1144,6 +1151,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		// Start the UI. Cold `omp` launch opts into clearing on the first paint so
 		// the initial welcome frame does not append over the previous run's scrollback.
 		this.ui.start({ clearScrollback: options.clearInitialTerminalHistory === true });
+		bootMark("tui_first_frame");
 		// Sticky top chips — viewport overlay so they never scroll into history.
 		// showOverlay focuses the bar; hand focus to the editor. Bar implements
 		// ownsOverlayFocusTarget(editor) so this setFocus is not rewritten.
@@ -4057,6 +4065,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		// B2 dispose: coalesce outer first, then counters.
 		this.#restorePaintCoalesce?.();
 		this.#restorePaintCoalesce = undefined;
+		this.#streamPaintCoalesceOwned = false;
 		this.#perfCounters?.dispose();
 		this.#perfCounters = undefined;
 		// Sticky chrome + history browser before TUI stop.
@@ -4414,6 +4423,25 @@ export class InteractiveMode implements InteractiveModeContext {
 		}
 
 		this.#pendingWorkingMessage = message;
+	}
+
+	/**
+	 * Stream-scoped paint coalesce: arm on agent_start, release on agent_end.
+	 * Idle stays stock TUI; env OMHERM_PAINT_COALESCE / MTUI_PERF still force always-on.
+	 */
+	setStreamPaintCoalesce(active: boolean): void {
+		if (this.#envPaintCoalesce) return;
+		if (active) {
+			if (this.#restorePaintCoalesce) return;
+			const paintCoalesce = coalesceTuiPaint(this.ui);
+			this.#restorePaintCoalesce = paintCoalesce.restore;
+			this.#streamPaintCoalesceOwned = true;
+			return;
+		}
+		if (!this.#streamPaintCoalesceOwned) return;
+		this.#restorePaintCoalesce?.();
+		this.#restorePaintCoalesce = undefined;
+		this.#streamPaintCoalesceOwned = false;
 	}
 
 	applyPendingWorkingMessage(): void {

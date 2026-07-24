@@ -36,6 +36,19 @@ describe("HermesBrain mapper path", () => {
     brain.feedUiForTest({ kind: "turn_end" })
     expect(names).toEqual(["terminal"])
   })
+
+  test("dispose mid-stream emits notice + agent_end before killing listeners", () => {
+    const brain = new HermesBrain()
+    const types: string[] = []
+    brain.subscribe((e) => types.push(e.type))
+    // Open a mapped turn so forceEnd has something to seal.
+    brain.feedUiForTest({ kind: "text", text: "partial" })
+    expect(brain.streaming).toBe(true)
+    brain.dispose()
+    expect(types).toContain("notice")
+    expect(types).toContain("agent_end")
+    expect(brain.streaming).toBe(false)
+  })
 })
 
 describe("isHermesBrainEnabled", () => {
