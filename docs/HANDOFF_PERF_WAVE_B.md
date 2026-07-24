@@ -1,96 +1,116 @@
-# Session handoff — omherm perf wave B (+ residual product dogfood)
+# Session handoff — omherm (perf + model hub + coat identity)
 
-**Written:** 2026-07-24 America/Toronto (Fri, work hours)  
-**Repo:** `~/omherm` only · branch `main` · **do not thrash** `~/meshina` hub `plans/HANDOFF.md` (parallel model-lineup / mesh ops).  
-**Role lock:** L1/L2 brain for **omherm** coat + Hermes brain plug. Not hub topology.  
-**Product:** `omherm` = OMP coat + HermesBrain under IM (default ON). Escape `MESHINA_TUI_OMP_BRAIN=1`. **No HMR** — quit + relaunch after coat/bridge edits.  
-**Binary:** `/home/nixos/.bun/bin/omherm` → sources this repo.
+**Written:** 2026-07-24 ~16:20 America/Toronto (Fri, work hours)  
+**Repo:** `~/omherm` · branch `main` · tip **`196c954`** (pushed)  
+**Role lock:** L1/L2 brain for **omherm coat + Hermes brain plug only**.  
+**Product:** Hermes brain · OMP InteractiveMode coat · launch `omh` / `omherm` (`MESHINA_TUI_BRAND=hermes`). Escape `MESHINA_TUI_OMP_BRAIN=1`. **No HMR** — quit + relaunch after coat/bridge edits.  
+**Binary:** `/home/nixos/.bun/bin/omherm`
 
 ---
 
-## Parallel-session boundaries (binding)
+## Parallel-session boundaries (binding — read first)
 
 | Lane | Owner | Touch? |
 |------|--------|--------|
-| `~/meshina` `stable/mesh-beta` model lineup / VITALS / Config A3 | **other session** | **NO** unless operator says |
-| Hub `plans/HANDOFF.md` / kanban model epic | other | **NO** |
-| `~/omherm` main tip | **this session** | YES |
-| `~/.hermes/` skill patches that affect all profiles | only with operator OK | careful |
-| Dual brain / Herm React tab strip / plasma OS | **never** | non-goal |
+| `~/meshina` `stable/mesh-beta` · Config A3 / Laguna+KAT OCI cutover · VITALS · LiteLLM routes | **mesh/infra session** | **NO** from TUI lane unless operator pins this session |
+| Hub `plans/HANDOFF.md` Config A3 next steps (T4–T8 etc.) | mesh session | **Do not replace.** Pointer-only edits OK |
+| `~/meshina` dirty tree (Dockerfile.laguna, cutover scripts, compose, slot units) | mesh session inflight | **NO** — leave for that lane |
+| `~/omherm` main | **this product lane** | YES |
+| Dual brain / Herm React strip / plasma OS / hub model-lineup thrash | **never** | non-goal |
 
-If a task needs mesh model probes, stop and ask — do not SSH topology rebuild from a TUI session.
+**Boot orientation for a fresh session:**
+
+```bash
+date; hostname; cd ~/omherm && git log -5 --oneline && git status -sb
+# Mesh lane (read-only glance if coordinating):
+cd ~/meshina && git status -sb | head -20 && head -30 plans/HANDOFF.md
+```
+
+If the task is mesh cutover / LiteLLM / systemd slots → use **meshina HANDOFF next steps**, not this file.
 
 ---
 
-## Tip state (verify on boot)
+## Tip lineage (omherm `main`, verify with `git log`)
 
-```bash
-date; cd ~/omherm && git log -8 --oneline && git status -sb
-```
+| Commit | What |
+|--------|------|
+| `196c954` | test path fix coat-identity |
+| `93123af` | **footer model + effort sync** with live Hermes identity |
+| `cb59f5d` | keep `org/name:tag` model ids (bareModelId fix) |
+| `e0249ec` | hub assign → gateway `/model … --global` |
+| `3be9e31` | Model hub Hermes inventory (Nous Portal chrome) |
+| `b8da0a2` | stream-scoped paint coalesce + spinner + boot marks |
+| `162adab` | sessions mouse/layout + port fail-loud banners |
+| `b2b98b0` | B2 perf + sticky chrome + tips checkpoint |
 
-**Landed this session (verify `git log`):**
+---
 
-1. Sessions mouse/layout + port fail-loud banners (baseline)  
-2. **Perf sweep:** stream-scoped `setStreamPaintCoalesce` · spinner contract fix · `bootMark` timeline · HermesBrain mid-stream dispose fail-loud · `docs/PERF_SWEEP.md`
+## Closed this arc (do not re-do)
 
-| Area | Detail |
+### Model hub + live switch
+- Hub UI = OMP chrome + **Hermes catalog** (`loadHermesModelCatalog` → `scopedModels`).
+- Default assign: `applyHermesModelLive` → `slash.exec` `/model <id> --provider <p> --global` (agent switch + config). Config-only is insufficient for running session.
+- **Bugfix:** `bareModelId` must only strip `<provider>/`, never org segment (`inclusionai/ling-…` stayed intact). Gateway “not found” prose = hard fail.
+- **Coat identity:** `hermes-coat-identity.ts` pushes Hermes model/effort into OMP `agent.setModel` (paint-only, no OMP auth) on install, `session.info`, hub assign, turn end. Thinking cycle under Hermes → `/reasoning <effort> --global`.
+
+### Perf / stability (prior)
+- Stream-scoped `setStreamPaintCoalesce`; spinner contract; `bootMark`; mid-stream dispose fail-loud.
+- Docs: `docs/PERF_SWEEP.md`.
+
+### Sessions / ports (prior)
+- Sessions table layout + mouse; port fail-loud banners.
+
+---
+
+## Next session — start here (omherm only)
+
+1. **Dogfood coat identity (5 min):** quit+relaunch `omh` → Model hub → pick Nous model with `org/name:tag` → confirm:
+   - status: `live Hermes session + config.yaml` (no “not found”)
+   - **footer model label moves** (not stuck MiniMax)
+   - assistant turn uses new model
+   - thinking cycle → status `Hermes reasoning → …` and Hermes effort sticks
+2. **P0 product dogfood** (`docs/DOGFOOD_CHECKLIST.md`): approvals+clarify ask-dialog; slash.exec short/long/dead-gateway; port CLI death banners.
+3. **Optional perf receipt:** `MTUI_PERF=1 omh` during long stream → stderr vs `docs/PERF_SWEEP.md`.
+4. **Named debt (only if operator asks):**
+   - Coat full history replay after Hermes resume
+   - OMP context window / cost still synthetic 128k on Hermes models
+   - Role-model cycle may still walk OMP registry under product brand
+   - Nous catalog context ceilings → coat compaction math
+   - Live `config.set` hot keys via ConfigPort only
+   - pi-tui overlay full-compose while stack open
+
+---
+
+## Key paths
+
+| What | Where |
 |------|--------|
-| Stream coalesce | Arm on `agent_start`, release on `agent_end`. Idle = stock TUI. Env `OMHERM_PAINT_COALESCE` / `MTUI_PERF` still always-on. |
-| Spinner | No default `|| true`; custom renderResult-only tools don't inherit generic animated pending |
-| Boot | Marks: hermes bootstrap start/done, tui_constructed, tui_first_frame (`MTUI_PERF=1` → stderr) |
-| Stability | `dispose()` while streaming → notice + mapper `forceEnd` before kill |
+| Catalog + live switch | `packages/hermes-bridge/src/hermes-model-catalog.ts` |
+| Brain + identity listeners | `packages/hermes-bridge/src/hermes-brain.ts` |
+| Coat paint sync | `packages/coding-agent/src/modes/hermes-coat-identity.ts` |
+| Brain install | `packages/coding-agent/src/modes/hermes-brain-install.ts` |
+| Hub wire | `selector-controller.ts` · `hermes-model-picker.ts` |
+| Thinking cycle | `input-controller.ts` → `cycleHermesThinking` |
+| Bar | `docs/CADILLAC.md` · `docs/HERMES_BRAIN.md` |
+| Backlog | `docs/REMAINING_WORK.md` |
+| Mesh parallel brief | `~/meshina/plans/HANDOFF.md` (Config A3 — **other lane**) |
 
-**Boot probes:**
+---
+
+## Tests (smoke)
 
 ```bash
-cd ~/omherm/packages/coding-agent && bun test \
-  test/modes/utils/perf-counters.test.ts \
-  test/modes/components/tool-execution-spinner.test.ts \
-  test/modes/components/hermes-sessions-list.test.ts
-cd ~/omherm/packages/hermes-bridge && bun test src/hermes-brain.test.ts
-# Measure live: MTUI_PERF=1 omh   → see docs/PERF_SWEEP.md
+cd ~/omherm && bun test \
+  packages/hermes-bridge/src/hermes-model-catalog.test.ts \
+  packages/hermes-bridge/src/hermes-brain.test.ts \
+  packages/coding-agent/test/modes/hermes-coat-identity.test.ts \
+  packages/coding-agent/test/modes/components/hermes-model-hub-feed.test.ts
 ```
 
-Docs spine: `docs/REMAINING_WORK.md` · this file · `docs/PERF_SWEEP.md` · `docs/DOGFOOD_CHECKLIST.md` · `docs/CADILLAC.md` · `docs/HERMES_BRAIN.md`.
-
 ---
 
-## Already shipped (prior tip)
+## Coordinate
 
-### Product
-- P2 skills/tools/memory ports + overlays + mapper notices + subagent trail + image paste marker + slash deep-links
-- Kanban board switch, slash.exec pager overlay, Hermes sessions list (coat full history replay still partial)
-- Quick-access: Settings · Kanban · Sessions · Model
-- **Sticky top chips** + **chat history browser**
-- Hermes startup tip pack · launchers `omh` / `mtui` / `omherm` with `MESHINA_TUI_BRAND=hermes`
-
-### Perf
-- Pass A/B/B2 counters + opt-in coalesce  
-- **Plus stream-scoped coalesce** (this session)
-
----
-
-## P0 wiring status (code — still needs operator dogfood)
-
-| Item | Code | Dogfood |
-|------|------|---------|
-| Approvals + clarify ask-dialog | wired | open |
-| Slash.exec + dead-gateway | wired | open |
-| Port CLI death banners | warning fg | open |
-
----
-
-## Named debt (do not “fix” by inventing a second store)
-
-- Coat full history replay after Hermes resume (notice-only OK until product decision)  
-- pi-tui overlay full-compose while stack open  
-- Live `config.set` hot keys via ConfigPort only  
-
----
-
-## Next operator moves
-
-1. Quit + relaunch `omh` / `omherm` (no HMR).  
-2. Dogfood P0 checklist.  
-3. Optional: `MTUI_PERF=1 omh` during a long stream — save stderr receipts against `docs/PERF_SWEEP.md`.  
-4. Do **not** touch hub meshina HANDOFF from this lane.
+- **This lane closed clean** on `main` (no intentional dirty tree at handoff write — re-check `git status`).
+- **Mesh lane owns** node-b OCI/systemd/LiteLLM dirt under `~/meshina`. Do not steal that WIP.
+- Fresh session: pick **one** lane from the boundary table before editing.

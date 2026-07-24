@@ -1,63 +1,62 @@
 # Remaining work — omherm M1′ (concrete)
 
-**Stamp:** 2026-07-24 · tip ahead of `b2b98b0` with sessions fix + **stream-scoped coalesce / spinner / boot marks** · Cadillac: `docs/CADILLAC.md` (binding bar).
-
-**Next-session brief:** [`docs/HANDOFF_PERF_WAVE_B.md`](./HANDOFF_PERF_WAVE_B.md) · **perf receipts:** [`docs/PERF_SWEEP.md`](./PERF_SWEEP.md)  
-**Bar:** every slice held against Cadillac pride test + ownership map + review checklist.  
-**Parallel:** do **not** edit `~/meshina` hub `plans/HANDOFF.md` / model-lineup from a TUI session.
-
----
-
-## Cadillac filter (what “done” means here)
-
-| Gate | Implication for remaining work |
-|------|--------------------------------|
-| One brain | P0 dogfood proves Hermes dialog host + slash.exec + ports — not OMP dual path |
-| One writer per fact | Sessions resume must stay Hermes SoT; coat chrome replay is **named debt**, not a second store |
-| Ports only | Fail-loud stays in port UI + port throw contract — no raw CLI spray |
-| Designed empty/error | Port banners on CLI death must read as **error**, not success accent |
-| Named debt | Coat history-after-resume, pi-tui overlay compose — fingerprinted below |
-| Contract tests | Spinner 6/6 green; brain dispose mid-stream covered |
+**Stamp:** 2026-07-24 ~16:20 America/Toronto · tip **`196c954`** (pushed)  
+**Next-session brief:** [`docs/HANDOFF_PERF_WAVE_B.md`](./HANDOFF_PERF_WAVE_B.md) · perf: [`docs/PERF_SWEEP.md`](./PERF_SWEEP.md)  
+**Bar:** `docs/CADILLAC.md`  
+**Parallel:** mesh Config A3 / OCI cutover lives in `~/meshina/plans/HANDOFF.md` — **do not thrash** from a TUI-only session.
 
 ---
 
-## Landed this arc (do not re-do)
+## Cadillac filter
 
-| Area | What | Cadillac |
-|------|------|----------|
-| Sticky chips + chat scroll | `b2b98b0` | coat paint ownership |
-| B2.1–B2.5 perf | counters/coalesce **opt-in** + **stream-scoped** arm | craft + no idle dual path |
-| Sessions table + mouse | layout + `routeSgrMouseInput(data, handler)` | coat chrome |
-| Spinner contract | opt-in `animatedPendingPreview` only | no ghost ticks |
-| Mid-stream brain dispose | notice + `forceEnd` | fail-loud |
-| P2 ports/overlays | skills/tools/memory via ports | ownership map |
-| P1 dashboard slices | cron/kanban/profile via ports | one writer |
+| Gate | Implication |
+|------|-------------|
+| One brain | Dogfood Hermes dialog + slash + ports — not OMP dual path |
+| One writer per fact | Hermes session model SoT; coat `session.model` is **paint mirror** via `hermes-coat-identity` |
+| Ports only | Fail-loud in port UI |
+| Named debt | History-after-resume, synthetic ctx windows — fingerprinted below |
 
 ---
 
-## P0 — product safety (Cadillac UX + fail-loud)
+## Landed (do not re-do)
 
-Code mostly landed. **Operator dogfood is the remaining gate** (not more coat features).
-
-| # | Item | Cadillac lens | Status |
-|---|------|---------------|--------|
-| 1 | Approvals + clarify → ask-dialog | Hermes brain owns prompt; coat hosts dialog only | **wired** · dogfood open |
-| 2 | Slash.exec live + pager + dead-gateway warning | slash via brain path; fail-loud | **wired** · dogfood open |
-| 3 | Port mutations fail-loud under CLI death | designed error state; ports throw | throws + **warning banner** |
-
-Dogfood script: `docs/DOGFOOD_CHECKLIST.md` §1.
+| Area | Tip / note |
+|------|------------|
+| Sticky chips + chat scroll | `b2b98b0` |
+| Stream-scoped coalesce + spinner + boot marks | `b8da0a2` |
+| Sessions table + mouse | `162adab` |
+| Model hub Hermes inventory | `3be9e31` |
+| Live `/model --global` via slash.exec | `e0249ec` |
+| org/name model id bareModelId | `cb59f5d` |
+| Footer + effort coat sync | `93123af` |
+| P2 ports / P1 cron-kanban-profile | prior |
 
 ---
 
-## P1 — sessions / config (named dual-SoT debt)
+## P0 — product safety (operator dogfood gate)
 
-| Item | Status | Exit condition |
-|------|--------|----------------|
-| Sessions list + gateway resume | **shipped** | — |
-| **Model hub → Hermes inventory** | **shipped** | OMP chrome + `loadHermesModelCatalog` scoped feed (Nous Portal, xAI OAuth, mesh, …) · default assign → `config.yaml` |
-| Coat full history replay after resume | **named debt** | implement coat inject from resume payload **or** document notice-only forever |
+| # | Item | Status |
+|---|------|--------|
+| 1 | Approvals + clarify ask-dialog | wired · **dogfood open** |
+| 2 | Slash.exec + pager + dead-gateway | wired · **dogfood open** |
+| 3 | Port CLI death banners | warning fg · **dogfood open** |
+| 4 | Model hub live switch + footer label | **code shipped** · **re-dogfood after relaunch** |
+
+Script: `docs/DOGFOOD_CHECKLIST.md` §1.
+
+---
+
+## P1 — coat ↔ Hermes identity residual
+
+| Item | Status | Exit |
+|------|--------|------|
+| Hub inventory + live switch + org/name ids | **shipped** | — |
+| Footer model / effort mirror | **shipped** | dogfood confirms label moves |
+| Coat full history after resume | **named debt** | inject from resume **or** notice-only forever |
+| Synthetic 128k ctx on Hermes models | open | map catalog / session.info context_max into coat |
+| Role-model cycle under product brand | open | Hermes-only cycle or disable OMP registry walk |
 | Live `config.set` hot keys | open | ConfigPort only |
-| Status-line invalidate after usage | partial | revision path |
+| Status-line after usage | partial | revision path exists |
 
 ---
 
@@ -65,25 +64,17 @@ Dogfood script: `docs/DOGFOOD_CHECKLIST.md` §1.
 
 | Done | Next | Non-goal |
 |------|------|----------|
-| Stream-scoped coalesce + boot marks + spinner green | live `MTUI_PERF=1` dogfood receipt under Hermes stream | lex fork, React |
-| Sticky/scroll chrome | — | dual brain |
-
-See `docs/PERF_SWEEP.md`.
+| Stream-scoped coalesce + boot + spinner | `MTUI_PERF=1` live receipt | lex fork, React, dual brain |
 
 ---
 
-## P3 non-goals (Cadillac anti-patterns)
+## P3 non-goals
 
-Dual brain · Herm top tab strip · markdown board as SoT · plasma OS · SQLite writers outside ports · hub model-lineup thrash
+Dual brain · Herm top tabs · markdown board as SoT · plasma OS · SQLite writers outside ports · hub Config A3 from TUI session
 
 ---
 
-## Cadillac PR paste (for next commit)
+## Fresh-session lane pick
 
-- [ ] Ownership table still true  
-- [ ] Hermes touch via port/public surface  
-- [ ] Contract test N/A or present  
-- [ ] No dual write  
-- [ ] Debt named (sessions replay)  
-- [ ] UX loading/error/empty  
-- [ ] Launch path `omh`/`omherm` brand hermes  
+1. **omherm product** → this file + `HANDOFF_PERF_WAVE_B.md`  
+2. **mesh Config A3 cutover** → `~/meshina/plans/HANDOFF.md` only (leave omherm alone)
