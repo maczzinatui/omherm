@@ -10,6 +10,9 @@
  */
 
 import { spawn } from "node:child_process"
+import { createTtlCache, PORT_LIST_TTL_MS } from "./port-list-cache.ts"
+
+const listCache = createTtlCache<Skill[]>(PORT_LIST_TTL_MS)
 
 export type SkillSource = "builtin" | "hub" | "local" | "unknown"
 export type SkillTrust = "builtin" | "official" | "local" | "unknown"
@@ -165,6 +168,9 @@ export function parseSkillsListOutput(text: string): Skill[] {
 export function createSkillsPort(): SkillPort {
 	return {
 		async list(opts = {}) {
+			const cacheKey = `list:${opts.source ?? "all"}:${opts.enabledOnly ? "1" : "0"}`
+			const hit = listCache.get(cacheKey)
+			if (hit) return hit
 			const args = ["list"]
 			if (opts.source && opts.source !== "all") args.push("--source", opts.source)
 			if (opts.enabledOnly) args.push("--enabled-only")
@@ -174,6 +180,7 @@ export function createSkillsPort(): SkillPort {
 			}
 			let parsed = parseSkillsListOutput(r.stdout)
 			if (opts.enabledOnly) parsed = parsed.filter((s) => s.status === "enabled")
+			listCache.set(cacheKey, parsed)
 			return parsed
 		},
 
@@ -187,12 +194,14 @@ export function createSkillsPort(): SkillPort {
 
 		async enable(name) {
 			const r = await runSkills(["enable", name])
+			listCache.invalidate()
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `enable failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},
 
 		async disable(name) {
 			const r = await runSkills(["disable", name])
+			listCache.invalidate()
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `disable failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},

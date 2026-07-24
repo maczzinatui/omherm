@@ -81,6 +81,8 @@ export class HermesInventoryListComponent implements Component {
 	#actionStartRow = -1
 	#actionCount = 0
 	#hoverIdx = -1
+	#hoverRaf: ReturnType<typeof setTimeout> | null = null
+	#pendingHover = -2
 
 	constructor(tui: TUI, kind: HermesInventoryKind, onCancel: () => void) {
 		this.#tui = tui
@@ -426,8 +428,17 @@ export class HermesInventoryListComponent implements Component {
 				if (ev.row >= this.#tableStartRow && ev.row < this.#tableStartRow + this.#tableHitCount) {
 					const idx = this.#scroll + (ev.row - this.#tableStartRow)
 					if (idx >= 0 && idx < this.#count() && idx !== this.#hoverIdx) {
-						this.#hoverIdx = idx
-						this.#paintLocal()
+						this.#pendingHover = idx
+						if (this.#hoverRaf == null) {
+							// coalesce hover paints (~60fps max)
+							this.#hoverRaf = setTimeout(() => {
+								this.#hoverRaf = null
+								if (this.#pendingHover >= 0 && this.#pendingHover !== this.#hoverIdx) {
+									this.#hoverIdx = this.#pendingHover
+									this.#paintLocal()
+								}
+							}, 16)
+						}
 					}
 				}
 				return

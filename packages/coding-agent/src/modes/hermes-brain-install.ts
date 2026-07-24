@@ -151,9 +151,35 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
   }
 
   // Refresh gateway usage after each mapped turn so status line % stays live.
+  // Bump contextUsageRevision so status-line context memoization invalidates
+  // (private OMP counter only moves on pending snapshot; Hermes owns real %).
+  let hermesCtxRevBump = 0
+  const proto = Object.getPrototypeOf(session)
+  const origCtxRevDesc = Object.getOwnPropertyDescriptor(proto, "contextUsageRevision")
+  Object.defineProperty(session, "contextUsageRevision", {
+    configurable: true,
+    enumerable: true,
+    get() {
+      let base = 0
+      try {
+        if (typeof origCtxRevDesc?.get === "function") {
+          base = Number(origCtxRevDesc.get.call(session) ?? 0)
+        }
+      } catch {
+        base = 0
+      }
+      return base + hermesCtxRevBump
+    },
+  })
+
   const unsubUsage = brain.subscribe((ev) => {
     if (ev.type === "turn_end" || ev.type === "agent_end") {
-      void brain.refreshInfo().catch(() => {})
+      void brain
+        .refreshInfo()
+        .then(() => {
+          hermesCtxRevBump++
+        })
+        .catch(() => {})
     }
   })
 
@@ -185,6 +211,11 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
       session.followUp = origFollowUp
       session.abort = origAbort
       session.getContextUsage = origGetContextUsage
+      try {
+        delete (session as unknown as { contextUsageRevision?: unknown }).contextUsageRevision
+      } catch {
+        /* restore via prototype */
+      }
       if (origIsStreamingDesc) {
         Object.defineProperty(session, "isStreaming", origIsStreamingDesc)
       }

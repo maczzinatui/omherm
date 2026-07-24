@@ -13,6 +13,9 @@
  */
 
 import { spawn } from "node:child_process"
+import { createTtlCache, PORT_LIST_TTL_MS } from "./port-list-cache.ts"
+
+const listCache = createTtlCache<Tool[]>(PORT_LIST_TTL_MS)
 
 export type ToolPlatform =
 	| "cli"
@@ -218,13 +221,18 @@ export function parseToolsListOutput(text: string): Tool[] {
 export function createToolsPort(): ToolPort {
 	return {
 		async list(opts = {}) {
+			const cacheKey = `list:${opts.platform ?? "default"}`
+			const hit = listCache.get(cacheKey)
+			if (hit) return hit
 			const args = ["list"]
 			if (opts.platform) args.push("--platform", opts.platform)
 			const r = await runTools(args)
 			if (!r.ok && !r.stdout.trim()) {
 				throw new Error(r.stderr.trim() || `hermes tools list failed (${r.code})`)
 			}
-			return parseToolsListOutput(r.stdout)
+			const parsed = parseToolsListOutput(r.stdout)
+			listCache.set(cacheKey, parsed)
+			return parsed
 		},
 
 		async enable(name, platform) {
@@ -232,6 +240,7 @@ export function createToolsPort(): ToolPort {
 			if (platform) args.push("--platform", platform)
 			args.push(name)
 			const r = await runTools(args)
+			listCache.invalidate()
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `enable failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},
@@ -241,6 +250,7 @@ export function createToolsPort(): ToolPort {
 			if (platform) args.push("--platform", platform)
 			args.push(name)
 			const r = await runTools(args)
+			listCache.invalidate()
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `disable failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},
@@ -250,6 +260,7 @@ export function createToolsPort(): ToolPort {
 			if (platform) args.push("--platform", platform)
 			args.push(name)
 			const r = await runTools(args)
+			listCache.invalidate()
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `post-setup failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},

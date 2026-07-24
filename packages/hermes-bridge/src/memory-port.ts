@@ -15,6 +15,9 @@ import { existsSync, readFileSync, statSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import { spawn } from "node:child_process"
+import { createTtlCache, PORT_LIST_TTL_MS } from "./port-list-cache.ts"
+
+const statusCache = createTtlCache<MemoryStatus>(PORT_LIST_TTL_MS)
 
 export type MemoryKind = "user" | "memory"
 
@@ -210,10 +213,15 @@ export function createMemoryPort(): MemoryPort {
 		},
 
 		async status() {
+			// status is CLI-spawned; short TTL so inventory reopen is cheap
+			const hit = statusCache.get("status")
+			if (hit) return hit
 			const r = await runMemory(["status"])
 			const text = (r.stdout || r.stderr || "").trim()
 			if (!text) throw new Error(r.stderr.trim() || `memory status failed (${r.code})`)
-			return parseMemoryStatusOutput(text)
+			const parsed = parseMemoryStatusOutput(text)
+			statusCache.set("status", parsed)
+			return parsed
 		},
 	}
 }
