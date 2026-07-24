@@ -16,14 +16,30 @@ export const HERMES_OPEN_MODEL_HUB_PATH = "hermes:action.open_model_hub" as Sett
 export const HERMES_OPEN_KANBAN_PATH = "hermes:action.open_kanban" as SettingPath;
 export const HERMES_OPEN_CRON_PATH = "hermes:action.open_cron" as SettingPath;
 export const HERMES_OPEN_PROFILES_PATH = "hermes:action.open_profiles" as SettingPath;
+export const HERMES_OPEN_SKILLS_PATH = "hermes:action.open_skills" as SettingPath;
+export const HERMES_OPEN_TOOLS_PATH = "hermes:action.open_tools" as SettingPath;
+export const HERMES_OPEN_MEMORY_PATH = "hermes:action.open_memory" as SettingPath;
+export const HERMES_OPEN_SUBAGENTS_PATH = "hermes:action.open_subagents" as SettingPath;
 
-export type HermesPortAction = "kanban" | "cron" | "profiles" | "model_hub";
+export type HermesPortAction =
+	| "kanban"
+	| "cron"
+	| "profiles"
+	| "skills"
+	| "tools"
+	| "memory"
+	| "subagents"
+	| "model_hub";
 
 export function hermesPortActionFromPath(path: string): HermesPortAction | null {
 	if (path === HERMES_OPEN_MODEL_HUB_PATH) return "model_hub";
 	if (path === HERMES_OPEN_KANBAN_PATH) return "kanban";
 	if (path === HERMES_OPEN_CRON_PATH) return "cron";
 	if (path === HERMES_OPEN_PROFILES_PATH) return "profiles";
+	if (path === HERMES_OPEN_SKILLS_PATH) return "skills";
+	if (path === HERMES_OPEN_TOOLS_PATH) return "tools";
+	if (path === HERMES_OPEN_MEMORY_PATH) return "memory";
+	if (path === HERMES_OPEN_SUBAGENTS_PATH) return "subagents";
 	return null;
 }
 
@@ -102,6 +118,42 @@ function portLauncherDefs(): SettingDef[] {
 			description: "Hermes profiles via ProfilePort (FS + hermes profile CLI).",
 			tab: "tasks",
 			group: "Profiles",
+			type: "enum",
+			values: ["open"],
+		},
+		{
+			path: HERMES_OPEN_SKILLS_PATH,
+			label: "Open Skills…",
+			description: "Installed skills via SkillsPort (enable/disable/inspect).",
+			tab: "tasks",
+			group: "Commands & Skills",
+			type: "enum",
+			values: ["open"],
+		},
+		{
+			path: HERMES_OPEN_TOOLS_PATH,
+			label: "Open Tools…",
+			description: "Built-in toolsets + MCP servers via ToolsPort.",
+			tab: "tasks",
+			group: "Commands & Skills",
+			type: "enum",
+			values: ["open"],
+		},
+		{
+			path: HERMES_OPEN_MEMORY_PATH,
+			label: "Open Memory…",
+			description: "USER.md / MEMORY.md viewer + memory status.",
+			tab: "tasks",
+			group: "Profiles",
+			type: "enum",
+			values: ["open"],
+		},
+		{
+			path: HERMES_OPEN_SUBAGENTS_PATH,
+			label: "Open Subagent trail…",
+			description: "Live subagent.* / browser.progress trail for this session.",
+			tab: "tasks",
+			group: "Subagents",
 			type: "enum",
 			values: ["open"],
 		},

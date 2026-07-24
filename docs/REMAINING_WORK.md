@@ -1,8 +1,8 @@
 # Remaining work — mtui M1′ (concrete)
 
-**Stamp:** 2026-07-24 (P1 ports + steer/context bind) · Cadillac: Hermes brain, OMP coat, one launch `mtui`.
+**Stamp:** 2026-07-24 (P2 ports + overlays + mapper + image path) · Cadillac: Hermes brain, OMP coat, one launch `mtui`.
 
-Dogfood mouse/chrome arc shipped (`df4f1f3` + follow-ups). P1 dashboard slice landed this session (see below). Next session: **P2 polish / mapper**.
+Dogfood mouse/chrome + P1 dashboard + **P2 inventory/mapper** landed. Relaunch `mtui` after coat/bridge edits (no HMR).
 
 ---
 
@@ -11,11 +11,15 @@ Dogfood mouse/chrome arc shipped (`df4f1f3` + follow-ups). P1 dashboard slice la
 | Area | What |
 |------|------|
 | Mouse/chrome dogfood | top-left overlays, async ports, hover sidebar, Esc stack, quick-access chip |
-| P1 cron runs | richer `parseCronRunsOutput` + detail pane paint (`formatCronRunLine`); fail-loud runs refresh |
-| P1 kanban comment | form + `m` hotkey → `kanbanPort.comment` |
-| P1 profile confirm | use/delete confirms with `confirmSessionEnd` / `confirmDestroy` |
-| P1 status context % | `getContextUsage` override from gateway usage; turn_end usage merge; refreshInfo on turn end |
-| P1 session.steer | `gateway.steer` → brain.steer → followUp; fallback interrupt+prompt |
+| P1 cron / kanban comment / profile confirm / steer / context% | `0a66cfc` + follow-ups |
+| P2 Skills port | `skills-port.ts` + tests (`ee48c33`) |
+| P2 Tools port | `tools-port.ts` + tests (`5a34482`) |
+| P2 Memory port | `memory-port.ts` + tests (`6bbc1ab`) |
+| P2 Mapper gap | GatewayEvent/UiEvent + GatewayTurnMapper notices/working_status only (never transcript noise); unit tests |
+| P2 Skills/Tools/Memory overlays | `hermes-inventory-list.ts` + settings launchers + `/skills` `/tools` `/memory` slash intercepts |
+| P2 Subagent trail | `subagent-trail.ts` store + overlay; brain subscribe feed; `/subagents` |
+| P2 Image attach | Hermes brain path: clipboard → `~/.hermes/tmp/mtui-paste/` + editor path marker (no fake gateway RPC) |
+| P2 Slash extras | bare `/skills|/tools|/memory|/subagents` → overlays; `/yolo|/compress|/goal|/browser` stay slash.exec |
 
 ---
 
@@ -36,16 +40,18 @@ Dogfood mouse/chrome arc shipped (`df4f1f3` + follow-ups). P1 dashboard slice la
 | 8 | Live `config.set` for hot keys | CLI-only today; ConfigPort exists |
 | 10b | Status line live refresh tick after usage patch | Override present; may need status-line invalidate on refreshInfo |
 
-## P2 — polish / mapper (NEXT SESSION PRIMARY)
+## P2 — polish / mapper
 
-| # | Item |
-|---|------|
-| 11 | Skills + toolsets panels |
-| 12 | Memory panel (USER/MEMORY) |
-| 13 | Subagent trail cards |
-| 14 | Mapper: btw, review.summary, background.complete, browser.progress, moa.* |
-| 15 | Image attach / clipboard via gateway |
-| 16 | `/yolo` `/compress` `/goal` `/browser` handlers |
+| # | Item | Status |
+|---|------|--------|
+| 11 | Skills + toolsets panels | **shipped** inventory overlay |
+| 12 | Memory panel | **shipped** |
+| 13 | Subagent trail cards | **shipped** (store + overlay) |
+| 14 | Mapper gap events | **shipped** + tests |
+| 15 | Image attach | **shipped** Hermes path marker |
+| 16 | Slash extras | **shipped** intercepts + exec passthrough |
+
+Dogfood still required after relaunch.
 
 ## P3 — explicit non-goals
 
@@ -65,7 +71,7 @@ Dual brain, Herm top tab bar, plasma-fractal OS, web dashboard chase, plain-whee
 
 ## Cadillac checklist
 
-- Ownership: board/cron/profile writes only via ports  
+- Ownership: board/cron/profile/skills/tools writes only via ports  
 - No Herm React tab strip / second coordinator  
 - Debt named here if deferred  
 - **Relaunch `mtui` after coat/bridge edits** (no hot reload)  

@@ -1496,6 +1496,33 @@ export class InputController {
 				// Keep the normalized image when resize fails.
 			}
 		}
+		// Hermes brain: gateway prompt.submit is text-only. Persist clipboard
+		// image to disk and inject a path marker so the model can vision/read it.
+		// (No invented image_attach RPC — client-side path only.)
+		try {
+			const { getInstalledHermesBrain } = await import("../hermes-brain-install.ts");
+			if (getInstalledHermesBrain(this.ctx.session)) {
+				const ext =
+					imageData.mimeType.includes("png")
+						? "png"
+						: imageData.mimeType.includes("webp")
+							? "webp"
+							: imageData.mimeType.includes("gif")
+								? "gif"
+								: "jpg";
+				const dir = path.join(process.env.HERMES_HOME?.trim() || path.join(process.env.HOME || "/tmp", ".hermes"), "tmp", "mtui-paste");
+				await fs.mkdir(dir, { recursive: true });
+				const filePath = path.join(dir, `paste-${Date.now()}.${ext}`);
+				await fs.writeFile(filePath, Buffer.from(imageData.data, "base64"));
+				const marker = `\n[Attached image: ${filePath}]\nUse vision / read this path if needed.\n`;
+				this.ctx.editor.insertText(marker);
+				this.ctx.showStatus(`Hermes: image saved → ${filePath}`);
+				this.ctx.ui.requestRender();
+				return true;
+			}
+		} catch {
+			/* fall through to OMP pending-image path */
+		}
 		await this.#insertPendingImage(imageData);
 		return true;
 	}

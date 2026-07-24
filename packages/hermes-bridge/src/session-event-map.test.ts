@@ -380,3 +380,70 @@ describe("mapGatewayToUi status / thinking", () => {
 		expect(think.some((e) => e.type === "message_update")).toBe(true);
 	});
 });
+
+describe("P2 mapper gap — subagent / review / browser / moa / background", () => {
+	test("mapGatewayToUi maps subagent lifecycle", () => {
+		expect(
+			mapGatewayToUi({
+				type: "subagent.start",
+				payload: { subagent_id: "s1", goal: "probe", preview: "go" },
+			}),
+		).toEqual({
+			kind: "subagent_start",
+			subagentId: "s1",
+			goal: "probe",
+			preview: "go",
+		});
+		expect(
+			mapGatewayToUi({
+				type: "subagent.tool",
+				payload: { subagent_id: "s1", tool: "terminal", preview: "ls" },
+			}),
+		).toMatchObject({ kind: "subagent_tool", subagentId: "s1", tool: "terminal" });
+		expect(
+			mapGatewayToUi({
+				type: "subagent.complete",
+				payload: { subagent_id: "s1", preview: "done" },
+			}),
+		).toMatchObject({ kind: "subagent_complete", subagentId: "s1", preview: "done" });
+		expect(mapGatewayToUi({ type: "subagent.start", payload: {} })).toBeNull();
+	});
+
+	test("mapGatewayToUi maps review / browser / moa / background", () => {
+		expect(mapGatewayToUi({ type: "review.summary", payload: { text: "lgtm" } })).toEqual({
+			kind: "review_summary",
+			text: "lgtm",
+		});
+		expect(
+			mapGatewayToUi({
+				type: "browser.progress",
+				payload: { message: "nav", level: "info" },
+			}),
+		).toEqual({ kind: "browser_progress", message: "nav", level: "info" });
+		expect(
+			mapGatewayToUi({
+				type: "background.complete",
+				payload: { task_id: "t1", text: "bg done" },
+			}),
+		).toEqual({ kind: "background_complete", taskId: "t1", text: "bg done" });
+		expect(
+			mapGatewayToUi({
+				type: "moa.reference",
+				payload: { url: "https://x", title: "X" },
+			}),
+		).toMatchObject({ kind: "moa_reference", url: "https://x", title: "X" });
+	});
+
+	test("GatewayTurnMapper surfaces gap events as notices / working_status (not transcript)", () => {
+		const m = new GatewayTurnMapper();
+		const start = m.feedUi({ kind: "subagent_start", subagentId: "s1", goal: "g" });
+		expect(start.some((e) => e.type === "notice")).toBe(true);
+		expect(start.some((e) => e.type === "message_update")).toBe(false);
+		const text = m.feedUi({ kind: "subagent_text", subagentId: "s1", text: "hi" });
+		expect(text).toEqual([{ type: "working_status", message: "subagent: hi" }]);
+		const think = m.feedUi({ kind: "subagent_thinking", subagentId: "s1", text: "..." });
+		expect(think).toEqual([]);
+		const bg = m.feedUi({ kind: "background_complete", taskId: "t", text: "ok" });
+		expect(bg[0]?.type).toBe("notice");
+	});
+});

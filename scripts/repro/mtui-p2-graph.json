@@ -1,0 +1,62 @@
+{
+  "epic": {
+    "title": "mtui P2 — skills/toolsets/memory panels + mapper gap + image attach + slash verify",
+    "body": "Pick back up HANDOFF P2 in full. Meshina-tui main @0a66cfc. Six items: skills/toolsets panels, memory panel, subagent trail cards, mapper gap (btw/review.summary/background.complete/browser.progress/moa.*), image attach, /yolo /compress /goal /browser handlers. Coordination: mtui is local ts/bun work in ~/meshina-tui — no mesh infra, no node-c. Relaunch mtui after coat/bridge edits. Reference: docs/REMAINING_WORK.md, docs/HERMES_BRAIN.md, docs/CADILLAC.md."
+  },
+  "tasks": [
+    {
+      "idempotency_key": "mtui-p2-skills-port",
+      "title": "Skills port (skills-port.ts) + tests — parses hermes skills list human output, list/enable/disable",
+      "body": "New port following kanban-port/cron-port shape. Parse `hermes skills list` table (Name/Category/Source/Trust/Status columns). list(opts?) → Skill[]; enable(name) → text; disable(name) → text; inspect(name) → text; raw line for log. Export from index.ts. Tests: parseSkillsListOutput covers builtin/local sources, enabled/disabled, truncated table.",
+      "priority": 4
+    },
+    {
+      "idempotency_key": "mtui-p2-tools-port",
+      "title": "Tools port (tools-port.ts) + tests — parses hermes tools list human output, list/enable/disable per platform",
+      "body": "New port. Parse `hermes tools list` table (Built-in toolsets + MCP servers sections). list(opts?) → Tool[]; enable(name, platform?) → text; disable(name, platform?) → text. Distinguish built-in (name only) vs MCP (server:tool). Tests cover section split, status marks.",
+      "priority": 4
+    },
+    {
+      "idempotency_key": "mtui-p2-memory-port",
+      "title": "Memory port (memory-port.ts) + tests — reads USER/MEMORY.md + hermes memory status",
+      "body": "Read built-in ~/.hermes/memories/{USER,MEMORY}.md via hermesRootFromHome. status() → runs `hermes memory status`, parses provider section. reload() re-reads files. List of (path, content, bytes, chars). Tests cover missing files, both files present, status parse.",
+      "priority": 4
+    },
+    {
+      "idempotency_key": "mtui-p2-mapper-gap",
+      "title": "Mapper gap — extend GatewayEvent + UiEvent + mapGatewayToUi for subagent.* / review.summary / browser.progress / moa.* / background.complete",
+      "body": "btw is NOT a gateway event (it's a CLI alias for /background). Real gateway events: subagent.start, subagent.text, subagent.thinking, subagent.tool, subagent.complete, review.summary, browser.progress, moa.reference, moa.aggregating, background.complete (task_id, text). Add to KNOWN set, UiEvent kinds, mapGatewayToUi cases, session-event-map subagent trail builder, types.ts. Tests.",
+      "priority": 4
+    },
+    {
+      "idempotency_key": "mtui-p2-subagent-trail",
+      "title": "Subagent trail overlay — new component subscribing to mapped subagent.* + browser.progress events",
+      "body": "New overlay (separate from hermes-port-list because subagent events stream live during a turn). Table of active subagents with status/text/preview. Toggle with /subagents slash or auto-show when a subagent starts. Depends on P2.4 mapper.",
+      "priority": 4
+    },
+    {
+      "idempotency_key": "mtui-p2-skills-tools-overlay",
+      "title": "Skills + Tools overlay — table+detail split reusing overlay-box chrome, deep-link /skills /tools",
+      "body": "New HermesPortListComponent fork (skills-tools-list). Reuses topBorder/splitRow/divider chrome. Two-kind (skills|tools). Action keys: enable/disable for both; inspect for skills. Slash route: bare /skills → port overlay; /skills list → exec. Same for /tools. Depends on P2.1 + P2.2.",
+      "priority": 4
+    },
+    {
+      "idempotency_key": "mtui-p2-memory-overlay",
+      "title": "Memory overlay — read-only viewer (USER.md / MEMORY.md) with reload + char counts",
+      "body": "New component memory-list. Two tabs (USER, MEMORY) with file path, byte count, char count, scrollable content. Reload on R. Depends on P2.3.",
+      "priority": 4
+    },
+    {
+      "idempotency_key": "mtui-p2-image-attach",
+      "title": "Image attach wire — connect app.clipboard.pasteImage to Hermes-brain-aware flow",
+      "body": "Gateway prompt.submit only takes text. Approach: clipboard image runs through existing OMP inspect-image tool client-side (path exists), inspect returns vision description, then prompt.submit text includes description. No invented RPC. Wire HermesBrain.promptWithImage(image) that runs inspect via OMP session, then submits text. Hook from input-controller pasteImage handler.",
+      "priority": 4
+    },
+    {
+      "idempotency_key": "mtui-p2-slash-extras",
+      "title": "Slash extras live-verify — dogfood /yolo /compress /goal /browser + add /skills /tools /memory port intercepts",
+      "body": "Routes already wired in hermes-slash-router.ts to slash.exec. Verify the gateway honors them (live test against running gateway). Add /skills, /tools, /memory to port intercept set in router so bare forms open overlays. Update HERMES_BUILTIN_SLASH if needed.",
+      "priority": 4
+    }
+  ]
+}

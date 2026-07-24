@@ -738,7 +738,101 @@ export class GatewayTurnMapper {
 				return [
 					{ type: "working_status", message: ev.text },
 					{ type: "notice", level: "info", message: ev.text, source: "hermes-gateway" },
-				];
+				]
+			// ===== P2 mapper gap: surface as notices / working_status only =====
+			case "subagent_start": {
+				const label = ev.preview || ev.goal || ev.subagentId || "subagent"
+				return [
+					{
+						type: "notice",
+						level: "info",
+						message: `subagent ${ev.subagentId || ""} start: ${label}`,
+						source: "subagent",
+					},
+				]
+			}
+			case "subagent_text":
+				// Streamed child text — drop from main transcript (no subagent transcript
+				// in OMP today); keep a transient working_status so operator sees activity.
+				return ev.text
+					? [{ type: "working_status", message: `subagent: ${ev.text}` }]
+					: []
+			case "subagent_thinking":
+				return []
+			case "subagent_tool":
+				return [
+					{
+						type: "working_status",
+						message: `subagent tool: ${ev.tool || "?"}${ev.preview ? ` — ${ev.preview.slice(0, 80)}` : ""}`,
+					},
+				]
+			case "subagent_complete":
+				return [
+					{
+						type: "notice",
+						level: "info",
+						message: `subagent ${ev.subagentId || ""} done: ${ev.preview || ev.resultText || "(no preview)"}`.slice(0, 240),
+						source: "subagent",
+					},
+				]
+			case "review_summary":
+				return ev.text
+					? [
+							{
+								type: "notice",
+								level: "info",
+								message: `review: ${ev.text}`.slice(0, 240),
+								source: "review",
+							},
+						]
+					: []
+			case "browser_progress":
+				return ev.message
+					? [
+							{
+								type: "working_status",
+								message: `browser: ${ev.message}`,
+							},
+						]
+					: []
+			case "moa_reference":
+				return ev.url
+					? [
+							{
+								type: "notice",
+								level: "info",
+								message: `moa ref: ${ev.title || ev.url}`.slice(0, 200),
+								source: "moa",
+							},
+						]
+					: []
+			case "moa_aggregating":
+				return [
+					{
+						type: "working_status",
+						message: `moa aggregating: ${ev.aggregator || "..."}`,
+					},
+				]
+			case "background_complete":
+				return [
+					{
+						type: "notice",
+						level: "info",
+						message: `background ${ev.taskId || ""} done: ${ev.text || "(no text)"}`.slice(0, 240),
+						source: "background",
+					},
+				]
+			case "skin_changed":
+				return [
+					{
+						type: "notice",
+						level: "info",
+						message: `skin: ${ev.skin || "(none)"}`,
+						source: "skin",
+					},
+				]
+			case "terminal_close":
+				return [];
 			default:
 				return [];
 		}

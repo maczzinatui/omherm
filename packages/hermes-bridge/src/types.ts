@@ -84,6 +84,52 @@ export type GatewayEvent =
       type: "approval.request"
       payload: { command: string; description: string }
     }
+  | { type: "skin.changed"; payload?: { skin?: string } }
+  | { type: "terminal.close"; payload?: { process_id?: string } }
+  | {
+      type: "subagent.start"
+      payload?: {
+        subagent_id?: string
+        goal?: string
+		preview?: string
+      }
+    }
+  | {
+      type: "subagent.text"
+      payload?: { subagent_id?: string; text?: string }
+    }
+  | {
+      type: "subagent.thinking"
+      payload?: { subagent_id?: string; text?: string }
+    }
+  | {
+      type: "subagent.tool"
+      payload?: { subagent_id?: string; tool?: string; preview?: string; args?: unknown }
+    }
+  | {
+      type: "subagent.complete"
+      payload?: { subagent_id?: string; preview?: string; result_text?: string }
+    }
+  | {
+      type: "review.summary"
+      payload?: { text?: string }
+    }
+  | {
+      type: "browser.progress"
+      payload?: { message?: string; level?: "info" | "warning" | "error" }
+    }
+  | {
+      type: "moa.reference"
+      payload?: { url?: string; title?: string; index?: number; count?: number }
+    }
+  | {
+      type: "moa.aggregating"
+      payload?: { aggregator?: string }
+    }
+  | {
+      type: "background.complete"
+      payload?: { task_id?: string; text?: string }
+    }
   | { type: "error"; payload?: { message?: string } }
 
 const KNOWN = new Set([
@@ -107,6 +153,18 @@ const KNOWN = new Set([
   "tool.complete",
   "clarify.request",
   "approval.request",
+  "skin.changed",
+  "terminal.close",
+  "subagent.start",
+  "subagent.text",
+  "subagent.thinking",
+  "subagent.tool",
+  "subagent.complete",
+  "review.summary",
+  "browser.progress",
+  "moa.reference",
+  "moa.aggregating",
+  "background.complete",
   "error",
 ])
 
@@ -165,6 +223,34 @@ export type UiEvent =
       smart_denied?: boolean
     }
   | { kind: "turn_end"; usage?: Usage }
+  // ===== P2 mapper gap: subagent / review / browser / moa / background =====
+  | { kind: "subagent_start"; subagentId?: string; goal?: string; preview?: string }
+  | { kind: "subagent_text"; subagentId?: string; text?: string }
+  | { kind: "subagent_thinking"; subagentId?: string; text?: string }
+  | {
+      kind: "subagent_tool"
+      subagentId?: string
+      tool?: string
+      preview?: string
+      args?: unknown
+    }
+  | {
+      kind: "subagent_complete"
+      subagentId?: string
+      preview?: string
+      resultText?: string
+    }
+  | { kind: "review_summary"; text?: string }
+  | {
+      kind: "browser_progress"
+      message?: string
+      level?: "info" | "warning" | "error"
+    }
+  | { kind: "moa_reference"; url?: string; title?: string; index?: number; count?: number }
+  | { kind: "moa_aggregating"; aggregator?: string }
+  | { kind: "background_complete"; taskId?: string; text?: string }
+  | { kind: "skin_changed"; skin?: string }
+  | { kind: "terminal_close"; processId?: string }
 
 export function mapGatewayToUi(ev: GatewayEvent): UiEvent | UiEvent[] | null {
   switch (ev.type) {
@@ -297,6 +383,80 @@ export function mapGatewayToUi(ev: GatewayEvent): UiEvent | UiEvent[] | null {
     }
     case "error":
       return { kind: "error", text: ev.payload?.message || "error" }
+    // ===== P2 mapper gap =====
+    case "skin.changed":
+      return ev.payload?.skin ? { kind: "skin_changed", skin: ev.payload.skin } : null
+    case "terminal.close":
+      return ev.payload?.process_id
+        ? { kind: "terminal_close", processId: ev.payload.process_id }
+        : null
+    case "subagent.start": {
+      const p = ev.payload as { subagent_id?: string; goal?: string; preview?: string } | undefined
+      if (!p?.subagent_id) return null
+      return {
+        kind: "subagent_start",
+        subagentId: p.subagent_id,
+        goal: p.goal,
+        preview: p.preview,
+      }
+    }
+    case "subagent.text":
+      return {
+        kind: "subagent_text",
+        subagentId: (ev.payload as { subagent_id?: string })?.subagent_id,
+        text: ev.payload?.text,
+      }
+    case "subagent.thinking":
+      return {
+        kind: "subagent_thinking",
+        subagentId: (ev.payload as { subagent_id?: string })?.subagent_id,
+        text: ev.payload?.text,
+      }
+    case "subagent.tool": {
+      const p = ev.payload as { subagent_id?: string; tool?: string; preview?: string; args?: unknown } | undefined
+      if (!p?.subagent_id) return null
+      return {
+        kind: "subagent_tool",
+        subagentId: p.subagent_id,
+        tool: p.tool,
+        preview: p.preview,
+        args: p.args,
+      }
+    }
+    case "subagent.complete": {
+      const p = ev.payload as { subagent_id?: string; preview?: string; result_text?: string } | undefined
+      if (!p?.subagent_id) return null
+      return {
+        kind: "subagent_complete",
+        subagentId: p.subagent_id,
+        preview: p.preview,
+        resultText: p.result_text,
+      }
+    }
+    case "review.summary":
+      return ev.payload?.text ? { kind: "review_summary", text: ev.payload.text } : null
+    case "browser.progress":
+      return ev.payload?.message
+        ? {
+            kind: "browser_progress",
+            message: ev.payload.message,
+            level: (ev.payload as { level?: "info" | "warning" | "error" }).level,
+          }
+        : null
+    case "moa.reference":
+      return {
+        kind: "moa_reference",
+        url: ev.payload?.url,
+        title: ev.payload?.title,
+        index: ev.payload?.index,
+        count: ev.payload?.count,
+      }
+    case "moa.aggregating":
+      return { kind: "moa_aggregating", aggregator: ev.payload?.aggregator }
+    case "background.complete":
+      return ev.payload?.text
+        ? { kind: "background_complete", taskId: ev.payload.task_id, text: ev.payload.text }
+        : null
     default:
       return null
   }

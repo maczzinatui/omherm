@@ -368,7 +368,7 @@ export interface InteractiveModeContext {
 
 	// Selector handling
 	showSettingsSelector(): void;
-	showHermesPortList(kind: "kanban" | "cron" | "profiles"): void;
+	showHermesPortList(kind: "kanban" | "cron" | "profiles" | "skills" | "tools" | "memory" | "subagents"): void;
 	showAdvisorConfigure(): void;
 	showHistorySearch(): void;
 	showExtensionsDashboard(): void;

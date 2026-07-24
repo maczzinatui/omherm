@@ -4648,7 +4648,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#selectorController.showSettingsSelector();
 	}
 
-	showHermesPortList(kind: "kanban" | "cron" | "profiles"): void {
+	showHermesPortList(kind: "kanban" | "cron" | "profiles" | "skills" | "tools" | "memory" | "subagents"): void {
 		this.#selectorController.showHermesPortList(kind);
 	}
 

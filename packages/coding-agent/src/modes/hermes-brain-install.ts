@@ -17,6 +17,7 @@ import {
 } from "@meshina/hermes-bridge"
 import type { AgentSession, AgentSessionEvent, PromptOptions } from "../session/agent-session.ts"
 import { logger } from "@oh-my-pi/pi-utils"
+import { getOrCreateSubagentTrailStore } from "./components/subagent-trail"
 
 export type HermesBrainHandle = {
   brain: HermesBrain
@@ -58,6 +59,12 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
   session.subscribe = (listener: (event: AgentSessionEvent) => void) => {
     const unsubSession = origSubscribe(listener)
     const unsubBrain = brain.subscribe((ev: HermesBrainEvent) => {
+      // Feed subagent trail (notices / working_status carry mapped subagent activity)
+      try {
+        getOrCreateSubagentTrailStore(session).ingest(ev as { type?: string; message?: string; source?: string })
+      } catch {
+        /* trail optional during bootstrap */
+      }
       if (ev.type === "working_status") {
         try {
           // InteractiveMode attaches setWorkingMessage on the session facade via IM ctx;

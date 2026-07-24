@@ -85,6 +85,11 @@ import {
 	HermesModelPickerComponent,
 } from "../components/hermes-model-picker";
 import { HermesPortListComponent } from "../components/hermes-port-list";
+import {
+	HermesInventoryListComponent,
+	type HermesInventoryKind,
+} from "../components/hermes-inventory-list";
+import { SubagentTrailComponent, getOrCreateSubagentTrailStore } from "../components/subagent-trail";
 import { isHermesProductSettings } from "../../config/settings-product-manifest";
 import { OAuthSelectorComponent } from "../components/oauth-selector";
 import { PluginSelectorComponent } from "../components/plugin-selector";
@@ -671,9 +676,9 @@ export class SelectorController {
 		this.#showModelHub({});
 	}
 
-	/** Settings → Tasks Hermes ports (Kanban / Cron / Profiles) — full-width table+detail. */
+	/** Settings → Tasks Hermes ports (Kanban / Cron / Profiles / Skills / Tools / Memory / Subagents). */
 	showHermesPortList(
-		kind: "kanban" | "cron" | "profiles",
+		kind: "kanban" | "cron" | "profiles" | "skills" | "tools" | "memory" | "subagents",
 		opts?: { onDismiss?: () => void },
 	): void {
 		let overlayHandle: OverlayHandle | undefined
@@ -693,18 +698,48 @@ export class SelectorController {
 			}
 			// hide() already requestRenders; onDismiss does too — one more is waste.
 		}
-		const panel = new HermesPortListComponent(this.ctx.ui, kind, done)
-		overlayHandle = this.ctx.ui.showOverlay(panel, {
-			// top-left + 100% so mouse row/col === component line/col.
-			// center anchor was shifting the panel down; clicks hit ~5 rows off.
-			anchor: "top-left",
-			width: "100%",
-			maxHeight: "100%",
-			margin: 0,
-			fullscreen: true,
-		})
-		this.ctx.ui.setFocus(panel)
-		this.ctx.ui.requestRender()
+		try {
+			let panel: HermesPortListComponent | HermesInventoryListComponent | SubagentTrailComponent
+			if (kind === "skills" || kind === "tools" || kind === "memory") {
+				panel = new HermesInventoryListComponent(this.ctx.ui, kind as HermesInventoryKind, done)
+			} else if (kind === "subagents") {
+				const store = getOrCreateSubagentTrailStore(this.ctx.session)
+				panel = new SubagentTrailComponent(this.ctx.ui, store, done)
+			} else {
+				panel = new HermesPortListComponent(this.ctx.ui, kind, done)
+			}
+			overlayHandle = this.ctx.ui.showOverlay(panel, {
+				// top-left + 100% so mouse row/col === component line/col.
+				// center anchor was shifting the panel down; clicks hit ~5 rows off.
+				anchor: "top-left",
+				width: "100%",
+				maxHeight: "100%",
+				margin: 0,
+				fullscreen: true,
+			})
+			this.ctx.ui.setFocus(panel)
+			this.ctx.ui.requestRender()
+		} catch (err) {
+			// Fail soft: restore settings if we hid them, surface error — never hard-crash TUI.
+			try {
+				opts?.onDismiss?.()
+			} catch {
+				/* ignore */
+			}
+			const msg = err instanceof Error ? err.message : String(err)
+			console.error(`[mtui] showHermesPortList(${kind}) failed: ${msg}`)
+			try {
+				this.ctx.session?.emitNotice?.("error", `Port overlay failed (${kind}): ${msg}`, "mtui")
+			} catch {
+				/* ignore */
+			}
+			try {
+				this.focusActiveEditorArea()
+				this.ctx.ui.requestRender()
+			} catch {
+				/* ignore */
+			}
+		}
 	}
 
 	/**

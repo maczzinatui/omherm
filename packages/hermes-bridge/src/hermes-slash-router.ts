@@ -2,10 +2,12 @@
  * Hermes slash router for mtui product path.
  * Deep-link coat surfaces first; otherwise gateway slash.exec.
  */
+export type HermesPortDeepLink = "kanban" | "cron" | "profiles" | "skills" | "tools" | "memory" | "subagents"
+
 export type HermesSlashDeepLink =
 	| { type: "settings" }
 	| { type: "model" }
-	| { type: "port"; port: "kanban" | "cron" | "profiles" }
+	| { type: "port"; port: HermesPortDeepLink }
 	| { type: "exec"; command: string }
 	| { type: "none" }
 
@@ -47,8 +49,21 @@ export function routeHermesSlash(text: string): HermesSlashDeepLink {
 		case "agents":
 			if (!p.rest) return { type: "port", port: "profiles" }
 			return { type: "exec", command: p.raw }
-		// Always gateway / CLI worker
 		case "skills":
+			if (!p.rest) return { type: "port", port: "skills" }
+			return { type: "exec", command: p.raw }
+		case "tools":
+		case "toolsets":
+			if (!p.rest) return { type: "port", port: "tools" }
+			return { type: "exec", command: p.raw }
+		case "memory":
+			if (!p.rest) return { type: "port", port: "memory" }
+			return { type: "exec", command: p.raw }
+		case "subagents":
+		case "subagent":
+			if (!p.rest) return { type: "port", port: "subagents" }
+			return { type: "exec", command: p.raw }
+		// Always gateway / CLI worker
 		case "reload-skills":
 		case "reload-mcp":
 		case "status":

@@ -57,9 +57,10 @@ export {
   type HermesDialogHost,
 } from "./hermes-brain.ts"
 export {
-  parseHermesSlashLine,
-  routeHermesSlash,
-  type HermesSlashDeepLink,
+	parseHermesSlashLine,
+	routeHermesSlash,
+	type HermesSlashDeepLink,
+	type HermesPortDeepLink,
 } from "./hermes-slash-router.ts"
 export {
   createKanbanPort,
