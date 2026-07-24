@@ -57,6 +57,8 @@ export type HermesSessionsListOptions = {
 		title: string
 		messageCount: number
 		previewLines: string[]
+		/** Full gateway resume payload for coat paint */
+		messages?: unknown[]
 	}) => void
 }
 
@@ -348,6 +350,7 @@ export class HermesSessionsListComponent implements Component {
 				title: row.title || row.id,
 				messageCount: msgs.length || row.messageCount,
 				previewLines,
+				messages: msgs,
 			})
 			this.#onCancel()
 		} catch (e) {

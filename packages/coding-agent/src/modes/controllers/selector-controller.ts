@@ -95,6 +95,8 @@ import { SubagentTrailComponent, getOrCreateSubagentTrailStore } from "../compon
 import { HermesTextOverlayComponent } from "../components/hermes-text-overlay";
 import { HermesSessionsListComponent } from "../components/hermes-sessions-list";
 import { getInstalledHermesBrain } from "../hermes-brain-install";
+import { paintHermesHistoryOnCoat } from "../hermes-history-paint";
+import { syncCoatFromHermesBrain } from "../hermes-coat-identity";
 import { isHermesProductSettings } from "../../config/settings-product-manifest";
 import { OAuthSelectorComponent } from "../components/oauth-selector";
 import { PluginSelectorComponent } from "../components/plugin-selector";
@@ -871,33 +873,48 @@ export class SelectorController {
 						}
 					: null,
 				onResumed: (info) => {
-					try {
-						this.ctx.clearTransientSessionUi?.()
-					} catch {
-						/* optional */
-					}
-					const preview =
-						info.previewLines.length > 0
-							? `\nRecent:\n${info.previewLines.slice(-6).join("\n")}`
-							: ""
-					this.ctx.session.emitNotice?.(
-						"info",
-						`Hermes session resumed · ${info.title} · live ${info.sessionId} · ${info.messageCount} msgs in payload.${preview}\n(Coat chat chrome may not replay full history yet — prompts continue on this Hermes session.)`,
-						"hermes-sessions",
-					)
-					this.ctx.showStatus(`Resumed Hermes · ${info.title}`)
-					this.ctx.statusLine?.invalidate?.()
-					// Optional: open pager with preview if long
-					if (info.previewLines.length > 4) {
-						try {
-							this.showHermesTextOverlay(
-								`Resumed · ${info.title}`,
-								info.previewLines.join("\n"),
-							)
-						} catch {
-							/* optional */
+					// Coat history paint (Herm load path): clear chat + paint resume messages.
+					const rows = info.messages ?? []
+					const { painted } = paintHermesHistoryOnCoat(this.ctx, rows, {
+						notice: `Hermes resumed · ${info.title} · ${info.sessionId}`,
+					})
+					if (painted > 0) {
+						this.ctx.session.emitNotice?.(
+							"info",
+							`Hermes session resumed · ${info.title} · live ${info.sessionId} · painted ${painted} msgs on coat.`,
+							"hermes-sessions",
+						)
+						this.ctx.showStatus(`Resumed Hermes · ${info.title} · ${painted} msgs`)
+					} else {
+						const preview =
+							info.previewLines.length > 0
+								? `\nRecent:\n${info.previewLines.slice(-6).join("\n")}`
+								: ""
+						this.ctx.session.emitNotice?.(
+							"info",
+							`Hermes session resumed · ${info.title} · live ${info.sessionId} · ${info.messageCount} msgs in payload (coat paint empty — gateway may omit history).${preview}`,
+							"hermes-sessions",
+						)
+						this.ctx.showStatus(`Resumed Hermes · ${info.title}`)
+						if (info.previewLines.length > 4) {
+							try {
+								this.showHermesTextOverlay(
+									`Resumed · ${info.title}`,
+									info.previewLines.join("\n"),
+								)
+							} catch {
+								/* optional */
+							}
 						}
 					}
+					// Identity + context window after resume
+					try {
+						const b = getInstalledHermesBrain(this.ctx.session)
+						if (b) void syncCoatFromHermesBrain(this.ctx.session, b)
+					} catch {
+						/* */
+					}
+					this.ctx.statusLine?.invalidate?.()
 				},
 			})
 			overlayHandle = this.ctx.ui.showOverlay(panel, {

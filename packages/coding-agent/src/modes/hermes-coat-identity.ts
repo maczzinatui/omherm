@@ -15,6 +15,7 @@ import {
 } from "@omherm/hermes-bridge"
 import type { AgentSession } from "../session/agent-session.ts"
 import type { ConfiguredThinkingLevel } from "../thinking"
+import { resolveHermesContextWindow } from "./hermes-history-paint.ts"
 
 /** Hermes effort strings ↔ OMP ThinkingLevel (footer + cycle). */
 const HERMES_EFFORT_TO_LEVEL: Record<string, ThinkingLevel> = {
@@ -63,10 +64,23 @@ export function hermesFooterModelName(modelId: string): string {
 /**
  * Synthetic OMP Model for coat paint only. reasoning=true so thinking cycle
  * and status-line effort chip work; Hermes still runs the turn.
+ * contextWindow: prefer Hermes usage.context_max (or explicit) over hardcoded 128k.
  */
-export function hermesIdentityToModel(provider: string, modelId: string): Model {
+export function hermesIdentityToModel(
+  provider: string,
+  modelId: string,
+  opts?: { contextWindow?: number; maxTokens?: number },
+): Model {
   const id = bareModelId(provider, modelId)
   const name = hermesFooterModelName(id)
+  const contextWindow =
+    typeof opts?.contextWindow === "number" && opts.contextWindow > 0
+      ? Math.trunc(opts.contextWindow)
+      : 128_000
+  const maxTokens =
+    typeof opts?.maxTokens === "number" && opts.maxTokens > 0
+      ? Math.trunc(opts.maxTokens)
+      : Math.min(8192, Math.max(1024, Math.floor(contextWindow / 8)))
   return buildModel({
     id,
     name,
@@ -76,8 +90,8 @@ export function hermesIdentityToModel(provider: string, modelId: string): Model 
     reasoning: true,
     input: ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 128_000,
-    maxTokens: 8192,
+    contextWindow,
+    maxTokens,
   })
 }
 
@@ -92,14 +106,15 @@ type AgentWithSetModel = {
  */
 export function applyHermesIdentityToSession(
   session: AgentSession,
-  info: Pick<SessionInfo, "model" | "provider" | "reasoning_effort">,
-  opts?: { modelId?: string; provider?: string },
+  info: Pick<SessionInfo, "model" | "provider" | "reasoning_effort" | "usage">,
+  opts?: { modelId?: string; provider?: string; contextWindow?: number },
 ): { model?: Model; thinking?: ThinkingLevel } {
   const provider = (opts?.provider || info.provider || "").trim()
   const modelId = (opts?.modelId || info.model || "").trim()
   if (!modelId) return {}
 
-  const model = hermesIdentityToModel(provider || "unknown", modelId)
+  const contextWindow = resolveHermesContextWindow(info, opts?.contextWindow)
+  const model = hermesIdentityToModel(provider || "unknown", modelId, { contextWindow })
   const agent = session.agent as unknown as AgentWithSetModel
   try {
     agent.setModel(model)

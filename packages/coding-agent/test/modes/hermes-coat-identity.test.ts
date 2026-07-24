@@ -20,6 +20,12 @@ describe("hermes coat identity", () => {
     expect(m.name).toBe("laguna-s-2.1:free")
     expect(m.reasoning).toBe(true)
     expect(m.thinking).toBeTruthy()
+    expect(m.contextWindow).toBe(128_000)
+  })
+
+  test("contextWindow opts override synthetic default", () => {
+    const m = hermesIdentityToModel("xai", "grok-4.5", { contextWindow: 256_000 })
+    expect(m.contextWindow).toBe(256_000)
   })
 
   test("effort map round-trips high", () => {

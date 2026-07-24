@@ -54,10 +54,10 @@ Script: `docs/DOGFOOD_CHECKLIST.md` §1.
 | Footer model / effort mirror | **shipped** | operator dogfood OK 2026-07-24 |
 | Keyboard model cycle (no OMP roles) | **shipped** | Hermes catalog + `/model --global` |
 | Live `config.set` hot keys (Herm lane) | **shipped** | `config-lane.ts` + ConfigPort.setGateway |
-| Coat full history after resume | **named debt** | inject from resume **or** notice-only forever |
-| Synthetic 128k ctx on Hermes models | open | map catalog / session.info context_max into coat |
+| Coat full history after resume | **shipped** | `hermes-history-paint.ts` + sessions `onResumed` paints resume messages |
+| Synthetic 128k ctx on Hermes models | **shipped** | `resolveHermesContextWindow` ← `usage.context_max` into coat Model |
 | Boot OMP AgentSession bloat under brain | **partial** | coat-boot thins tools/MCP/ext; AgentSession host remains |
-| Status-line after usage | partial | revision path exists |
+| Status-line after usage | partial | revision path exists; ctx window now follows context_max |
 
 ---
 

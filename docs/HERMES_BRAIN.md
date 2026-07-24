@@ -54,12 +54,13 @@ Hermes owns the agent loop. OMP InteractiveMode is the coat. One launch: `omherm
 7. **Config write lane (Herm parity)** — ~~CLI-only~~ **shipped 2026-07-24:** `config-lane.ts` (RPC_ALIAS from Herm `lane.ts`); `HermesConfigPort.set` routes hot keys via gateway `config.set`; brain install attaches gateway. Cold keys still CLI.  
 8. **Settings text rows** — never call OMP `settings.get/set` on `hermes:*` paths. Values: HermesConfigPort cache only.  
 9. **slash.exec output** — currently notice + status; pager overlay like Herm is nicer for long help.  
-10. **Sessions list/resume** still OMP chrome — **named debt 2026-07-24:** coat bookmarks only under Hermes brain; exit = gateway `session.list` / resume via brain or hide resume + label. See `docs/REMAINING_WORK.md` §Sessions SoT.  
+10. **Sessions list/resume** — gateway list/resume via brain; **coat history paint shipped** (`hermes-history-paint.ts` on resume messages). Fallback notice if payload empty.  
 11. **Tool slab chrome** — Hermes aliases + **framed generic fallback** for all other tools (`generic-tool-render.ts` via `resolveToolRenderer`). Named: terminal→bash, read_file→read, web_search/extract, browser_*, execute_code→eval, …. Remaining: gateway `result` JSON density; polish titles/icons per tool family.  
 12. ~~Kaomoji in transcript~~ **fixed 2026-07-23** — `thinking.delta` → `working_status` → OMP `setWorkingMessage` (loader above footer). Real model reason = `reasoning.delta` only.
 13. **Perf (2026-07-24 pass A)** — skills/tools list + memory status TTL cache (8s, invalidate on mutation); inventory hover coalesce; Hermes usage refresh bumps `contextUsageRevision` for status-line context%.
 14. ~~Role-model keyboard cycle OMP registry~~ **fixed 2026-07-24** — `cycleHermesModel` + `pickNextHermesModelRow`.
 15. ~~**Boot bloat**~~ **partial 2026-07-24** — interactive Hermes path applies `hermes-coat-boot.ts`: empty `toolNames` + `restrictToolNames`, MCP/LSP/IRC off, skip OMP extension discovery + model registry refresh. Still constructs AgentSession host for chrome/`!bash`. Next: smaller system prompt / CockpitSession facade.
+16. ~~**Synthetic 128k contextWindow**~~ **fixed 2026-07-24** — `resolveHermesContextWindow` maps `usage.context_max` into coat Model.
 
 ## Dogfood gate
 

@@ -70,12 +70,14 @@ If the task is mesh cutover / LiteLLM / systemd slots → use **meshina HANDOFF 
    - **Herm config lane** ported (`packages/hermes-bridge/src/config-lane.ts` from `~/herm/src/config/lane.ts`): hot keys → gateway `config.set` RPC aliases; cold → CLI. Brain install attaches `hermesConfigPort().setGateway(brain.gateway)`.
    - **Coat boot thin** (`hermes-coat-boot.ts`): interactive Hermes → empty OMP tools + `restrictToolNames`, MCP/LSP/extensions off, skip OMP modelRegistry refresh. Escape `MESHINA_TUI_OMP_BRAIN=1`.
 3. **P0 product dogfood** still open: approvals+clarify · slash.exec · port death banners (`docs/DOGFOOD_CHECKLIST.md`).
-4. **Named debt still open:**
-   - Coat full history after Hermes resume
-   - Synthetic 128k context window on coat models
+4. **Shipped this slice (history + ctx):**
+   - Coat history after Hermes resume — `hermes-history-paint.ts`; sessions list passes full `messages`; paint via `addMessageToChat` (user + custom assistant/tool lines).
+   - Context window — drop blind 128k when `session.info.usage.context_max` present (`resolveHermesContextWindow` → synthetic Model).
+5. **Named debt still open:**
    - AgentSession host still constructed (chrome/`!bash`) — CockpitSession facade later
    - Voice STT/TTS settings multiselect
    - pi-tui overlay full-compose residual
+   - Gateway may still omit history on some resume paths → notice + preview fallback
 
 ### Herm fork reference (binding research gold @ `3d2170a`)
 
@@ -86,7 +88,7 @@ Steal methods, not React tabs:
 | `src/config/lane.ts` RPC_ALIAS + writeConfig | **ported** → `hermes-bridge/config-lane.ts` |
 | `src/config/models.ts` config.set model | live `/model` + catalog (prior) |
 | `session.steer` | brain.steer (prior) |
-| `session.list` / resume | sessions port partial · coat history debt |
+| `session.list` / resume + `transcriptToMessages` | **resume paint** via `hermes-history-paint.ts` |
 | Schema-driven settings IA | product filter + ConfigPort; live apply now RPC when gw attached |
 
 ---
@@ -98,6 +100,7 @@ Steal methods, not React tabs:
 | Catalog + live switch | `packages/hermes-bridge/src/hermes-model-catalog.ts` |
 | Brain + identity listeners | `packages/hermes-bridge/src/hermes-brain.ts` |
 | Coat paint sync | `packages/coding-agent/src/modes/hermes-coat-identity.ts` |
+| History resume paint | `packages/coding-agent/src/modes/hermes-history-paint.ts` |
 | Brain install | `packages/coding-agent/src/modes/hermes-brain-install.ts` |
 | Hub wire | `selector-controller.ts` · `hermes-model-picker.ts` |
 | Thinking cycle | `input-controller.ts` → `cycleHermesThinking` |
