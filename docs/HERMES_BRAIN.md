@@ -51,13 +51,15 @@ Hermes owns the agent loop. OMP InteractiveMode is the coat. One launch: `omherm
 4. ~~Approvals / clarify notices only~~ **shipped** ask-dialog host (sudo/secret still missing).  
 5. ~~Slash execution~~ **shipped** router + `slash.exec` (skill names may still need dogfood).  
 6. ~~Port create/edit~~ **shipped** basic field forms; rich Herm cron-editor fields (skills/toolsets/script multi-line) next; Profiles still inventory.  
-7. **Config write lane (Herm parity)** — Herm TUI routes hot keys via gateway `config.set` RPC aliases; omherm HermesConfigPort is **CLI-only**. Live mid-session apply for reasoning/display needs gateway RPC.  
+7. **Config write lane (Herm parity)** — ~~CLI-only~~ **shipped 2026-07-24:** `config-lane.ts` (RPC_ALIAS from Herm `lane.ts`); `HermesConfigPort.set` routes hot keys via gateway `config.set`; brain install attaches gateway. Cold keys still CLI.  
 8. **Settings text rows** — never call OMP `settings.get/set` on `hermes:*` paths. Values: HermesConfigPort cache only.  
 9. **slash.exec output** — currently notice + status; pager overlay like Herm is nicer for long help.  
 10. **Sessions list/resume** still OMP chrome — **named debt 2026-07-24:** coat bookmarks only under Hermes brain; exit = gateway `session.list` / resume via brain or hide resume + label. See `docs/REMAINING_WORK.md` §Sessions SoT.  
 11. **Tool slab chrome** — Hermes aliases + **framed generic fallback** for all other tools (`generic-tool-render.ts` via `resolveToolRenderer`). Named: terminal→bash, read_file→read, web_search/extract, browser_*, execute_code→eval, …. Remaining: gateway `result` JSON density; polish titles/icons per tool family.  
 12. ~~Kaomoji in transcript~~ **fixed 2026-07-23** — `thinking.delta` → `working_status` → OMP `setWorkingMessage` (loader above footer). Real model reason = `reasoning.delta` only.
 13. **Perf (2026-07-24 pass A)** — skills/tools list + memory status TTL cache (8s, invalidate on mutation); inventory hover coalesce; Hermes usage refresh bumps `contextUsageRevision` for status-line context%.
+14. ~~Role-model keyboard cycle OMP registry~~ **fixed 2026-07-24** — `cycleHermesModel` + `pickNextHermesModelRow`.
+15. **Boot bloat** — still full `createAgentSession` (OMP tools/MCP/registry) before brain install. Next lobotomy target.
 
 ## Dogfood gate
 

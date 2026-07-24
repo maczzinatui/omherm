@@ -7,7 +7,12 @@ import type { Model } from "@oh-my-pi/pi-ai"
 import { buildModel } from "@oh-my-pi/pi-catalog/build"
 import { ThinkingLevel } from "@oh-my-pi/pi-agent-core"
 import type { HermesBrain, SessionInfo } from "@omherm/hermes-bridge"
-import { bareModelId } from "@omherm/hermes-bridge"
+import {
+  bareModelId,
+  loadHermesModelCatalog,
+  pickNextHermesModelRow,
+  type HermesModelRow,
+} from "@omherm/hermes-bridge"
 import type { AgentSession } from "../session/agent-session.ts"
 import type { ConfiguredThinkingLevel } from "../thinking"
 
@@ -160,4 +165,45 @@ export async function cycleHermesThinking(
   await syncCoatFromHermesBrain(session, brain)
   session.setThinkingLevel(next, true)
   return next
+}
+
+export type CycleHermesModelResult = {
+  row: HermesModelRow
+  /** Short status chip text */
+  label: string
+}
+
+/**
+ * Keyboard model cycle under Hermes brain — walk Hermes inventory via live
+ * `/model --global`, never OMP role registry (`cycleRoleModels`).
+ */
+export async function cycleHermesModel(
+  session: AgentSession,
+  brain: HermesBrain,
+  direction: "forward" | "backward" = "forward",
+): Promise<CycleHermesModelResult | undefined> {
+  let info = brain.sessionInfo
+  try {
+    info = await brain.refreshInfo()
+  } catch {
+    info = brain.sessionInfo
+  }
+  const catalog = await loadHermesModelCatalog()
+  const next = pickNextHermesModelRow(
+    catalog.rows,
+    { provider: info.provider || catalog.provider, model: info.model || catalog.model },
+    direction,
+  )
+  if (!next) return undefined
+
+  await brain.switchModel(next.provider, next.id, { global: true })
+  await syncCoatFromHermesBrain(session, brain, {
+    provider: next.provider,
+    modelId: next.id,
+  })
+  const short = hermesFooterModelName(bareModelId(next.provider, next.id))
+  return {
+    row: next,
+    label: `${next.providerName || next.provider} · ${short}`,
+  }
 }

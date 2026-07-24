@@ -51,11 +51,12 @@ Script: `docs/DOGFOOD_CHECKLIST.md` §1.
 | Item | Status | Exit |
 |------|--------|------|
 | Hub inventory + live switch + org/name ids | **shipped** | — |
-| Footer model / effort mirror | **shipped** | dogfood confirms label moves |
+| Footer model / effort mirror | **shipped** | operator dogfood OK 2026-07-24 |
+| Keyboard model cycle (no OMP roles) | **shipped** | Hermes catalog + `/model --global` |
+| Live `config.set` hot keys (Herm lane) | **shipped** | `config-lane.ts` + ConfigPort.setGateway |
 | Coat full history after resume | **named debt** | inject from resume **or** notice-only forever |
 | Synthetic 128k ctx on Hermes models | open | map catalog / session.info context_max into coat |
-| Role-model cycle under product brand | open | Hermes-only cycle or disable OMP registry walk |
-| Live `config.set` hot keys | open | ConfigPort only |
+| Boot OMP AgentSession bloat under brain | open | thin/skip tool harness + model registry discovery |
 | Status-line after usage | partial | revision path exists |
 
 ---

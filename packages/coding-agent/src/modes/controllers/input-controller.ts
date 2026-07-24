@@ -1894,6 +1894,27 @@ export class InputController {
 			this.ctx.showStatus("Model/thinking apply to the main session — press ←← to return first");
 			return;
 		}
+		// Hermes brain: cycle gateway inventory — never OMP role registry.
+		try {
+			const { getInstalledHermesBrain } = await import("../hermes-brain-install.ts");
+			const brain = getInstalledHermesBrain(this.ctx.session);
+			if (brain) {
+				const { cycleHermesModel } = await import("../hermes-coat-identity.ts");
+				const result = await cycleHermesModel(this.ctx.session, brain, direction);
+				if (!result) {
+					this.ctx.showStatus("Only one Hermes model available (or catalog empty)");
+					return;
+				}
+				this.ctx.statusLine.invalidate();
+				this.ctx.updateEditorBorderColor();
+				this.ctx.showStatus(`Hermes model → ${result.label}`);
+				return;
+			}
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			this.ctx.showWarning(`Hermes model cycle failed: ${msg.slice(0, 160)}`);
+			return;
+		}
 		try {
 			const cycleOrder = settings.get("cycleOrder");
 			const result = await this.ctx.session.cycleRoleModels(cycleOrder, direction);

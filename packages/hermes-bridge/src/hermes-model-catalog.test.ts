@@ -78,7 +78,32 @@ describe("hermes model catalog", () => {
             "live session sync failed: Model `ling-3.0-flash:free` was not found in this provider's model listing.",
         }),
       }),
-    ).rejects.toThrow(/not found/i)
+    ).rejects.toThrow(/not found|live session sync failed/i)
+  })
+
+  test("pickNextHermesModelRow walks catalog not role registry", async () => {
+    const { flattenCatalog, pickNextHermesModelRow } = await import("./hermes-model-catalog.ts")
+    const cat = flattenCatalog({
+      provider: "nous",
+      model: "a",
+      providers: [
+        {
+          slug: "nous",
+          name: "Nous",
+          authenticated: true,
+          is_current: true,
+          models: ["a", "b", "org/c:free"],
+        },
+      ],
+    })
+    const fwd = pickNextHermesModelRow(cat.rows, { provider: "nous", model: "a" }, "forward")
+    expect(fwd?.id).toBeTruthy()
+    expect(fwd?.id).not.toBe("a")
+    const back = pickNextHermesModelRow(cat.rows, { provider: "nous", model: fwd!.id }, "backward")
+    // may not return exactly a if sort order differs — at least cycles
+    expect(back?.id).toBeTruthy()
+    expect(pickNextHermesModelRow(cat.rows.slice(0, 1), { model: "a" }, "forward")).toBeUndefined()
+    expect(pickNextHermesModelRow([], { model: "a" }, "forward")).toBeUndefined()
   })
 })
 

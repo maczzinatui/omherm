@@ -42,10 +42,21 @@ export {
   bareModelId,
   isHermesModelSwitchFailureText,
   flattenCatalog,
+  pickNextHermesModelRow,
   type HermesModelCatalog,
   type HermesModelRow,
   type ApplyHermesModelLiveResult,
 } from "./hermes-model-catalog.ts"
+export {
+  RPC_ALIAS,
+  routeConfigKey,
+  writeConfigLane,
+  toCliString,
+  type ConfigGw,
+  type ConfigDiff,
+  type ConfigWriteResult,
+  type ConfigLane,
+} from "./config-lane.ts"
 export {
   buildHermesSlashCatalog,
   listHermesSkills,

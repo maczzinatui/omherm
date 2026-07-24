@@ -257,3 +257,33 @@ export async function applyHermesModelLive(
   await applyHermesModelGlobal(provider, modelId)
   return { mode: "config", command }
 }
+
+/**
+ * Pick next/prev row in Hermes catalog for keyboard model cycle.
+ * Order = catalog `rows` (current-first from flattenCatalog, then alpha).
+ * Under Hermes brain we cycle **gateway inventory**, never OMP role registry.
+ */
+export function pickNextHermesModelRow(
+  rows: HermesModelRow[],
+  current: { provider?: string; model?: string },
+  direction: "forward" | "backward" = "forward",
+): HermesModelRow | undefined {
+  if (!rows.length) return undefined
+  if (rows.length === 1) return undefined
+
+  const curModel = (current.model || "").trim()
+  const curProvider = (current.provider || "").trim()
+  let idx = rows.findIndex(
+    (r) =>
+      r.isCurrentModel ||
+      r.id === curModel ||
+      r.selector === curModel ||
+      (curProvider && r.provider === curProvider && (r.id === curModel || r.selector.endsWith(`/${curModel}`))),
+  )
+  if (idx < 0) idx = 0
+
+  const step = direction === "forward" ? 1 : -1
+  const next = (idx + step + rows.length) % rows.length
+  if (next === idx) return undefined
+  return rows[next]
+}

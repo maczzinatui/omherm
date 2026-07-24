@@ -226,6 +226,15 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
   // Initial async refresh (gateway config may lag session.create info)
   void syncCoatFromHermesBrain(session, brain).catch(() => {})
 
+  // Herm config lane: attach live gateway so settings hot keys use config.set RPC
+  // (not CLI-only). Research gold: ~/herm/src/config/lane.ts
+  try {
+    const { hermesConfigPort } = await import("@omherm/hermes-bridge")
+    hermesConfigPort().setGateway(brain.gateway)
+  } catch {
+    /* optional — settings still CLI */
+  }
+
   const handle: HermesBrainHandle = {
     brain,
     setDialogHost: (host) => brain.setDialogHost(host),
@@ -234,6 +243,11 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
       unsubUsage()
       unsubInfo()
       unsubIdentity()
+      void import("@omherm/hermes-bridge")
+        .then(({ hermesConfigPort }) => {
+          hermesConfigPort().setGateway(null)
+        })
+        .catch(() => {})
       brain.dispose()
       session.subscribe = origSubscribe
       session.prompt = origPrompt

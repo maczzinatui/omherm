@@ -1,4 +1,6 @@
-// HermesConfigPort — public hermes config get/set (CLI). Cadillac: no ad-hoc yaml.
+// HermesConfigPort — public hermes config get/set.
+// Writes: Herm-style lane (gateway config.set RPC aliases for hot keys;
+// CLI for cold). Cadillac: no ad-hoc yaml. Research: ~/herm/src/config/lane.ts
 
 import { shellQuote } from "./profile-dto.ts"
 import {
@@ -6,6 +8,11 @@ import {
   type HermesOmpFieldSpec,
   type OmpSettingsTab,
 } from "./hermes-omp-settings-map.ts"
+import {
+  type ConfigGw,
+  routeConfigKey,
+  writeConfigLane,
+} from "./config-lane.ts"
 
 export type ConfigEffect = "live" | "restart" | "session"
 
@@ -73,7 +80,23 @@ function formatSetValue(value: unknown): string {
   return String(value)
 }
 
-export function createHermesConfigPort(run: RunHermesConfig = defaultRun) {
+export type CreateHermesConfigPortOptions = {
+  run?: RunHermesConfig
+  /**
+   * Live gateway (HermesBrain). When set, hot keys use `config.set` RPC
+   * aliases (Herm lane). Optional — CLI-only still works for cold edits.
+   */
+  gateway?: ConfigGw | null
+}
+
+export function createHermesConfigPort(
+  runOrOpts: RunHermesConfig | CreateHermesConfigPortOptions = defaultRun,
+) {
+  const opts: CreateHermesConfigPortOptions =
+    typeof runOrOpts === "function" ? { run: runOrOpts } : runOrOpts
+  const run = opts.run ?? defaultRun
+  let gateway: ConfigGw | null | undefined = opts.gateway
+
   const cache = new Map<string, unknown>()
   let loadedAt = 0
 
@@ -91,6 +114,15 @@ export function createHermesConfigPort(run: RunHermesConfig = defaultRun) {
     fields: HERMES_CONFIG_FIELDS,
     keys: HERMES_CONFIG_KEYS,
     cache,
+
+    /** Attach/detach live gateway after brain install (mid-session apply). */
+    setGateway(gw: ConfigGw | null | undefined): void {
+      gateway = gw
+    },
+
+    getGateway(): ConfigGw | null | undefined {
+      return gateway
+    },
 
     isHermesKey(key: string): boolean {
       return (HERMES_CONFIG_KEYS as readonly string[]).includes(key)
@@ -135,20 +167,31 @@ export function createHermesConfigPort(run: RunHermesConfig = defaultRun) {
       return v
     },
 
+    /**
+     * Set a Hermes config key. Prefer live RPC alias when gateway attached
+     * and key is hot (Herm lane); else CLI. Fail loud on allowlist miss.
+     */
     async set(key: string, value: unknown): Promise<void> {
       if (!(HERMES_CONFIG_KEYS as readonly string[]).includes(key)) {
         throw new Error(`key not in Hermes settings allowlist: ${key}`)
       }
-      const encoded = formatSetValue(value)
-      const r = await run(["config", "set", key, encoded])
-      if (r.code !== 0) {
-        throw new Error((r.stderr || r.stdout || `config set ${key} failed`).trim().slice(0, 500))
+      const result = await writeConfigLane(gateway ?? null, [{ key, to: value }], {
+        runCli: async (argv) => run(argv),
+      })
+      if (result.failed.length) {
+        const f = result.failed[0]!
+        throw new Error(f.err || `config set ${key} failed`)
       }
       try {
         cache.set(key, await getRaw(key))
       } catch {
         cache.set(key, value)
       }
+    },
+
+    /** Lane for a key (rpc | cli) — for UI effect badges. */
+    routeKey(key: string) {
+      return routeConfigKey(key)
     },
 
     buildGetArgv(key: string): string[] {

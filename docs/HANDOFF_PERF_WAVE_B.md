@@ -64,20 +64,29 @@ If the task is mesh cutover / LiteLLM / systemd slots → use **meshina HANDOFF 
 
 ## Next session — start here (omherm only)
 
-1. **Dogfood coat identity (5 min):** quit+relaunch `omh` → Model hub → pick Nous model with `org/name:tag` → confirm:
-   - status: `live Hermes session + config.yaml` (no “not found”)
-   - **footer model label moves** (not stuck MiniMax)
-   - assistant turn uses new model
-   - thinking cycle → status `Hermes reasoning → …` and Hermes effort sticks
-2. **P0 product dogfood** (`docs/DOGFOOD_CHECKLIST.md`): approvals+clarify ask-dialog; slash.exec short/long/dead-gateway; port CLI death banners.
-3. **Optional perf receipt:** `MTUI_PERF=1 omh` during long stream → stderr vs `docs/PERF_SWEEP.md`.
-4. **Named debt (only if operator asks):**
-   - Coat full history replay after Hermes resume
-   - OMP context window / cost still synthetic 128k on Hermes models
-   - Role-model cycle may still walk OMP registry under product brand
-   - Nous catalog context ceilings → coat compaction math
-   - Live `config.set` hot keys via ConfigPort only
-   - pi-tui overlay full-compose while stack open
+1. **Dogfood (relaunch `omh`):** model hub + footer already green (operator 2026-07-24).
+2. **New this slice — lobotomy:**
+   - Keyboard **model cycle** (prev/next) under Hermes brain walks Hermes inventory + live `/model --global` — **not** OMP role registry. Status: `Hermes model → …`
+   - **Herm config lane** ported (`packages/hermes-bridge/src/config-lane.ts` from `~/herm/src/config/lane.ts`): hot keys → gateway `config.set` RPC aliases; cold → CLI. Brain install attaches `hermesConfigPort().setGateway(brain.gateway)`.
+3. **P0 product dogfood** still open: approvals+clarify · slash.exec · port death banners (`docs/DOGFOOD_CHECKLIST.md`).
+4. **Named debt still open:**
+   - Coat full history after Hermes resume
+   - Synthetic 128k context window on coat models
+   - Boot still constructs full OMP `createAgentSession` (extensions/MCP/registry) before brain install — next lobotomy: skip/thin agent tools under product brand
+   - Voice STT/TTS settings multiselect
+   - pi-tui overlay full-compose residual
+
+### Herm fork reference (binding research gold @ `3d2170a`)
+
+Steal methods, not React tabs:
+
+| Herm path | omherm status |
+|-----------|----------------|
+| `src/config/lane.ts` RPC_ALIAS + writeConfig | **ported** → `hermes-bridge/config-lane.ts` |
+| `src/config/models.ts` config.set model | live `/model` + catalog (prior) |
+| `session.steer` | brain.steer (prior) |
+| `session.list` / resume | sessions port partial · coat history debt |
+| Schema-driven settings IA | product filter + ConfigPort; live apply now RPC when gw attached |
 
 ---
 
