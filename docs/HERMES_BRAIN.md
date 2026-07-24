@@ -59,7 +59,7 @@ Hermes owns the agent loop. OMP InteractiveMode is the coat. One launch: `omherm
 12. ~~Kaomoji in transcript~~ **fixed 2026-07-23** — `thinking.delta` → `working_status` → OMP `setWorkingMessage` (loader above footer). Real model reason = `reasoning.delta` only.
 13. **Perf (2026-07-24 pass A)** — skills/tools list + memory status TTL cache (8s, invalidate on mutation); inventory hover coalesce; Hermes usage refresh bumps `contextUsageRevision` for status-line context%.
 14. ~~Role-model keyboard cycle OMP registry~~ **fixed 2026-07-24** — `cycleHermesModel` + `pickNextHermesModelRow`.
-15. **Boot bloat** — still full `createAgentSession` (OMP tools/MCP/registry) before brain install. Next lobotomy target.
+15. ~~**Boot bloat**~~ **partial 2026-07-24** — interactive Hermes path applies `hermes-coat-boot.ts`: empty `toolNames` + `restrictToolNames`, MCP/LSP/IRC off, skip OMP extension discovery + model registry refresh. Still constructs AgentSession host for chrome/`!bash`. Next: smaller system prompt / CockpitSession facade.
 
 ## Dogfood gate
 

@@ -68,11 +68,12 @@ If the task is mesh cutover / LiteLLM / systemd slots → use **meshina HANDOFF 
 2. **New this slice — lobotomy:**
    - Keyboard **model cycle** (prev/next) under Hermes brain walks Hermes inventory + live `/model --global` — **not** OMP role registry. Status: `Hermes model → …`
    - **Herm config lane** ported (`packages/hermes-bridge/src/config-lane.ts` from `~/herm/src/config/lane.ts`): hot keys → gateway `config.set` RPC aliases; cold → CLI. Brain install attaches `hermesConfigPort().setGateway(brain.gateway)`.
+   - **Coat boot thin** (`hermes-coat-boot.ts`): interactive Hermes → empty OMP tools + `restrictToolNames`, MCP/LSP/extensions off, skip OMP modelRegistry refresh. Escape `MESHINA_TUI_OMP_BRAIN=1`.
 3. **P0 product dogfood** still open: approvals+clarify · slash.exec · port death banners (`docs/DOGFOOD_CHECKLIST.md`).
 4. **Named debt still open:**
    - Coat full history after Hermes resume
    - Synthetic 128k context window on coat models
-   - Boot still constructs full OMP `createAgentSession` (extensions/MCP/registry) before brain install — next lobotomy: skip/thin agent tools under product brand
+   - AgentSession host still constructed (chrome/`!bash`) — CockpitSession facade later
    - Voice STT/TTS settings multiselect
    - pi-tui overlay full-compose residual
 

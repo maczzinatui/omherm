@@ -56,7 +56,7 @@ Script: `docs/DOGFOOD_CHECKLIST.md` §1.
 | Live `config.set` hot keys (Herm lane) | **shipped** | `config-lane.ts` + ConfigPort.setGateway |
 | Coat full history after resume | **named debt** | inject from resume **or** notice-only forever |
 | Synthetic 128k ctx on Hermes models | open | map catalog / session.info context_max into coat |
-| Boot OMP AgentSession bloat under brain | open | thin/skip tool harness + model registry discovery |
+| Boot OMP AgentSession bloat under brain | **partial** | coat-boot thins tools/MCP/ext; AgentSession host remains |
 | Status-line after usage | partial | revision path exists |
 
 ---

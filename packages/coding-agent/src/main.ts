@@ -51,6 +51,7 @@ import {
 } from "./discovery/helpers";
 import { injectOmpExtensionCliRoots } from "./discovery/omp-extension-roots";
 import { formatExtensionLoadNotifications } from "./extensibility/extensions/load-errors";
+import { loadExtensions } from "./extensibility/extensions/loader";
 import { ExtensionRunner } from "./extensibility/extensions/runner";
 import type { ExtensionUIContext } from "./extensibility/extensions/types";
 import { scheduleMarketplaceAutoUpdate } from "./extensibility/plugins/marketplace-auto-update";
@@ -1385,6 +1386,18 @@ export async function runRootCommand(
 	sessionOptions.hasUI = isInteractive || mode === "rpc-ui";
 	sessionOptions.settings = settingsInstance;
 
+	// Hermes brain product path: thin OMP agent harness before createAgentSession.
+	// Coat still needs AgentSession host; tools/MCP/extensions must not load (dual-brain + boot bloat).
+	// Escape: MESHINA_TUI_OMP_BRAIN=1 keeps full OMP. Print/rpc/acp leave full harness.
+	const thinHermesCoat = isInteractive && (await import("./modes/hermes-coat-boot.ts")).shouldThinOmpAgentHarness();
+	if (thinHermesCoat) {
+		const { applyHermesCoatSessionOptions } = await import("./modes/hermes-coat-boot.ts");
+		applyHermesCoatSessionOptions(sessionOptions);
+		logger.info("hermes-coat-boot: thinned OMP agent harness (tools/MCP/extensions off)", {
+			restrictToolNames: true,
+		});
+	}
+
 	// OTEL: register global OTLP exporters when an endpoint is configured via
 	// env, then switch on the agent loop's telemetry hooks so traces, run-level
 	// metrics, and structured logs have source events to export. Content capture
@@ -1413,7 +1426,10 @@ export async function runRootCommand(
 		// Kick off background model discovery only after createAgentSession finishes its parallel
 		// discovery arms; running these concurrently contends for the event loop and stretches
 		// every parallel arm by ~30ms.
-		modelRegistry.refreshInBackground();
+		// Hermes coat: model inventory is Hermes catalog / hub — skip OMP registry refresh thrash.
+		if (!thinHermesCoat) {
+			modelRegistry.refreshInBackground();
+		}
 		return result;
 	};
 
@@ -1440,12 +1456,15 @@ export async function runRootCommand(
 		// string-flag value such as `--target @notes.md` is the flag's value, not a
 		// file — and the same result is handed to createAgentSession via
 		// `preloadedExtensions` so the discovery work is not repeated.
-		if (isInteractive) {
+		// Hermes coat: skip OMP extension disk discovery (brain owns tools).
+		if (isInteractive && !thinHermesCoat) {
 			sessionOptions.extensions = [...(sessionOptions.extensions ?? []), createWarpEventBridgeExtension()];
 		}
 
 		const eventBus = new EventBus();
-		const extensionsResult = await loadSessionExtensions(sessionOptions, cwd, settingsInstance, eventBus);
+		const extensionsResult = thinHermesCoat
+			? await loadExtensions([], cwd, eventBus)
+			: await loadSessionExtensions(sessionOptions, cwd, settingsInstance, eventBus);
 		const extensionFlagSink: ExtensionFlagSink = {
 			getFlags: () => ExtensionRunner.aggregateFlags(extensionsResult.extensions),
 			setFlagValue: (name, value) => {
