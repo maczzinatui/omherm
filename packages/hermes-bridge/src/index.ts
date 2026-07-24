@@ -67,6 +67,7 @@ export {
   kanbanPort,
   parseKanbanListOutput,
   parseKanbanListJson,
+  parseKanbanBoardsList,
   mapKanbanJsonRow,
   formatKanbanLabel,
   formatKanbanDescription,
@@ -74,6 +75,7 @@ export {
   type KanbanTask,
   type KanbanDetail,
   type KanbanCreateInput,
+  type KanbanBoard,
 } from "./kanban-port.ts"
 export {
   createCronPort,
@@ -128,3 +130,10 @@ export {
   type MemoryStatus,
   type MemoryKind,
 } from "./memory-port.ts"
+export {
+  createSessionsPort,
+  sessionsPort,
+  parseSessionsListOutput,
+  type SessionsPort,
+  type HermesSessionRow,
+} from "./sessions-port.ts"

@@ -4652,6 +4652,10 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#selectorController.showHermesPortList(kind);
 	}
 
+	showHermesTextOverlay(title: string, body: string, pathHint?: string): void {
+		this.#selectorController.showHermesTextOverlay(title, body, pathHint ?? "");
+	}
+
 	showAdvisorConfigure(): void {
 		this.#selectorController.showAdvisorConfigure();
 	}

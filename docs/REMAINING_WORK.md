@@ -35,10 +35,10 @@ Headless smoke (2026-07-24): slash routes OK; skills 82 / tools 24 / memory port
 
 | # | Item | Notes |
 |---|------|--------|
-| 5b | Kanban **board switch** | Comment done; board picker still open |
-| 7 | Sessions picker = Hermes `session.list` / resume | **Named debt** — see below |
+| 5b | Kanban **board switch** | **shipped** — `listBoards` / `switchBoard` + UI `B` / Board form |
+| 7 | Sessions picker = Hermes `session.list` / resume | **partial** — `sessionsPort` list + coat-picker warning; resume wire still open |
 | 8 | Live `config.set` for hot keys | CLI-only today; ConfigPort exists |
-| 10b | Status line live refresh | **partial** — revision bump after turn_end; coat may still need IM tick |
+| 10b | Status line live refresh | revision bump after turn_end |
 
 ### Sessions SoT debt (Cadillac #7)
 
@@ -46,10 +46,10 @@ Headless smoke (2026-07-24): slash routes OK; skills 82 / tools 24 / memory port
 
 | Field | Value |
 |-------|--------|
-| Owner | Hermes `session.*` RPC (preferred) |
-| Current | OMP chrome list/resume — does **not** switch Hermes gateway session |
-| Exit | Wire selector to `session.list` + resume/create via brain; or hide resume under brain and label “coat bookmarks” |
-| Fail-loud | Do not claim “session switched” for Hermes turns until RPC path lands |
+| Owner | Hermes `session.*` RPC (preferred) + `sessionsPort` CLI list |
+| Current | Coat picker warns; `sessionsPort.list` available; no resume switch |
+| Exit | Wire selector to Hermes sessions + gateway resume/create |
+| Fail-loud | Warning on open under brain (2026-07-24) |
 | Tracked | this file + `docs/HERMES_BRAIN.md` debt #10 |
 
 ---
@@ -58,9 +58,10 @@ Headless smoke (2026-07-24): slash routes OK; skills 82 / tools 24 / memory port
 
 | # | Item | Status |
 |---|------|--------|
-| 11–16 | Skills/tools/memory/trail/mapper/image/slash | **shipped** `e99cba2` |
+| 11–16 | Skills/tools/memory/trail/mapper/image/slash | **shipped** |
+| slash.exec pager | **shipped** `HermesTextOverlay` + tmp dump |
 
-Dogfood still required after relaunch (skills crash fixed).
+Dogfood: `docs/DOGFOOD_CHECKLIST.md`
 
 ---
 

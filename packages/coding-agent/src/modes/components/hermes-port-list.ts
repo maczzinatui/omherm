@@ -98,7 +98,13 @@ const STATUS_ORDER = [
 type ConfirmKind = "remove_cron" | "use_profile" | "delete_profile" | null
 
 type FormField = { key: string; label: string; value: string; help?: string }
-type FormKind = "cron_create" | "cron_edit" | "kanban_create" | "kanban_assign" | "kanban_comment"
+type FormKind =
+	| "cron_create"
+	| "cron_edit"
+	| "kanban_create"
+	| "kanban_assign"
+	| "kanban_comment"
+	| "kanban_board"
 
 type FormState = {
 	kind: FormKind
@@ -130,6 +136,8 @@ export class HermesPortListComponent implements Component {
 	#jobs: CronJob[] = []
 	#cronStatus: CronSchedulerStatus | null = null
 	#tasks: KanbanTask[] = []
+	#boardSlug = "default"
+	#boards: { slug: string; name: string; current: boolean; counts?: string }[] = []
 	#detail: KanbanDetail | CronJob | null = null
 	#detailLines: string[] = []
 	#profiles: ProfileInfo[] = []
@@ -202,7 +210,17 @@ export class HermesPortListComponent implements Component {
 				this.#paintDetailFromList()
 				void this.#refreshCronDetail()
 			} else if (this.#kind === "kanban") {
-				this.#tasks = await kanbanPort.list({ limit: 80 })
+				const [tasks, boards, cur] = await Promise.all([
+					kanbanPort.list({ limit: 80, board: this.#boardSlug !== "default" ? this.#boardSlug : undefined }),
+					kanbanPort.listBoards().catch(() => [] as Awaited<ReturnType<typeof kanbanPort.listBoards>>),
+					kanbanPort.currentBoard().catch(() => this.#boardSlug),
+				])
+				this.#tasks = tasks
+				this.#boards = boards
+				if (cur) this.#boardSlug = cur
+				// Prefer ● current from boards list when available
+				const marked = boards.find((b) => b.current)
+				if (marked) this.#boardSlug = marked.slug
 				if (this.#sel >= this.#tasks.length) this.#sel = Math.max(0, this.#tasks.length - 1)
 				this.#paintDetailFromList()
 			} else {
@@ -341,8 +359,8 @@ export class HermesPortListComponent implements Component {
 	}
 
 	#title(): string {
-		if (this.#kind === "cron") return `Cron Jobs (${this.#jobs.length})`
-		if (this.#kind === "kanban") return `Kanban (${this.#tasks.length})`
+		if (this.#kind === "cron") return `Cron (${this.#jobs.length})`
+		if (this.#kind === "kanban") return `Kanban · ${this.#boardSlug} (${this.#tasks.length})`
 		return `Profiles (${this.#profiles.length})`
 	}
 
@@ -380,12 +398,14 @@ export class HermesPortListComponent implements Component {
 			const back = { id: "close", label: "Back to Settings", desc: "Esc/q" }
 			const base = [
 				{ id: "create", label: "New task…", desc: "n" },
+				{ id: "switch_board", label: `Board: ${this.#boardSlug}…`, desc: "B" },
 				{ id: "reload", label: "Reload list", desc: "R" },
 				back,
 			]
 			if (!t) return base
 			return [
 				{ id: "create", label: "New task…", desc: "n" },
+				{ id: "switch_board", label: `Board: ${this.#boardSlug}…`, desc: "B" },
 				{ id: "comment", label: "Comment…", desc: "m" },
 				{ id: "assign", label: "Assign…", desc: "a" },
 				{ id: "promote", label: "Promote → ready", desc: "u" },
@@ -449,6 +469,10 @@ export class HermesPortListComponent implements Component {
 				this.#openKanbanComment()
 				return
 			}
+			if (id === "switch_board" && this.#kind === "kanban") {
+				this.#openKanbanBoardSwitch()
+				return
+			}
 			if (this.#kind === "profiles") {
 				const p = this.#profiles[this.#sel]
 				if (!p) return
@@ -508,11 +532,12 @@ export class HermesPortListComponent implements Component {
 			if (this.#kind === "kanban") {
 				const t = this.#tasks[this.#sel]
 				if (!t) return
-				if (id === "promote") this.#banner = await kanbanPort.promote([t.id])
-				else if (id === "complete") this.#banner = await kanbanPort.complete([t.id])
-				else if (id === "block") this.#banner = await kanbanPort.block([t.id])
-				else if (id === "unblock") this.#banner = await kanbanPort.unblock([t.id])
-				else if (id === "archive") this.#banner = await kanbanPort.archive([t.id])
+				const b = this.#boardSlug
+				if (id === "promote") this.#banner = await kanbanPort.promote([t.id], b)
+				else if (id === "complete") this.#banner = await kanbanPort.complete([t.id], b)
+				else if (id === "block") this.#banner = await kanbanPort.block([t.id], b)
+				else if (id === "unblock") this.#banner = await kanbanPort.unblock([t.id], b)
+				else if (id === "archive") this.#banner = await kanbanPort.archive([t.id], b)
 				await this.reload()
 			}
 		} catch (e) {
@@ -613,6 +638,27 @@ export class HermesPortListComponent implements Component {
 		this.#paintLocal()
 	}
 
+	#openKanbanBoardSwitch(): void {
+		const known = this.#boards.map((b) => `${b.current ? "●" : " "} ${b.slug}`).join("  ")
+		this.#form = {
+			kind: "kanban_board",
+			idx: 0,
+			editing: true,
+			fields: [
+				{
+					key: "slug",
+					label: "Board slug",
+					value: this.#boardSlug,
+					help: known
+						? `known: ${known} · hermes kanban boards switch`
+						: "hermes kanban boards switch <slug>",
+				},
+			],
+		}
+		this.#focus = "form"
+		this.#paintLocal()
+	}
+
 	async #submitForm(): Promise<void> {
 		const f = this.#form
 		if (!f) return
@@ -661,10 +707,11 @@ export class HermesPortListComponent implements Component {
 					title,
 					body: get("body") || undefined,
 					assignee: get("assignee") || undefined,
+					board: this.#boardSlug,
 				})
 			} else if (f.kind === "kanban_assign" && f.targetId) {
 				const who = get("assignee") || "unassigned"
-				this.#banner = await kanbanPort.assign(f.targetId, who)
+				this.#banner = await kanbanPort.assign(f.targetId, who, this.#boardSlug)
 			} else if (f.kind === "kanban_comment" && f.targetId) {
 				const text = get("text")
 				if (!text) {
@@ -672,7 +719,16 @@ export class HermesPortListComponent implements Component {
 					this.#paintLocal()
 					return
 				}
-				this.#banner = await kanbanPort.comment(f.targetId, text)
+				this.#banner = await kanbanPort.comment(f.targetId, text, this.#boardSlug)
+			} else if (f.kind === "kanban_board") {
+				const slug = get("slug")
+				if (!slug) {
+					f.error = "board slug required"
+					this.#paintLocal()
+					return
+				}
+				this.#banner = await kanbanPort.switchBoard(slug)
+				this.#boardSlug = slug
 			}
 			this.#form = null
 			this.#focus = "table"
@@ -888,6 +944,10 @@ export class HermesPortListComponent implements Component {
 			}
 			if (data === "c") {
 				void this.#runAction("complete")
+				return
+			}
+			if (data === "B") {
+				void this.#runAction("switch_board")
 				return
 			}
 			if (data === "b") {
@@ -1293,7 +1353,7 @@ export class HermesPortListComponent implements Component {
 			return `↑↓ · n new · e edit · !/r run · p pause · d delete · R reload · Tab actions · ${back}`
 		}
 		if (this.#kind === "kanban") {
-			return `↑↓ · n new · m comment · a assign · r archive · c complete · u promote · R reload · Tab actions · ${back}`
+			return `↑↓ · n new · B board · m comment · a assign · r archive · c complete · u promote · R reload · Tab · ${back}`
 		}
 		return `↑↓ · Enter use profile · d delete · R reload · Tab actions · ${back}`
 	}

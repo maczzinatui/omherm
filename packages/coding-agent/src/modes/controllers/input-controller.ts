@@ -2062,15 +2062,42 @@ export class InputController {
 				try {
 					const { output, warning } = await brain.slashExec(route.command);
 					const body = [warning ? `warning: ${warning}` : "", output].filter(Boolean).join("\n").trim();
-					// Paint as a coat notice so we don't start a Hermes user turn
-					this.ctx.session.emitNotice?.(
-						"info",
-						body.length > 4000 ? `${body.slice(0, 4000)}\n…(truncated)` : body || "(no output)",
-						"hermes-slash",
-					);
-					if (body.length > 200) {
-						// Also dump multi-line into chat as a simple status for readability
-						this.ctx.showStatus(body.split("\n")[0] || "slash done");
+					const text = body || "(no output)";
+					// Short → notice. Long → pager overlay (+ optional disk dump).
+					if (text.length <= 400 && text.split("\n").length <= 8) {
+						this.ctx.session.emitNotice?.("info", text, "hermes-slash");
+						this.ctx.showStatus(text.split("\n")[0] || "slash done");
+					} else {
+						let pathHint = "";
+						try {
+							const { mkdirSync, writeFileSync } = await import("node:fs");
+							const { join } = await import("node:path");
+							const { homedir } = await import("node:os");
+							const dir = join(homedir(), ".hermes", "tmp", "mtui-slash");
+							mkdirSync(dir, { recursive: true });
+							const safe = route.command.replace(/[^\w.-]+/g, "_").slice(0, 40);
+							const path = join(dir, `slash-${Date.now()}-${safe}.txt`);
+							writeFileSync(path, text, "utf-8");
+							pathHint = path;
+						} catch {
+							/* disk optional */
+						}
+						const show =
+							typeof this.ctx.showHermesTextOverlay === "function"
+								? this.ctx.showHermesTextOverlay.bind(this.ctx)
+								: null;
+						if (show) {
+							show(`slash ${route.command}`, text, pathHint);
+						} else {
+							this.ctx.session.emitNotice?.(
+								"info",
+								text.length > 4000 ? `${text.slice(0, 4000)}\n…(truncated)` : text,
+								"hermes-slash",
+							);
+						}
+						this.ctx.showStatus(
+							pathHint ? `slash done · full output ${pathHint}` : "slash done · open pager Esc",
+						);
 					}
 				} catch (e) {
 					const msg = e instanceof Error ? e.message : String(e);

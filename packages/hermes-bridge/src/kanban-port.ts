@@ -34,6 +34,16 @@ export type KanbanCreateInput = {
 	board?: string
 }
 
+export type KanbanBoard = {
+	slug: string
+	name: string
+	/** true when this is the CLI current board (● marker) */
+	current: boolean
+	/** raw counts string e.g. "blocked=4, done=22" */
+	counts?: string
+	raw?: string
+}
+
 export type KanbanPort = {
 	list(opts?: {
 		status?: string
@@ -52,6 +62,12 @@ export type KanbanPort = {
 	assign(id: string, assignee: string, board?: string): Promise<string>
 	comment(id: string, text: string, board?: string): Promise<string>
 	stats(board?: string): Promise<string>
+	/** `hermes kanban boards list` */
+	listBoards(): Promise<KanbanBoard[]>
+	/** `hermes kanban boards show` / current */
+	currentBoard(): Promise<string>
+	/** `hermes kanban boards switch <slug>` — sticky for subsequent CLI calls */
+	switchBoard(slug: string): Promise<string>
 }
 
 function hermesBin(): string {
@@ -115,6 +131,55 @@ export function mapKanbanJsonRow(row: Record<string, unknown>): KanbanTask {
 		tenant: row.tenant != null ? String(row.tenant) : null,
 		created_at: typeof row.created_at === "number" ? row.created_at : null,
 	}
+}
+
+/**
+ * Parse `hermes kanban boards list` human table:
+ *
+ *   SLUG  NAME  COUNTS
+ *   ●   default   Default   blocked=4, done=22
+ *   Current board: default
+ */
+export function parseKanbanBoardsList(text: string): KanbanBoard[] {
+	const out: KanbanBoard[] = []
+	for (const line of text.split("\n")) {
+		const t = line.trim()
+		if (!t || /^SLUG\b/i.test(t) || /^Current board:/i.test(t) || /^─+/.test(t)) continue
+		// ●? slug name counts…
+		const m = t.match(/^(●)?\s*([a-zA-Z0-9][a-zA-Z0-9_-]*)\s{2,}(.+?)\s{2,}(.+)$/)
+		if (m) {
+			out.push({
+				slug: m[2]!,
+				name: m[3]!.trim(),
+				current: Boolean(m[1]),
+				counts: m[4]!.trim(),
+				raw: t,
+			})
+			continue
+		}
+		// looser: ● slug NameRest
+		const m2 = t.match(/^(●)?\s*([a-zA-Z0-9][a-zA-Z0-9_-]*)\s+(.+)$/)
+		if (m2 && !/^(blocked|done|ready|todo)=/i.test(m2[2]!)) {
+			const rest = m2[3]!.trim()
+			// try split name / counts at last multi-space
+			const parts = rest.split(/\s{2,}/)
+			out.push({
+				slug: m2[2]!,
+				name: (parts[0] || rest).trim(),
+				current: Boolean(m2[1]),
+				counts: parts.length > 1 ? parts.slice(1).join("  ") : undefined,
+				raw: t,
+			})
+		}
+	}
+	// If no ● found but "Current board: X" present, mark it
+	const cur = text.match(/Current board:\s*(\S+)/i)?.[1]
+	if (cur && out.length && !out.some((b) => b.current)) {
+		for (const b of out) {
+			if (b.slug === cur) b.current = true
+		}
+	}
+	return out
 }
 
 /** Parse `hermes kanban list` human lines into DTOs (fallback). */
@@ -269,6 +334,33 @@ export function createKanbanPort(): KanbanPort {
 			const r = await runKanban(withBoard(["stats"], board))
 			if (!r.ok && !r.stdout.trim()) throw new Error(r.stderr.trim() || `stats failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
+		},
+
+		async listBoards() {
+			const r = await runKanban(["boards", "list"])
+			if (!r.ok && !r.stdout.trim()) {
+				throw new Error(r.stderr.trim() || `boards list failed (${r.code})`)
+			}
+			return parseKanbanBoardsList(r.stdout || r.stderr)
+		},
+
+		async currentBoard() {
+			const r = await runKanban(["boards", "show"])
+			const text = (r.stdout || r.stderr || "").trim()
+			if (!r.ok && !text) throw new Error(r.stderr.trim() || `boards show failed (${r.code})`)
+			const m = text.match(/Current board:\s*(\S+)/i)
+			if (m) return m[1]!
+			// fallback first token
+			const line = text.split("\n").find((l) => l.trim())
+			return (line || "default").replace(/^Current board:\s*/i, "").trim() || "default"
+		},
+
+		async switchBoard(slug) {
+			const s = slug.trim()
+			if (!s) throw new Error("board slug required")
+			const r = await runKanban(["boards", "switch", s])
+			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `boards switch failed (${r.code})`)
+			return (r.stdout || r.stderr || `switched to ${s}`).trim()
 		},
 	}
 }

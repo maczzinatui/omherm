@@ -90,6 +90,7 @@ import {
 	type HermesInventoryKind,
 } from "../components/hermes-inventory-list";
 import { SubagentTrailComponent, getOrCreateSubagentTrailStore } from "../components/subagent-trail";
+import { HermesTextOverlayComponent } from "../components/hermes-text-overlay";
 import { isHermesProductSettings } from "../../config/settings-product-manifest";
 import { OAuthSelectorComponent } from "../components/oauth-selector";
 import { PluginSelectorComponent } from "../components/plugin-selector";
@@ -739,6 +740,43 @@ export class SelectorController {
 			} catch {
 				/* ignore */
 			}
+		}
+	}
+
+	/** Long slash.exec / CLI dump pager (not a second brain). */
+	showHermesTextOverlay(title: string, body: string, pathHint = ""): void {
+		let overlayHandle: OverlayHandle | undefined
+		let closed = false
+		const done = () => {
+			if (closed) return
+			closed = true
+			overlayHandle?.hide()
+			this.focusActiveEditorArea()
+		}
+		try {
+			const panel = new HermesTextOverlayComponent(this.ctx.ui, title, body, done, pathHint)
+			overlayHandle = this.ctx.ui.showOverlay(panel, {
+				anchor: "top-left",
+				width: "100%",
+				maxHeight: "100%",
+				margin: 0,
+				fullscreen: true,
+			})
+			this.ctx.ui.setFocus(panel)
+			this.ctx.ui.requestRender()
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err)
+			console.error(`[mtui] showHermesTextOverlay failed: ${msg}`)
+			try {
+				this.ctx.session?.emitNotice?.(
+					"info",
+					body.length > 4000 ? `${body.slice(0, 4000)}\n…(truncated)` : body || "(no output)",
+					"hermes-slash",
+				)
+			} catch {
+				/* ignore */
+			}
+			this.focusActiveEditorArea()
 		}
 	}
 
@@ -1492,6 +1530,18 @@ export class SelectorController {
 	}
 
 	async showSessionSelector(): Promise<void> {
+		// Cadillac: under Hermes brain, OMP session files are coat bookmarks only.
+		// Fail-loud so we never claim Hermes transcript switched.
+		try {
+			const { getInstalledHermesBrain } = await import("../hermes-brain-install.ts");
+			if (getInstalledHermesBrain(this.ctx.session)) {
+				this.ctx.showWarning(
+					"Hermes brain ON: session list is coat bookmarks only — does not switch gateway session (see REMAINING_WORK §Sessions SoT).",
+				);
+			}
+		} catch {
+			/* optional */
+		}
 		const sessions = await SessionManager.list(
 			this.ctx.sessionManager.getCwd(),
 			this.ctx.sessionManager.getSessionDir(),
