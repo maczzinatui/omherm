@@ -121,17 +121,19 @@ export class QuickAccessBar implements Component {
 	}
 
 	/** Horizontal padding cells around each chip glyph (widens click target). */
-	static readonly CHIP_PAD = 2;
-	/** Trailing empty rows under the content line (taller click target). */
-	static readonly TRAIL_ROWS = 1;
+	static readonly CHIP_PAD = 0;
+	/** Trailing empty rows under the content line. 0 = sit flush above splash. */
+	static readonly TRAIL_ROWS = 0;
+	/** Separator between chips (keep short — multi-chip strip). */
+	static readonly SEP = " ";
 
 	/**
 	 * Glyph for a button including horizontal pad spaces (hit + paint).
-	 * Example: `  〔 Settings 〕  `
+	 * Example: `〔Settings〕`
 	 */
 	#chipGlyph(label: string): string {
 		const pad = " ".repeat(QuickAccessBar.CHIP_PAD);
-		return `${pad}〔 ${label} 〕${pad}`;
+		return `${pad}〔${label}〕${pad}`;
 	}
 
 	/**
@@ -143,7 +145,7 @@ export class QuickAccessBar implements Component {
 		if (this.#buttons.length === 0 || width <= 0) return [];
 		const parts: string[] = [];
 		let usedWidth = 0;
-		const sep = theme.fg("dim", " · ");
+		const sep = theme.fg("dim", QuickAccessBar.SEP);
 		for (let i = 0; i < this.#buttons.length; i++) {
 			const btn = this.#buttons[i]!;
 			const glyph = this.#chipGlyph(btn.label);
@@ -173,7 +175,7 @@ export class QuickAccessBar implements Component {
 	}
 
 	#hitTest(col: number): QuickAccessButton | undefined {
-		const sep = " · ";
+		const sep = QuickAccessBar.SEP;
 		let cursor = 0;
 		for (let i = 0; i < this.#buttons.length; i++) {
 			const btn = this.#buttons[i]!;

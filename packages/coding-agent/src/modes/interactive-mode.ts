@@ -1019,9 +1019,8 @@ export class InteractiveMode implements InteractiveModeContext {
 			this.ui.addChild(new Spacer(1));
 		}
 
-		// Top quick-access: one blank row under the window chrome so the chip
-		// sits closer to the braille welcome (not flush under the taskbar),
-		// then the bar itself. Hit geometry includes the bar's trail spacer.
+		// Top quick-access: one blank under window chrome, chips flush on splash
+		// (no Spacer between bar and welcome; TRAIL_ROWS=0).
 		this.ui.addChild(new Spacer(1));
 		this.ui.addChild(this.quickAccessBar);
 
@@ -1035,8 +1034,7 @@ export class InteractiveMode implements InteractiveModeContext {
 				this.#getWelcomeLspServers(),
 			);
 
-			// Setup UI layout
-			this.ui.addChild(new Spacer(1));
+			// Setup UI layout — bar already above; no gap before splash
 			this.ui.addChild(this.#welcomeComponent);
 			this.ui.addChild(new Spacer(1));
 			if (!options.suppressWelcomeIntro) {
@@ -4863,9 +4861,8 @@ export class InteractiveMode implements InteractiveModeContext {
 		if (this.ui.hasOverlay()) return undefined;
 		let consumed = false;
 		routeSgrMouseInput(data, event => {
-			// Top quick-access strip. Layout is: Spacer(1) then the bar
-			// (content + trail). Screen rows: 0 = spacer (dead), 1..hit
-			// = bar. Fat hit = content row + trail spacer.
+			// Top quick-access strip. Layout: Spacer(1) then the bar (content only
+			// when TRAIL_ROWS=0). Screen rows: 0 = spacer, 1.. = bar hit rows.
 			const width = this.ui.terminal.columns;
 			const leadSpacerRows = 1; // matches Spacer(1) above the bar
 			const barHit = this.quickAccessBar.hitRowCount();

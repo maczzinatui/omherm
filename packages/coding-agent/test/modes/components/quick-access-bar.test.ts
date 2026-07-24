@@ -16,19 +16,19 @@ describe("QuickAccessBar", () => {
 		expect(bar.render(80)).toEqual([]);
 	});
 
-	it("renders one dim chip with chevron brackets and a trailing spacer row", () => {
+	it("renders one dim chip with chevron brackets", () => {
 		const bar = new QuickAccessBar();
 		let activated = 0;
 		bar.setButtons([{ id: "settings", label: "Settings", onActivate: () => activated++ }]);
 		const lines = bar.render(80);
-		// One styled line + one empty spacer line.
-		expect(lines.length).toBe(2);
-		// Strip ANSI for visibility-check.
+		// Content only when TRAIL_ROWS=0
+		expect(lines.length).toBe(1 + QuickAccessBar.TRAIL_ROWS);
 		const visible = lines[0]!.replace(/\x1b\[[0-9;]*m/g, "");
 		expect(visible).toContain("Settings");
-		expect(visible).toContain("〔"); // opening chevron
-		expect(visible).toContain("〕"); // closing chevron
-		expect(lines[1]).toBe(""); // trailing spacer
+		expect(visible).toContain("〔");
+		expect(visible).toContain("〕");
+		// tight: no spaces inside brackets
+		expect(visible).toContain("〔Settings〕");
 		expect(activated).toBe(0);
 	});
 
@@ -97,7 +97,7 @@ describe("QuickAccessBar", () => {
 		// Narrow width — only the first chip should fit. Render is
 		// defensive: visible width <= requested width.
 		const lines = bar.render(20);
-		expect(lines.length).toBe(2);
+		expect(lines.length).toBe(1 + QuickAccessBar.TRAIL_ROWS);
 		const visible = lines[0]!.replace(/\x1b\[[0-9;]*m/g, "");
 		expect(visible).toContain("Tasks");
 		expect(visible).not.toContain("Profiles");
@@ -127,18 +127,26 @@ describe("QuickAccessBar", () => {
 			{ id: "model", label: "Model", onActivate: () => hits.push("model") },
 		]);
 		const visible = bar.render(120)[0]!.replace(/\x1b\[[0-9;]*m/g, "");
-		const settingsAt = visible.indexOf("Settings");
-		const kanbanAt = visible.indexOf("Kanban");
-		const sessionsAt = visible.indexOf("Sessions");
-		const modelAt = visible.indexOf("Model");
-		expect(settingsAt).toBeGreaterThanOrEqual(0);
-		expect(kanbanAt).toBeGreaterThan(settingsAt);
-		expect(sessionsAt).toBeGreaterThan(kanbanAt);
-		expect(modelAt).toBeGreaterThan(sessionsAt);
-		expect(bar.handleClick(settingsAt + 1)).toBe("settings");
-		expect(bar.handleClick(kanbanAt + 1)).toBe("kanban");
-		expect(bar.handleClick(sessionsAt + 1)).toBe("sessions");
-		expect(bar.handleClick(modelAt + 1)).toBe("model");
+		// Glyphs use fullwidth 〔〕 — string index ≠ terminal col. Probe by
+		// scanning handleClick across the content width instead.
+		const found = new Set<string>();
+		const firstCol: Record<string, number> = {};
+		for (let col = 0; col < 80; col++) {
+			const id = bar.handleClick(col);
+			if (id && !found.has(id)) {
+				found.add(id);
+				firstCol[id] = col;
+			}
+		}
+		expect([...found]).toEqual(["settings", "kanban", "sessions", "model"]);
+		// Mid-chip click (firstCol + a few cells into the label)
+		expect(bar.handleClick(firstCol.settings! + 4)).toBe("settings");
+		expect(bar.handleClick(firstCol.kanban! + 3)).toBe("kanban");
+		expect(bar.handleClick(firstCol.sessions! + 4)).toBe("sessions");
+		expect(bar.handleClick(firstCol.model! + 3)).toBe("model");
 		expect(hits).toEqual(["settings", "kanban", "sessions", "model"]);
+		// Visual: single space between tight chips
+		expect(visible).toMatch(/〕 〔/);
+		expect(visible).not.toMatch(/〕 {2,}〔/);
 	});
 });
