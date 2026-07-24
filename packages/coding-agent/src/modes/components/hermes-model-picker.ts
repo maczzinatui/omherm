@@ -9,11 +9,12 @@ import {
   applyHermesModelGlobal,
   loadHermesModelCatalog,
   type HermesModelRow,
-} from "@meshina/hermes-bridge"
+} from "@omherm/hermes-bridge"
 import type { Settings } from "../../config/settings"
 import { theme } from "../theme/theme"
 import { ModelBrowser, type ModelBrowserItem } from "./model-browser"
 import { bottomBorder, row, topBorder } from "./overlay-box"
+import { enableOverlayScopedPaint, paintOverlayLocal } from "../utils/overlay-paint"
 
 export type HermesModelPickerCallbacks = {
   onPick: (row: HermesModelRow) => void | Promise<void>
@@ -61,6 +62,7 @@ export class HermesModelPickerComponent implements Component {
     options: { currentSelector?: string } = {},
   ) {
     this.#tui = tui
+    enableOverlayScopedPaint(this.#tui, this)
     this.#browser = new ModelBrowser(settings, {
       disableOverContext: false,
       emptyText: () => (this.#error ? `  ${this.#error}` : "  No Hermes models"),
@@ -94,12 +96,12 @@ export class HermesModelPickerComponent implements Component {
           cat.rows.find((r) => r.isCurrentModel)?.selector ||
           (cat.provider && cat.model ? `${cat.provider}/${cat.model}` : undefined)
         if (cur) this.#browser.selectSelector(cur)
-        this.#tui.requestRender()
+        paintOverlayLocal(this.#tui, this)
       })
       .catch((e) => {
         this.#error = e instanceof Error ? e.message : String(e)
         this.#status = "Failed to load Hermes model catalog"
-        this.#tui.requestRender()
+        paintOverlayLocal(this.#tui, this)
       })
   }
 

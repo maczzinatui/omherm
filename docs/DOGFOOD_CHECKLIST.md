@@ -1,17 +1,17 @@
-# mtui dogfood / debug list — 2026-07-24
+# omherm dogfood / debug list — 2026-07-24
 
-**After any coat/bridge edit: quit + relaunch `mtui` (no HMR).**  
-Binary: `/home/nixos/.bun/bin/mtui` · Repo: `~/meshina-tui` · Branch `main` (local commits; may be ahead of origin).
+**After any coat/bridge edit: quit + relaunch `omh` (no HMR).**  
+Binary: `/home/nixos/.bun/bin/omh` · Repo: `~/omherm` · Branch `main` (local commits; may be ahead of origin).
 
 Commits this arc (local): P2 overlays · perf TTL · board/sessions/slash pager · quick-access chips · **`6b47bcd` perf height/frame/slash** · next: [`HANDOFF_PERF_WAVE_B.md`](./HANDOFF_PERF_WAVE_B.md).
 
-**Parallel sessions:** TUI work stays in `~/meshina-tui`. Do not thrash hub `~/meshina` HANDOFF/model lineup.
+**Parallel sessions:** TUI work stays in `~/omherm`. Do not thrash hub `~/meshina` HANDOFF/model lineup.
 
 ---
 
 ## 0. Boot sanity (30s)
 
-- [ ] `mtui` starts without stack dump
+- [ ] `omherm` starts without stack dump
 - [ ] Footer shows Hermes branding / brain notice once
 - [ ] Status line shows model / context% (not frozen forever)
 - [ ] Mouse + keyboard both work in chat
@@ -107,7 +107,7 @@ Do **not** expect Herm React Sessions tab chrome; this is OMP coat + Hermes list
 - [ ] Kanban create + comment still work
 - [ ] Cron list + runs pane
 - [ ] Profiles use/delete still confirm
-- [ ] `MESHINA_TUI_OMP_BRAIN=1 mtui` still boots coat-only escape (optional)
+- [ ] `MESHINA_TUI_OMP_BRAIN=1 omherm` still boots coat-only escape (optional)
 
 ---
 
@@ -115,7 +115,7 @@ Do **not** expect Herm React Sessions tab chrome; this is OMP coat + Hermes list
 
 ```bash
 # from a second terminal
-cd ~/meshina-tui/packages/hermes-bridge && bun test
+cd ~/omherm/packages/hermes-bridge && bun test
 hermes skills list | head
 hermes kanban boards list
 hermes sessions list --limit 5

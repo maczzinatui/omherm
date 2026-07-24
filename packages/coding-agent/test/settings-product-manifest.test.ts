@@ -35,11 +35,14 @@ describe("settings-product-manifest", () => {
 
 	test("product mode hides purge from tabs", () => {
 		const prev = process.env.MESHINA_TUI_BRAND;
+		const prevO = process.env.OMHERM_BRAND;
 		const prevPs = process.env.MESHINA_TUI_PRODUCT_SETTINGS;
 		const prevRaw = process.env.MESHINA_TUI_RAW_OMP_SETTINGS;
-		process.env.MESHINA_TUI_BRAND = "hermes";
+		process.env.OMHERM_BRAND = "omherm";
+		process.env.MESHINA_TUI_BRAND = "omherm";
 		process.env.MESHINA_TUI_PRODUCT_SETTINGS = "1";
 		delete process.env.MESHINA_TUI_RAW_OMP_SETTINGS;
+		delete process.env.OMHERM_RAW_OMP_SETTINGS;
 		try {
 			expect(isHermesProductSettings()).toBe(true);
 			const mem = getProductPathsForTab("memory");
@@ -53,6 +56,8 @@ describe("settings-product-manifest", () => {
 		} finally {
 			if (prev === undefined) delete process.env.MESHINA_TUI_BRAND;
 			else process.env.MESHINA_TUI_BRAND = prev;
+			if (prevO === undefined) delete process.env.OMHERM_BRAND;
+			else process.env.OMHERM_BRAND = prevO;
 			if (prevPs === undefined) delete process.env.MESHINA_TUI_PRODUCT_SETTINGS;
 			else process.env.MESHINA_TUI_PRODUCT_SETTINGS = prevPs;
 			if (prevRaw === undefined) delete process.env.MESHINA_TUI_RAW_OMP_SETTINGS;
@@ -70,7 +75,8 @@ describe("settings-product-manifest", () => {
 
 	test("raw omp escape hatch", () => {
 		process.env.MESHINA_TUI_RAW_OMP_SETTINGS = "1";
-		process.env.MESHINA_TUI_BRAND = "hermes";
+		process.env.OMHERM_BRAND = "omherm";
+		process.env.MESHINA_TUI_BRAND = "omherm";
 		try {
 			expect(isHermesProductSettings()).toBe(false);
 		} finally {

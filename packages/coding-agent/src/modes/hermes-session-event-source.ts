@@ -8,7 +8,7 @@ import {
 	HermesGateway,
 	type MappedAgentSessionEvent,
 	type UiEvent,
-} from "@meshina/hermes-bridge";
+} from "@omherm/hermes-bridge";
 import type { AgentSessionEvent } from "../../session/agent-session.ts";
 
 export type HermesSessionEventListener = (event: AgentSessionEvent) => void;

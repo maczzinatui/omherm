@@ -1,0 +1,30 @@
+Top chips (Settings · Kanban · Sessions · Model) stay pinned — click anytime without scrolling back up
+Wheel up or PgUp opens history review; Esc or wheel past the bottom returns to the live tail
+`omh` and `mtui` both launch Hermes — brand stays ☿ (never set MESHINA_TUI_BRAND=omherm)
+`/kanban` or the Kanban chip opens the mesh job board without leaving the coat
+`/sessions` or the Sessions chip lists Hermes sessions for resume/switch
+`/model` or the Model chip opens the hub — cycle roles with ctrl+p when you just need the next arm
+Local mesh arms are free private inference — keep heavy grinding on LiteLLM :4000, not cloud tokens
+Cloud is hired supervisor: plan and audit up here, fire bounded work down to mesh arms
+`delegate_task` pins children to the mesh — good for quick probes without a full worker card
+File-touch or multi-minute work → real Orca worker card (max 3, one per GPU); operator closes cards
+`hermes kanban` is the durable board — markdown task lists are not a board
+Disputed multi-view judgment → `panel_fire.sh` for a receipted MoA panel before cloud monologue
+Long multi-step goals → `/goal-plan` dual-materializes kanban + goal-state with door receipts
+`MTUI_PERF=1` (or `OMHERM_PERF=1`) turns on paint counters + coalesce for dogfood — default stays stock
+`OMHERM_PAINT_COALESCE=1` enables paint coalesce alone without full perf noise
+Coat edits need a full relaunch — there is no HMR on the pi-tui stack
+Status line footer is live context/model/git — same palette as the top chips
+Ctrl+R searches prompt history; reuse a past message without retyping
+Start a prompt with `->` then a numbered list to queue multi-step follow-ups
+Say `ultrathink` in a message when you want harder multi-step reasoning
+`.` alone means keep going — no need to type “continue”
+`/btw` asks a side question without derailing the main turn
+Left-click thinking headers to expand/collapse compacted chain-of-thought
+Left-click tool cards to expand or collapse tool output
+Shift+Wheel still scrolls native terminal scrollback when you need host history past the app browser
+Mesh topology lives in plans/VITALS.md — probe live; don't trust stale docs
+Session continuity: memory sync pull on start, push on close when you touch load-bearing knowledge
+Protected constitutional files (SOUL/HERMES/AGENTS/memories) are never sweep fodder
+`hermes config` and the Settings chip share the product tables — prefer the UI for day-to-day knobs
+When in doubt: local first, receipts second, cloud only with a failure receipt [NEW]

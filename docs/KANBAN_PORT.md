@@ -8,7 +8,7 @@
 
 ## Goal
 
-Herm-grade create/edit/lifecycle inside mtui, without reimplementing `kanban_db.py` or forking hermes-agent.
+Herm-grade create/edit/lifecycle inside omherm, without reimplementing `kanban_db.py` or forking hermes-agent.
 
 ---
 
@@ -18,7 +18,7 @@ Herm-grade create/edit/lifecycle inside mtui, without reimplementing `kanban_db.
 |-------|----------|------|
 | **A — State machine** | create, assign, comment, block, unblock, promote, archive, link, dispatch, specify, decompose, complete | `hermes kanban --board <slug> <verb> …` (prefer `--json`) |
 | **B — Content fields** | title, body, priority on open tasks | Ladder below |
-| **C — Coat prefs** | open boards, filter chips, layout | mtui/OMP local config only |
+| **C — Coat prefs** | open boards, filter chips, layout | omherm/OMP local config only |
 
 CLI note (live 2026-07-23): `hermes kanban edit` is **done-task recovery** (result/summary/metadata), not title/body/priority.
 

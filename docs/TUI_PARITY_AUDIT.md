@@ -1,6 +1,6 @@
-# TUI parity audit — native Hermes · OMP coat · Herm fork · mtui
+# TUI parity audit — native Hermes · OMP coat · Herm fork · omherm
 
-**Stamp:** 2026-07-23 · Product path: **mtui** = OMP chrome + Hermes brain (no Herm top tab bar).
+**Stamp:** 2026-07-23 · Product path: **omherm** = OMP chrome + Hermes brain (no Herm top tab bar).
 
 Companion: `HERMES_BRAIN.md`, `CADILLAC.md`, `CRON_PORT.md`, `KANBAN_PORT.md`, `SETTINGS_REMAP.md`.
 
@@ -53,9 +53,9 @@ Analytics, Journey, Herm leader chords, dual brain, computer-use stack, web dash
 
 ---
 
-## Gateway RPC gap (Herm vs mtui brain)
+## Gateway RPC gap (Herm vs omherm brain)
 
-| RPC / event | Herm | mtui | Pri |
+| RPC / event | Herm | omherm | Pri |
 |-------------|------|------|-----|
 | `slash.exec` | yes | **shipping** | P0 |
 | `cron.manage` | yes | CLI port | P1 |
@@ -69,9 +69,9 @@ Analytics, Journey, Herm leader chords, dual brain, computer-use stack, web dash
 
 ---
 
-## Herm IA → mtui home (no top tab bar)
+## Herm IA → omherm home (no top tab bar)
 
-| Herm | mtui target |
+| Herm | omherm target |
 |------|-------------|
 | Automation/Kanban | Settings Tasks + `/kanban` |
 | Automation/Cron | Settings Tasks + `/cron` |

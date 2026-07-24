@@ -1,0 +1,37 @@
+# Third-party notices — omherm
+
+omherm is a product packaging and Hermes integration layer. Substantial portions
+of this repository are derived from upstream projects. Their licenses and
+copyrights remain in force for those components.
+
+## Oh My Pi
+
+- Project: https://github.com/can1357/oh-my-pi
+- Site: https://omp.sh
+- Packages in this monorepo under `packages/*` that retain `@oh-my-pi/*` names
+  (coding-agent coat, pi-tui, pi-ai, catalog, etc.)
+- License: MIT (see root `LICENSE` and per-package headers)
+- Copyright: Can Bölük, Mario Zechner, and Oh My Pi contributors
+
+omherm's InteractiveMode chrome, settings UI, keybinds, and many utilities come
+from this tree. Upstream tip pin (when present): `.omp-upstream-sha`.
+
+## Herm (inspiration)
+
+- Project: https://github.com/liftaris/herm
+- Role: product inspiration for cockpit density and settings grouping
+- Herm is **not** vendored as a second UI or dual coordinator in omherm
+
+## Hermes Agent
+
+- Project: https://github.com/NousResearch/hermes-agent
+- Docs: https://hermes-agent.nousresearch.com/
+- Role: external runtime / gateway that omherm ports talk to
+- Install and license Hermes separately; it is not redistributed as the core of
+  this repo
+
+## Other dependencies
+
+JavaScript and native dependencies are declared in `package.json` / workspace
+package manifests and carry their own licenses (MIT, Apache-2.0, etc.). Use your
+package manager's license report for a full inventory before redistribution.

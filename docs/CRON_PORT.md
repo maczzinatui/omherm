@@ -10,7 +10,7 @@ Unlike kanban content-edit, cron already has a **public gateway RPC** and a full
 
 ## Goal
 
-Operator sees every job: schedule, enabled, last/next run, last status, delivery, prompt/script, recent outputs. Create/edit/pause/resume/run/remove without leaving mtui. No second scheduler. No silent local cron.
+Operator sees every job: schedule, enabled, last/next run, last status, delivery, prompt/script, recent outputs. Create/edit/pause/resume/run/remove without leaving omherm. No second scheduler. No silent local cron.
 
 ---
 
@@ -20,7 +20,7 @@ Operator sees every job: schedule, enabled, last/next run, last status, delivery
 |------|--------|
 | Job definitions, fire times, run history | Hermes gateway scheduler |
 | Delivery to platforms | Hermes gateway |
-| Coat list/detail/editor chrome | mtui |
+| Coat list/detail/editor chrome | omherm |
 | Output file retention policy | Hermes `cron.output_retention` config |
 
 **Never:** invent a parallel job store in OMP. **Never:** fire jobs from the TUI process.
@@ -149,7 +149,7 @@ Settings Cron panel imports façade only. Same pattern as `KANBAN_PORT.md`.
 ## Anti-patterns
 
 - Porting Herm Cron.tsx wholesale into React-on-pi-tui  
-- Second scheduler in mtui  
+- Second scheduler in omherm  
 - Writing job JSON files by hand instead of RPC/CLI  
 - Ignoring capabilities and sending full advanced payload always  
 - Hiding last_error / failed last_status (visibility is the product)  

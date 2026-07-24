@@ -1,13 +1,19 @@
-# Contributing to oh-my-pi
+# Contributing to omherm
 
 Pull requests are welcome. Keep them focused, understand the work you submit,
 and be prepared to explain and maintain it.
 
-> [!NOTE]
-> Pull requests are **temporarily open to everyone** as a trial. We previously
-> required a vouch before accepting PRs; that requirement is lifted for now
-> while we evaluate how open contributions go. Depending on the results, the
-> vouch system may return.
+**Repo:** https://github.com/maczzinatui/omherm
+
+## What this project is
+
+- **Coat:** Oh My Pi InteractiveMode (`@oh-my-pi/*`) — see [NOTICE](NOTICE)
+- **Brain target:** Hermes Agent gateway / CLI
+- **Not goals:** dual-brain UIs, Herm React tab strip as second coordinator,
+  absorbing Hermes into a separate agent runtime inside this TUI
+
+Read [README.md](README.md) and [docs/CADILLAC.md](docs/CADILLAC.md) before large
+changes. Public-scrutiny quality is the bar.
 
 ## Before you start
 
@@ -18,73 +24,58 @@ straight to a pull request.
 
 ### Major changes
 
-Discuss major features and broad architectural or behavioral changes in
-[Discord](https://discord.gg/4NMW9cdXZa) **before writing the implementation**.
-This includes new subsystems, large UI changes, new dependencies, and changes
-that span several packages. A GitHub issue is not a substitute for this
-discussion, and prior discussion does not guarantee that a pull request will be
-merged.
+Open an issue or discussion first for new subsystems, large UI changes, new
+dependencies, or changes that span several packages. Prior discussion does not
+guarantee merge.
 
 ### Do not open an issue for work you are about to submit
 
-If you intend to implement a change yourself, **do not create an issue for it
-first**. robomp treats actionable issues as work to pick up and may start the
-same fix in parallel, wasting compute and maintainer time.
-
-Open an issue when you are reporting a problem or proposing work that you are
-not already turning into a pull request. If a relevant issue already exists,
-link it from your pull request instead of creating another one.
+If you intend to implement a change yourself, prefer a PR over an empty issue
+that invites parallel work on the same fix.
 
 ## AI-assisted contributions
 
-AI agents are welcome as tools, not as unattended contributors. Do not give an
-agent a vague goal and submit whatever it produces.
-
-Before opening a pull request, you must:
+AI agents are welcome as tools, not as unattended contributors. Before opening a
+pull request you must:
 
 - constrain the agent to the agreed scope and reject unrelated changes;
 - review every changed file and understand the resulting behavior;
 - run the relevant checks and exercise the changed behavior yourself; and
-- submit the pull request only after that review, rather than letting an agent
-  publish it autonomously.
+- submit the pull request only after that review.
 
 You are responsible for the code, regardless of who or what generated it.
 
 ## Pull request requirements
 
 Every pull request body **MUST include at least one sentence written by you, in
-your own words**, explaining what changed and why. A generated summary, pasted
-agent transcript, or checklist alone does not satisfy this requirement.
+your own words**, explaining what changed and why. A generated summary alone
+does not satisfy this.
 
-One honest line is enough:
+You **MUST verify that the change works as intended**. `bun check` / tests where
+relevant are expected, but not proof:
 
-> I reviewed the full diff; this change fixes duplicate PR reviews by reusing
-> the existing delivery guard.
+- for a bug fix, reproduce and confirm the fix;
+- for a feature, launch `omherm` and use the feature end to end;
+- for coat/UI changes, **quit and relaunch** (no HMR) and inspect the result.
 
-You **MUST verify that the change works as intended**. `bun check` and automated
-tests are expected where relevant, but they are not proof that the behavior
-works. Exercise the changed path yourself and report the exact scenario and
-result in the pull request:
+Keep each pull request to one logical change. Avoid unrelated cleanup or
+drive-by refactors.
 
-- for a bug fix, reproduce the bug and confirm the same reproduction no longer
-  fails;
-- for a feature, launch the product and use the feature end to end; and
-- for a UI change, interact with it and inspect the rendered result.
+## Development commands
 
-“`bun check` passes” by itself is not sufficient verification. For coding-agent
-development commands and repository structure, see
-[`packages/coding-agent/DEVELOPMENT.md`](packages/coding-agent/DEVELOPMENT.md).
+```bash
+bun install
+./scripts/omherm --version
+./scripts/omherm
 
-Keep each pull request to one logical change. Avoid unrelated cleanup,
-drive-by refactors, generated noise, or features that were not part of the
-agreed scope.
+# examples
+bun test packages/hermes-bridge
+bun test packages/coding-agent/test/modes/utils/
+```
 
-## Review
+Upstream coat structure and heavier OMP development notes may still live under
+`packages/coding-agent/DEVELOPMENT.md` where present.
 
-Maintainers review the submitted behavior and the contributor's understanding
-of it—not the volume of generated code. Respond to review feedback yourself,
-and only apply suggestions you have checked.
+## License
 
-Pull requests may be closed when they skip required prior discussion, lack the
-human-written explanation, contain unreviewed agent output, or mix unrelated
-changes.
+Contributions are under the MIT License (see [LICENSE](LICENSE)).

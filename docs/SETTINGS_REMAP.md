@@ -7,13 +7,13 @@
 
 | Class | Meaning |
 |-------|---------|
-| **COAT** | Pure TUI chrome. Lives in mtui/OMP local store. Never claims to configure Hermes. |
+| **COAT** | Pure TUI chrome. Lives in omherm/OMP local store. Never claims to configure Hermes. |
 | **HERMES** | Backed by Hermes public surface (`config.get`/`config.set`, CLI, gateway RPC). Label + path must match Hermes. |
 | **PORT** | Hermes feature via a port panel (Kanban, Cron, Profiles) — not a boolean in OMP schema. |
-| **PURGE** | OMP/pi-only. Hidden or deleted on mtui product path. Tests fail if it reappears as “live.” |
+| **PURGE** | OMP/pi-only. Hidden or deleted on omherm product path. Tests fail if it reappears as “live.” |
 | **BRIDGE** | Temporary dual-read while brain still OMP AgentSession; must flip to HERMES or PURGE at brain cutover. |
 
-**Product path** = default `mtui` InteractiveMode. Experimental bridge and stock `omp` binary may keep raw OMP schema.
+**Product path** = default `omherm` InteractiveMode. Experimental bridge and stock `omp` binary may keep raw OMP schema.
 
 ---
 
@@ -80,7 +80,7 @@ Inventory source: `settings-schema.ts` (**428** keys, 10 tabs). Counts below are
 | Speech STT | **HERMES** | `stt.*` |
 | Collab | **PURGE** | OMP collab relay / share server — not mesh product |
 | Magic Keywords | **PURGE** or COAT-only | OMP ultrathink/orchestrate — do not pretend Hermes slash |
-| Startup & Updates | **COAT** | splash, quiet, **checkUpdate OFF/purged on mtui** (already suppressed nag) |
+| Startup & Updates | **COAT** | splash, quiet, **checkUpdate OFF/purged on omherm** (already suppressed nag) |
 | Power macOS | **COAT** optional | keep if harmless |
 | Agent unexpected stop | **PURGE** | OMP |
 | Git enabled | **COAT** or HERMES terminal | weak — git is tool side |
@@ -179,8 +179,8 @@ Exact key list: generate from `config.get full` in contract tests — do not har
 
 ```
 settings-schema.ts          OMP upstream (vendor) — do not delete wholesale for omp binary
-settings-product-manifest.ts   NEW — mtui allowlist + class + hermesKey + coatKey
-settings-selector.ts        Filter by manifest on product path (mtui)
+settings-product-manifest.ts   NEW — omherm allowlist + class + hermesKey + coatKey
+settings-selector.ts        Filter by manifest on product path (omherm)
 HermesConfigPort            get/set/subscribe effect (restart vs live)
 coat-settings store         theme, splash, keybinds, statusline layout only
 ```
@@ -220,7 +220,7 @@ Restart → confirm + gateway restart instructions (or RPC if exists). Never sil
 ### P1 — Hermes ConfigPort + Session/Approvals/Model — **LANDED (2026-07-23)**
 
 1. Land this doc + machine-readable `settings-product-manifest` stub (tabs + group-level classes).  
-2. On mtui: **banner** in settings: product filter active.  
+2. On omherm: **banner** in settings: product filter active.  
 3. Hide entire tabs that are pure lies: **Files**, OMP **Memory** backends, etc.  
 4. Do **not** write OMP settings into Hermes without key map.
 
@@ -234,7 +234,7 @@ Kanban, Cron, Profiles (already designed) as settings categories.
 
 ### P4 — Coat-only Appearance polish + purge CI
 
-1. CI test: every visible mtui setting has manifest class ≠ missing.  
+1. CI test: every visible omherm setting has manifest class ≠ missing.  
 2. Fail if PURGE key is writable on product path.  
 3. Drop dead OMP code paths from product bundle only when safe (tree-shake later).
 
@@ -245,18 +245,18 @@ Kanban, Cron, Profiles (already designed) as settings categories.
 | Test | Asserts |
 |------|---------|
 | `settings-manifest-coverage` | Every SETTING_TABS group classified |
-| `settings-product-visible` | Snapshot of visible paths on mtui — no mnemopi, no hindsight, no collab.relay, no task.isolation |
+| `settings-product-visible` | Snapshot of visible paths on omherm — no mnemopi, no hindsight, no collab.relay, no task.isolation |
 | `hermes-config-roundtrip` | Safe keys via port |
 | `coat-settings-isolated` | Theme change does not call config.set |
 | `no-omp-brain-settings-write` | Changing purged key is no-op or hidden |
 
-Dogfood: open settings on mtui, flip a HERMES key, `hermes config get` confirms; flip theme, config unchanged.
+Dogfood: open settings on omherm, flip a HERMES key, `hermes config get` confirms; flip theme, config unchanged.
 
 ---
 
 ## Explicit purge candidates (first cut)
 
-Do not show as live agent config on mtui:
+Do not show as live agent config on omherm:
 
 - `mnemopi.*`, `hindsight.*`, `memory.backend` (OMP)  
 - `collab.*`, `share.*`  

@@ -4,7 +4,7 @@
  */
 import type { Component, TUI } from "@oh-my-pi/pi-tui"
 import { matchesKey, routeSgrMouseInput, type SgrMouseEvent, visibleWidth } from "@oh-my-pi/pi-tui"
-import { sessionsPort, type HermesSessionRow } from "@meshina/hermes-bridge"
+import { sessionsPort, type HermesSessionRow } from "@omherm/hermes-bridge"
 import { theme } from "../theme/theme"
 import { bottomBorder, fit, row, topBorder } from "./overlay-box"
 import {
@@ -14,6 +14,7 @@ import {
 	matchesSelectPageUp,
 	matchesSelectUp,
 } from "../utils/keybinding-matchers"
+import { enableOverlayScopedPaint, paintOverlayLocal } from "../utils/overlay-paint"
 
 export type HermesSessionListRow = {
 	id: string
@@ -133,33 +134,19 @@ export class HermesSessionsListComponent implements Component {
 	#tableHitCount = 0
 	#hoverIdx = -1
 	#busy = false
+	#pendingHoverIdx = -1
+	#hoverPaintTimer: ReturnType<typeof setTimeout> | null = null
 
 	constructor(tui: TUI, onCancel: () => void, opts: HermesSessionsListOptions) {
 		this.#tui = tui
 		this.#onCancel = onCancel
 		this.#opts = opts
-		try {
-			this.#tui.enableScopedInputRender?.(this)
-		} catch {
-			/* optional */
-		}
+		enableOverlayScopedPaint(this.#tui, this)
 		void this.reload()
 	}
 
 	#paint(): void {
-		try {
-			if (typeof this.#tui.requestComponentRender === "function") {
-				this.#tui.requestComponentRender(this)
-			} else {
-				this.#tui.requestRender()
-			}
-		} catch {
-			try {
-				this.#tui.requestRender()
-			} catch {
-				/* swallow */
-			}
-		}
+		paintOverlayLocal(this.#tui, this)
 	}
 
 	async reload(): Promise<void> {
@@ -312,8 +299,16 @@ export class HermesSessionsListComponent implements Component {
 				if (ev.row >= this.#tableStartRow && ev.row < this.#tableStartRow + this.#tableHitCount) {
 					const idx = this.#scroll + (ev.row - this.#tableStartRow)
 					if (idx >= 0 && idx < this.#rows.length && idx !== this.#hoverIdx) {
-						this.#hoverIdx = idx
-						this.#paint()
+						this.#pendingHoverIdx = idx
+						if (this.#hoverPaintTimer == null) {
+							this.#hoverPaintTimer = setTimeout(() => {
+								this.#hoverPaintTimer = null
+								if (this.#pendingHoverIdx >= 0 && this.#pendingHoverIdx !== this.#hoverIdx) {
+									this.#hoverIdx = this.#pendingHoverIdx
+									this.#paint()
+								}
+							}, 16)
+						}
 					}
 				}
 				return

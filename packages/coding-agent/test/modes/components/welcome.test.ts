@@ -61,4 +61,28 @@ describe("WelcomeComponent tips", () => {
 		expect(newMax).toBeGreaterThan(ordinaryMax);
 		expect(pickWeightedTip([], 0.5)).toBe("");
 	});
+
+	it("hermes brand picks from hermes tip pack (no bare omp CLI tips)", () => {
+		const prev = process.env.MESHINA_TUI_BRAND;
+		process.env.MESHINA_TUI_BRAND = "hermes";
+		try {
+			vi.spyOn(theme, "getSymbolPreset").mockReturnValue("nerd");
+			// Force selection into the middle of the hermes pool.
+			vi.spyOn(Math, "random").mockReturnValue(0.42);
+			const welcome = new WelcomeComponent("1.0.0", "model", "provider");
+			const tip = welcome.tip ?? "";
+			expect(tip.length).toBeGreaterThan(0);
+			// Hermes pack phrases (any one is enough to prove pool switch).
+			const hermesSignals =
+				/Kanban|mesh|omh|mtui|LiteLLM|goal-plan|MTUI_PERF|sticky|history review|delegate_task|VITALS/i;
+			expect(tip).toMatch(hermesSignals);
+			// Must not advertise stock omp CLI as the product entrypoint.
+			expect(tip).not.toMatch(/\bomp stats\b/i);
+			expect(tip).not.toMatch(/\bomp auth-broker\b/i);
+			expect(tip).not.toMatch(/\bomp -c\b/i);
+		} finally {
+			if (prev === undefined) delete process.env.MESHINA_TUI_BRAND;
+			else process.env.MESHINA_TUI_BRAND = prev;
+		}
+	});
 });

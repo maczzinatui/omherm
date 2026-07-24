@@ -2041,7 +2041,7 @@ export class InputController {
 			const brain = getInstalledHermesBrain(this.ctx.session);
 			if (!brain) return false;
 
-			const { routeHermesSlash } = await import("@meshina/hermes-bridge");
+			const { routeHermesSlash } = await import("@omherm/hermes-bridge");
 			const route = routeHermesSlash(text);
 			if (route.type === "none") return false;
 

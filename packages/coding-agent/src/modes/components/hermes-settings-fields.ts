@@ -1,13 +1,13 @@
 /**
  * Hermes-native setting defs injected into OMP settings tabs on product path.
- * Values read/write via @meshina/hermes-bridge HermesConfigPort — not OMP settings store.
+ * Values read/write via @omherm/hermes-bridge HermesConfigPort — not OMP settings store.
  * Placement: hermes-omp-settings-map.ts (Herm groups → OMP tab/group names).
  */
 import {
 	HERMES_CONFIG_FIELDS,
 	hermesConfigPort,
 	type HermesConfigField,
-} from "@meshina/hermes-bridge";
+} from "@omherm/hermes-bridge";
 import type { SettingPath, SettingTab } from "../../config/settings-schema";
 import type { SettingDef } from "./settings-defs";
 

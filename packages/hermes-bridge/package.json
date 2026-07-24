@@ -1,10 +1,16 @@
 {
   "type": "module",
-  "name": "@meshina/hermes-bridge",
+  "name": "@omherm/hermes-bridge",
   "version": "0.1.0",
   "private": true,
-  "description": "Hermes tui_gateway client for meshina-tui (OMP chrome host)",
+  "description": "Hermes tui_gateway client for omherm (OMP chrome host)",
   "license": "MIT",
+  "homepage": "https://github.com/maczzinatui/omherm",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maczzinatui/omherm.git",
+    "directory": "packages/hermes-bridge"
+  },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {

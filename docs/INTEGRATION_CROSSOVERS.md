@@ -1,4 +1,4 @@
-# Integration crossovers — Hermes + OMP coat (meshina-tui)
+# Integration crossovers — Hermes + OMP coat (omherm)
 
 **Stamp:** 2026-07-23 · Keep open while gutting. Not dual-brain.  
 **Quality bar:** `docs/CADILLAC.md` (whole repo). **Kanban:** `docs/KANBAN_PORT.md`. **Cron:** `docs/CRON_PORT.md`. **Profiles:** `docs/PROFILE_PORT.md`.
@@ -20,7 +20,7 @@
 1. **Prefix / prompt cache economics** — Hermes already tracks compressions + context_%; OMP status-line thresholds should bind to gateway usage events, not re-tokenize locally.
 2. **Streaming reveal throttle** — OMP `StreamingRevealController` + 80ms tool spinner cadence (issue #4353 family). When plugging under InteractiveMode, map Hermes deltas into those controllers; don't double-paint.
 3. **Native scrollback** — OMP commits sealed blocks to terminal scrollback. Hermes bridge must `seal()` tool/assistant blocks or long sessions balloon live region RAM.
-4. **WS vs stdio gateway** — WS for multi-client / remote glass; stdio for local mtui (lower latency, one proc). Prefer stdio default on node-b; WS when E glass attaches.
+4. **WS vs stdio gateway** — WS for multi-client / remote glass; stdio for local omherm (lower latency, one proc). Prefer stdio default on node-b; WS when E glass attaches.
 5. **Grok Build OSS patterns** — agent loop / TUI / subagent view / plan mode / inline diff ([xai-org/grok-build](https://github.com/xai-org/grok-build)). Steal *methods* (fullscreen mouse TUI, plan review, subagent cards), not a second brain. Same doctrine as plasma-fractal: methods only.
 
 ### Memory / context
@@ -46,7 +46,7 @@
 
 1. ~~Edge mapper: UiEvent/GatewayEvent → AgentSessionEvent subset EventController needs for one turn~~
 2. ~~Hermes-backed stub session for prompt/subscribe/interrupt only~~ (`HermesBrain` + install)
-3. ~~Default mtui stays full InteractiveMode; flip brain when mapper green~~ (default ON; `MESHINA_TUI_OMP_BRAIN=1` escape)
+3. ~~Default omherm stays full InteractiveMode; flip brain when mapper green~~ (default ON; `MESHINA_TUI_OMP_BRAIN=1` escape)
 4. Operator dogfood one real Hermes turn under full chrome (`docs/HERMES_BRAIN.md`)
 5. Settings → Kanban/Cron/Profiles inventory landed; editors next
 6. Optional research pass on grok-build TUI scrollback + plan review (steal, don't merge)

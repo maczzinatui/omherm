@@ -18,7 +18,7 @@ import {
 	type KanbanDetail,
 	type KanbanTask,
 	type ProfileInfo,
-} from "@meshina/hermes-bridge"
+} from "@omherm/hermes-bridge"
 import { theme } from "../theme/theme"
 import {
 	bottomBorder,
@@ -38,6 +38,12 @@ import {
 	matchesSelectPageUp,
 	matchesSelectUp,
 } from "../utils/keybinding-matchers"
+import {
+	enableOverlayScopedPaint,
+	paintOverlayFull,
+	paintOverlayLocal,
+	paintOverlayReload,
+} from "../utils/overlay-paint"
 
 export type HermesPortKind = "kanban" | "cron" | "profiles"
 
@@ -182,28 +188,27 @@ export class HermesPortListComponent implements Component {
 	/** Hovered table row index (absolute task/job index), or -1. */
 	#hoverIdx = -1
 	#lastHoverKey = ""
+	/** Coalesced hover target (B2.5) — applied on 16ms timer. */
+	#pendingHoverIdx = -1
+	#hoverPaintTimer: ReturnType<typeof setTimeout> | null = null
 
 	constructor(tui: TUI, kind: HermesPortKind, onCancel: () => void) {
 		this.#tui = tui
 		this.#kind = kind
 		this.#onCancel = onCancel
-		// Hover/sel/nav only mutates this overlay — skip full transcript walk.
-		this.#tui.enableScopedInputRender?.(this)
+		// Hover/sel/nav only mutates this overlay — prefer component-scoped paint.
+		enableOverlayScopedPaint(this.#tui, this)
 		void this.reload()
 	}
 
 	/** Local overlay paint (hover/nav). Prefer component-scoped when available. */
 	#paintLocal(): void {
-		if (typeof this.#tui.requestComponentRender === "function") {
-			this.#tui.requestComponentRender(this)
-		} else {
-			this.#tui.requestRender()
-		}
+		paintOverlayLocal(this.#tui, this)
 	}
 
-	/** Structural paint (load/reload/open forms) — full frame OK. */
+	/** Structural paint (cold open only). Soft reload uses local. */
 	#paintFull(): void {
-		this.#tui.requestRender()
+		paintOverlayFull(this.#tui)
 	}
 
 	async reload(): Promise<void> {
@@ -248,7 +253,8 @@ export class HermesPortListComponent implements Component {
 			this.#error = e instanceof Error ? e.message : String(e)
 		} finally {
 			this.#loading = false
-			this.#paintFull()
+			// Warm + completion: local only (B2.5). Cold already painted once above.
+			paintOverlayReload(this.#tui, this, false)
 		}
 	}
 
@@ -1011,7 +1017,8 @@ export class HermesPortListComponent implements Component {
 		routeSgrMouseInput(data, (event: SgrMouseEvent) => {
 			if (event.release) return true
 
-			// Hover highlight — motion only paints, never selects.
+			// Hover highlight — motion only paints, never selects. Coalesce ~60fps
+			// so SGR motion storms don't queue a paint per event (B2.5).
 			if (event.motion) {
 				if (
 					this.#focus === "table" &&
@@ -1025,12 +1032,25 @@ export class HermesPortListComponent implements Component {
 					const key = `${next}|${event.row}`
 					if (key !== this.#lastHoverKey) {
 						this.#lastHoverKey = key
-						this.#hoverIdx = next
-						this.#paintLocal()
+						this.#pendingHoverIdx = next
+						if (this.#hoverPaintTimer == null) {
+							this.#hoverPaintTimer = setTimeout(() => {
+								this.#hoverPaintTimer = null
+								if (this.#pendingHoverIdx !== this.#hoverIdx) {
+									this.#hoverIdx = this.#pendingHoverIdx
+									this.#paintLocal()
+								}
+							}, 16)
+						}
 					}
-				} else if (this.#hoverIdx !== -1) {
+				} else if (this.#hoverIdx !== -1 || this.#pendingHoverIdx !== -1) {
 					this.#hoverIdx = -1
+					this.#pendingHoverIdx = -1
 					this.#lastHoverKey = ""
+					if (this.#hoverPaintTimer != null) {
+						clearTimeout(this.#hoverPaintTimer)
+						this.#hoverPaintTimer = null
+					}
 					this.#paintLocal()
 				}
 				return true

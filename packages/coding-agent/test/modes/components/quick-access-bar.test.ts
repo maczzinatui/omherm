@@ -1,10 +1,14 @@
 /**
- * Top quick-access strip — footer-aesthetic, extensible registry, single
- * Settings chip v1. Hit-test + render + registry mutation.
+ * Top quick-access strip — footer-aesthetic, extensible registry.
  */
 import { beforeAll, describe, expect, it } from "bun:test";
+import { visibleWidth } from "@oh-my-pi/pi-tui";
 import { QuickAccessBar } from "../../../src/modes/components/quick-access-bar";
 import { initTheme } from "../../../src/modes/theme/theme";
+
+function stripAnsi(s: string): string {
+	return s.replace(/\x1b\[[0-9;]*m/g, "");
+}
 
 describe("QuickAccessBar", () => {
 	beforeAll(async () => {
@@ -14,22 +18,58 @@ describe("QuickAccessBar", () => {
 	it("renders empty when no buttons are registered", () => {
 		const bar = new QuickAccessBar();
 		expect(bar.render(80)).toEqual([]);
+		expect(bar.contentWidth()).toBe(0);
 	});
 
-	it("renders one dim chip with chevron brackets", () => {
+	it("paints a content-width statusLineBg slab (not full terminal)", () => {
 		const bar = new QuickAccessBar();
 		let activated = 0;
 		bar.setButtons([{ id: "settings", label: "Settings", onActivate: () => activated++ }]);
 		const lines = bar.render(80);
-		// Content only when TRAIL_ROWS=0
 		expect(lines.length).toBe(1 + QuickAccessBar.TRAIL_ROWS);
-		const visible = lines[0]!.replace(/\x1b\[[0-9;]*m/g, "");
-		expect(visible).toContain("Settings");
-		expect(visible).toContain("〔");
-		expect(visible).toContain("〕");
-		// tight: no spaces inside brackets
+		const raw = lines[0]!;
+		const visible = stripAnsi(raw);
 		expect(visible).toContain("〔Settings〕");
+		// Footer black-box under chips only
+		expect(raw).toMatch(/\x1b\[[0-9;]*48/);
+		const slabW = bar.contentWidth();
+		expect(slabW).toBeGreaterThan(0);
+		expect(slabW).toBeLessThan(40); // far short of full 80
+		// Line still spans width (plain tail), but slab is shorter
+		expect(visibleWidth(raw)).toBe(80);
 		expect(activated).toBe(0);
+	});
+
+	it("grows the bg slab when more buttons are added", () => {
+		const bar = new QuickAccessBar();
+		bar.setButtons([{ id: "settings", label: "Settings", onActivate: () => {} }]);
+		bar.render(120);
+		const one = bar.contentWidth();
+		bar.setButtons([
+			{ id: "settings", label: "Settings", onActivate: () => {} },
+			{ id: "kanban", label: "Kanban", onActivate: () => {} },
+			{ id: "sessions", label: "Sessions", onActivate: () => {} },
+			{ id: "model", label: "Model", onActivate: () => {} },
+		]);
+		bar.render(120);
+		const four = bar.contentWidth();
+		expect(four).toBeGreaterThan(one);
+	});
+
+	it("uses distinct footer segment colors per chip (not uniform dim)", () => {
+		const bar = new QuickAccessBar();
+		bar.setButtons([
+			{ id: "settings", label: "Settings", onActivate: () => {} },
+			{ id: "kanban", label: "Kanban", onActivate: () => {} },
+			{ id: "model", label: "Model", onActivate: () => {} },
+		]);
+		const raw = bar.render(120)[0]!;
+		// Multiple distinct 38;2 (truecolor fg) or 38;5 sequences → not one flat color
+		const fgs = raw.match(/\x1b\[[0-9;]*38[;:][0-9;:]+m/g) ?? [];
+		expect(fgs.length).toBeGreaterThanOrEqual(3);
+		// At least two different fg payloads among chips
+		const uniq = new Set(fgs);
+		expect(uniq.size).toBeGreaterThanOrEqual(2);
 	});
 
 	it("activates the chip on left-click inside its column range", () => {
@@ -45,13 +85,10 @@ describe("QuickAccessBar", () => {
 			},
 		]);
 		const before = bar.render(80)[0]!;
-		// Find the first non-bracket position to land a clean click on
-		// the chip label. Visible width of "〔 Settings 〕" = 12 cols.
+		// SLAB_PAD=1 then chip — col 3 lands in the label
 		const clicked = bar.handleClick(3);
 		expect(clicked).toBe("settings");
 		expect(activated).toBe("settings");
-		// Render again to confirm hover is still null (click does not
-		// leave a sticky accent on the chip — the overlay opens instead).
 		const after = bar.render(80)[0]!;
 		expect(after).toBe(before);
 	});
@@ -60,7 +97,7 @@ describe("QuickAccessBar", () => {
 		const bar = new QuickAccessBar();
 		let activated = 0;
 		bar.setButtons([{ id: "settings", label: "Settings", onActivate: () => activated++ }]);
-		// Far right of the terminal — past the chip.
+		bar.render(80);
 		expect(bar.handleClick(70)).toBeUndefined();
 		expect(activated).toBe(0);
 	});
@@ -68,16 +105,13 @@ describe("QuickAccessBar", () => {
 	it("handles motion hover via the SgrMouse dispatch helper", () => {
 		const bar = new QuickAccessBar();
 		bar.setButtons([{ id: "settings", label: "Settings", onActivate: () => {} }]);
-		// Motion event over col 3 → hit the chip → consumed.
+		bar.render(80);
 		const motion = { button: 35, col: 3, row: 0, release: false, wheel: null, motion: true, leftClick: false };
 		expect(bar.handleMouse(motion)).toBe(true);
-		// Render now paints the hovered chip in accent.
-		const visible = bar.render(80)[0]!.replace(/\x1b\[[0-9;]*m/g, "");
+		const visible = stripAnsi(bar.render(80)[0]!);
 		expect(visible).toContain("Settings");
-		// clearHover resets accent.
 		bar.clearHover();
-		const cleared = bar.render(80)[0]!.replace(/\x1b\[[0-9;]*m/g, "");
-		expect(cleared).toContain("Settings");
+		expect(stripAnsi(bar.render(80)[0]!)).toContain("Settings");
 	});
 
 	it("swallows wheel events so they do not reach the chat", () => {
@@ -94,11 +128,9 @@ describe("QuickAccessBar", () => {
 			{ id: "b", label: "Tools", onActivate: () => {} },
 			{ id: "c", label: "Profiles", onActivate: () => {} },
 		]);
-		// Narrow width — only the first chip should fit. Render is
-		// defensive: visible width <= requested width.
 		const lines = bar.render(20);
 		expect(lines.length).toBe(1 + QuickAccessBar.TRAIL_ROWS);
-		const visible = lines[0]!.replace(/\x1b\[[0-9;]*m/g, "");
+		const visible = stripAnsi(lines[0]!);
 		expect(visible).toContain("Tasks");
 		expect(visible).not.toContain("Profiles");
 	});
@@ -126,9 +158,7 @@ describe("QuickAccessBar", () => {
 			{ id: "sessions", label: "Sessions", onActivate: () => hits.push("sessions") },
 			{ id: "model", label: "Model", onActivate: () => hits.push("model") },
 		]);
-		const visible = bar.render(120)[0]!.replace(/\x1b\[[0-9;]*m/g, "");
-		// Glyphs use fullwidth 〔〕 — string index ≠ terminal col. Probe by
-		// scanning hitTestAt (no activate) across the content width.
+		const visible = stripAnsi(bar.render(120)[0]!);
 		const found = new Set<string>();
 		const firstCol: Record<string, number> = {};
 		for (let col = 0; col < 80; col++) {
@@ -139,13 +169,11 @@ describe("QuickAccessBar", () => {
 			}
 		}
 		expect([...found]).toEqual(["settings", "kanban", "sessions", "model"]);
-		// Mid-chip click (firstCol + a few cells into the label)
 		expect(bar.handleClick(firstCol.settings! + 4)).toBe("settings");
 		expect(bar.handleClick(firstCol.kanban! + 3)).toBe("kanban");
 		expect(bar.handleClick(firstCol.sessions! + 4)).toBe("sessions");
 		expect(bar.handleClick(firstCol.model! + 3)).toBe("model");
 		expect(hits).toEqual(["settings", "kanban", "sessions", "model"]);
-		// Visual: single space between tight chips
 		expect(visible).toMatch(/〕 〔/);
 		expect(visible).not.toMatch(/〕 {2,}〔/);
 	});

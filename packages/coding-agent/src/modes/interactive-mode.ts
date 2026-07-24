@@ -28,6 +28,7 @@ import {
 	clearRenderCache,
 	Loader,
 	Markdown,
+	matchesKey,
 	ProcessTerminal,
 	routeSgrMouseInput,
 	Spacer,
@@ -79,7 +80,7 @@ import type { CompactOptions } from "../extensibility/extensions/types";
 import type { Skill } from "../extensibility/skills";
 import { loadSlashCommands } from "../extensibility/slash-commands";
 import { isHermesProductSettings } from "../config/settings-product-manifest";
-import { buildHermesSlashCatalog } from "@meshina/hermes-bridge";
+import { buildHermesSlashCatalog } from "@omherm/hermes-bridge";
 import { type GuidedGoalMessage, newGuidedGoalSessionId, runGuidedGoalTurn } from "../goals/guided-setup";
 import type { Goal, GoalModeState } from "../goals/state";
 import { resolveLocalUrlToPath } from "../internal-urls";
@@ -164,6 +165,7 @@ import type { ToolExecutionHandle } from "./components/tool-execution";
 import { TranscriptContainer } from "./components/transcript-container";
 import { WelcomeComponent, type LspServerInfo as WelcomeLspServerInfo } from "./components/welcome";
 import { QuickAccessBar } from "./components/quick-access-bar";
+import { ChatScrollOverlay } from "./components/chat-scroll-overlay";
 import { BtwController } from "./controllers/btw-controller";
 import { CommandController } from "./controllers/command-controller";
 import { EventController } from "./controllers/event-controller";
@@ -218,6 +220,24 @@ import type {
 } from "./types";
 import { UiHelpers } from "./utils/ui-helpers";
 import { componentHeight } from "./utils/component-height";
+import { coalesceTuiPaint, createRenderCounters, instrumentedTuiOptions } from "./utils/perf-counters";
+
+function envOn(name: string): boolean {
+	const v = process.env[name];
+	if (!v) return false;
+	const t = v.trim().toLowerCase();
+	return t === "1" || t === "true" || t === "yes" || t === "on";
+}
+
+/**
+ * B2.4 coat paint coalesce — **opt-in only**.
+ * Enable with `MTUI_PERF=1` / `OMHERM_PERF=1` / `OMHERM_PAINT_COALESCE=1`.
+ * Default off so dogfood launch stays stock TUI (rename regression lesson).
+ */
+function isPaintCoalesceEnabled(): boolean {
+	if (envOn("OMHERM_PAINT_COALESCE") || envOn("MTUI_PAINT_COALESCE")) return true;
+	return envOn("OMHERM_PERF") || envOn("MTUI_PERF") || envOn("MESHINA_TUI_PERF");
+}
 
 const STILL_CLOSING_DELAY_MS = 3_000;
 
@@ -531,6 +551,22 @@ export class InteractiveMode implements InteractiveModeContext {
 	lastLeftTapTime = 0;
 	shutdownRequested = false;
 	#isShuttingDown = false;
+	/**
+	 * B2.1 opt-in render counters (`MTUI_PERF` / `OMHERM_PERF`). Undefined when off.
+	 */
+	#perfCounters?: ReturnType<typeof createRenderCounters>;
+	/**
+	 * B2.4 opt-in paint coalesce restorer. Default off — see isPaintCoalesceEnabled.
+	 */
+	#restorePaintCoalesce?: () => void;
+	/**
+	 * Sticky top quick-access strip (viewport overlay). Always painted at row 0
+	 * so chips stay usable after transcript commits to native scrollback.
+	 */
+	#chromeBarHandle?: OverlayHandle;
+	/** App-side chat history browser (wheel / PgUp when host scroll is stolen). */
+	#chatScrollOverlay?: ChatScrollOverlay;
+	#chatScrollHandle?: OverlayHandle;
 	/** True once `shutdown()` has begun teardown. Surfaced to the input
 	 *  controller so a Ctrl+C arriving while teardown is in flight can hard-
 	 *  abort the remaining work instead of stacking another no-op call. */
@@ -701,7 +737,15 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		setTuiTight(settings.get("tui.tight"));
 		setMarkdownMermaidRendering(settings.get("tui.renderMermaid"));
-		this.ui = new TUI(new ProcessTerminal(), settings.get("showHardwareCursor"));
+		this.ui = new TUI(new ProcessTerminal(), settings.get("showHardwareCursor"), instrumentedTuiOptions());
+		// B2.1 counters + B2.4 coalesce are opt-in (PERF / PAINT_COALESCE env).
+		// Order: counters on raw TUI first; coalesce outer when enabled.
+		this.#perfCounters = createRenderCounters();
+		this.#perfCounters?.wrap(this.ui);
+		if (isPaintCoalesceEnabled()) {
+			const paintCoalesce = coalesceTuiPaint(this.ui);
+			this.#restorePaintCoalesce = paintCoalesce.restore;
+		}
 		this.ui.setMaxInlineImages(settings.get("tui.maxInlineImages"));
 		this.ui.setScrollbackRebuild(settings.get("tui.scrollbackRebuild"));
 		// OSC 66 text-sizing is Kitty-only; resolve the setting against the terminal's
@@ -741,6 +785,9 @@ export class InteractiveMode implements InteractiveModeContext {
 			},
 		]);
 		this.editor = new CustomEditor(getEditorTheme());
+		// Sticky chrome is an always-on overlay — own the editor as focus target
+		// so setFocus(editor) is not rewritten onto the bar (typing freeze).
+		this.quickAccessBar.setKeySink(this.editor);
 		this.ui.enableScopedInputRender(this.editor);
 		this.editor.setUseTerminalCursor(this.ui.getShowHardwareCursor());
 		this.editor.setImeSafeCursorLayout(settings.get("tui.imeSafeCursor"));
@@ -829,7 +876,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	async #attachHermesDialogHost(): Promise<void> {
 		try {
 			const { getHermesBrainHandle } = await import("./hermes-brain-install.ts");
-			const { APPROVAL_LABELS } = await import("@meshina/hermes-bridge");
+			const { APPROVAL_LABELS } = await import("@omherm/hermes-bridge");
 			const handle = getHermesBrainHandle(this.session);
 			if (!handle) return;
 			const ui = this.#extensionUiController;
@@ -1020,11 +1067,8 @@ export class InteractiveMode implements InteractiveModeContext {
 			this.ui.addChild(new Spacer(1));
 		}
 
-		// Top quick-access: one blank under window chrome, chips flush on splash
-		// (no Spacer between bar and welcome; TRAIL_ROWS=0).
-		this.ui.addChild(new Spacer(1));
-		this.ui.addChild(this.quickAccessBar);
-
+		// Sticky quick-access lives as a viewport overlay (see #chromeBarHandle after
+		// start) so chips stay on-screen when the transcript grows. No in-tree bar.
 		if (!startupQuiet) {
 			// Add welcome header
 			this.#welcomeComponent = new WelcomeComponent(
@@ -1035,7 +1079,7 @@ export class InteractiveMode implements InteractiveModeContext {
 				this.#getWelcomeLspServers(),
 			);
 
-			// Setup UI layout — bar already above; no gap before splash
+			// Setup UI layout — splash at top of the scrollable tree
 			this.ui.addChild(this.#welcomeComponent);
 			this.ui.addChild(new Spacer(1));
 			if (!options.suppressWelcomeIntro) {
@@ -1100,10 +1144,25 @@ export class InteractiveMode implements InteractiveModeContext {
 		// Start the UI. Cold `omp` launch opts into clearing on the first paint so
 		// the initial welcome frame does not append over the previous run's scrollback.
 		this.ui.start({ clearScrollback: options.clearInitialTerminalHistory === true });
+		// Sticky top chips — viewport overlay so they never scroll into history.
+		// showOverlay focuses the bar; hand focus to the editor. Bar implements
+		// ownsOverlayFocusTarget(editor) so this setFocus is not rewritten.
+		this.#chromeBarHandle = this.ui.showOverlay(this.quickAccessBar, {
+			anchor: "top-left",
+			width: "100%",
+			maxHeight: 2,
+			margin: 0,
+		});
+		this.ui.setFocus(this.editor);
 		// Main-screen mouse: thinking header expand/collapse + tool chrome clicks.
 		// Fullscreen overlays (settings, ask, approvals) still own tracking while open.
 		this.ui.setBaseMouseTracking(true);
 		this.ui.addInputListener(data => this.#handleMainScreenMouse(data));
+		// PgUp/PgDn → app history browser (SGR steals host scrollback navigation).
+		this.ui.addInputListener(data => this.#handleMainScreenScrollKeys(data));
+		// If focus ever lands on chrome (modal close → topVisible=bar), bounce to editor
+		// before keys are handled so CustomEditor.focused stays true (cursor marker).
+		this.ui.addInputListener(data => this.#ensureEditorFocusUnderChrome(data));
 		pushTerminalTitle();
 		setTerminalTitleStateEnabled(this.settings.get("tui.titleState"));
 		setSessionTerminalTitle(this.sessionManager.getSessionName(), this.sessionManager.getCwd());
@@ -3995,6 +4054,17 @@ export class InteractiveMode implements InteractiveModeContext {
 		// Clear the process-global consent handler so it doesn't outlive this
 		// InteractiveMode instance (e.g. test harnesses, headless re-init).
 		setAutoQaConsentHandler(null, null);
+		// B2 dispose: coalesce outer first, then counters.
+		this.#restorePaintCoalesce?.();
+		this.#restorePaintCoalesce = undefined;
+		this.#perfCounters?.dispose();
+		this.#perfCounters = undefined;
+		// Sticky chrome + history browser before TUI stop.
+		this.#chatScrollHandle?.hide();
+		this.#chatScrollHandle = undefined;
+		this.#chatScrollOverlay = undefined;
+		this.#chromeBarHandle?.hide();
+		this.#chromeBarHandle = undefined;
 		if (this.isInitialized) {
 			this.ui.stop();
 			this.isInitialized = false;
@@ -4102,6 +4172,7 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		this.editorContainer.clear();
 		this.editor = nextEditor;
+		this.quickAccessBar.setKeySink(nextEditor);
 		this.editorContainer.addChild(nextEditor);
 		this.ui.setFocus(nextEditor);
 
@@ -4854,89 +4925,72 @@ export class InteractiveMode implements InteractiveModeContext {
 	/**
 	 * Main-screen SGR mouse (base tracking). Consumes left-clicks on thinking
 	 * headers (expand/collapse compacted CoT) and tool execution chrome
-	 * (toggle expanded output). Ignores events while a fullscreen overlay is up
-	 * (those components handle mouse themselves).
+	 * (toggle expanded output). Modal overlays that hold focus handle their own
+	 * input — we bail so CSI reaches them. Sticky chrome + chat history browser
+	 * are coat-owned and handled here.
 	 */
 	#handleMainScreenMouse(data: string): { consume: true } | undefined {
 		if (!data.startsWith("\x1b[<")) return undefined;
-		if (this.ui.hasOverlay()) return undefined;
+
+		// History browser open → it owns wheel/click.
+		if (this.#chatScrollOverlay && this.#chatScrollHandle && !this.#chatScrollHandle.isHidden()) {
+			if (this.#chatScrollOverlay.handleMouseData(data)) return { consume: true };
+		}
+
+		// Modal / fullscreen overlay focused (settings hub, selectors, …).
+		const focused = this.ui.getFocused();
+		if (
+			focused &&
+			focused !== this.editor &&
+			focused !== this.quickAccessBar &&
+			focused !== this.#chatScrollOverlay
+		) {
+			return undefined;
+		}
+
 		let consumed = false;
 		routeSgrMouseInput(data, event => {
-			// Top quick-access strip. Layout: Spacer(1) then the bar (content only
-			// when TRAIL_ROWS=0). Screen rows: 0 = spacer, 1.. = bar hit rows.
+			// Sticky quick-access: always at viewport row 0..hitRowCount.
 			const width = this.ui.terminal.columns;
-			const leadSpacerRows = 1; // matches Spacer(1) above the bar
 			const barHit = this.quickAccessBar.hitRowCount();
-			const barStart = leadSpacerRows;
+			const barStart = 0;
 			const barEnd = barStart + barHit;
 			if (barHit > 0 && event.row >= barStart && event.row < barEnd) {
-				// Remap to bar-local row 0 for content-relative handlers
-				// (hover/click only care about col; row is ignored).
 				if (this.quickAccessBar.handleMouse(event)) {
 					this.ui.requestRender();
 				}
 				consumed = true;
 				return true;
 			}
-			// Pointer left the bar zone — drop hover so the next paint
-			// does not leave a stale accent on the last hovered chip.
 			if (event.motion) this.quickAccessBar.clearHover();
 
-			// Wheel: always consume so SGR never hits the editor. Chat history is
-			// native terminal scrollback — with base mouse tracking on, plain
-			// wheel is owned by the app. Use scrollbar, Shift+Wheel, or
-			// Shift+PgUp/PgDn on the host to review history (host bypass).
+			// Wheel over chat → app history browser (SGR steals host scrollback).
 			if (event.wheel !== null) {
+				this.#handleChatWheel(event.wheel);
 				consumed = true;
 				return true;
 			}
 			if (!event.leftClick) {
-				// Swallow bare motion so the editor doesn't get CSI junk.
 				consumed = true;
 				return true;
 			}
 			const termRows = this.ui.terminal.rows;
-			// Bottom chrome height (editor + widgets + status) — chat is above it.
-			// Cache across clicks at same width; chrome height is stable between
-			// layout changes (editor multiline growth invalidates via width or
-			// next miss after content mutates and re-paints).
-			let bottomH = 0;
-			const chromeKids = [
-				this.hookWidgetContainerBelow,
-				this.editorContainer,
-				this.hookWidgetContainerAbove,
-				this.statusLine,
-				this.statusContainer,
-				this.modelCycleContainer,
-				this.errorBannerContainer,
-				this.omfgContainer,
-				this.btwContainer,
-				this.subagentContainer,
-				this.todoContainer,
-				this.pendingMessagesContainer,
-			];
-			for (const child of chromeKids) {
-				bottomH += componentHeight(child, width);
-			}
+			const bottomH = this.#bottomChromeHeight(width);
 			const chatBottomExclusive = Math.max(0, termRows - bottomH);
 			if (event.row >= chatBottomExclusive) {
 				consumed = true;
 				return true;
 			}
-			// Walk chat from the top of the visible stack. Prefer cached paint
-			// heights (assistant/tool note on render) so click does not re-lex
-			// markdown for every transcript child.
 			const kids = this.chatContainer.children;
 			const heights: number[] = kids.map(c => componentHeight(c, width));
-			let total = heights.reduce((a, b) => a + b, 0);
-			// Align the stack's bottom with chatBottomExclusive - 1.
+			const total = heights.reduce((a, b) => a + b, 0);
 			let rowCursor = chatBottomExclusive - total;
 			for (let i = 0; i < kids.length; i++) {
 				const h = heights[i] ?? 0;
-				const start = rowCursor;
-				const end = rowCursor + h;
-				if (event.row >= start && event.row < end) {
-					const local = event.row - start;
+				const startRow = rowCursor;
+				const endRow = rowCursor + h;
+				if (event.row >= startRow && event.row < endRow) {
+					const local = event.row - startRow;
 					const child = kids[i];
 					if (child instanceof AssistantMessageComponentClass) {
 						if (child.handleThinkingHeaderClick(local)) {
@@ -4945,13 +4999,11 @@ export class InteractiveMode implements InteractiveModeContext {
 							return true;
 						}
 					} else if (child instanceof ToolExecutionComponent) {
-						// Click anywhere on a tool card toggles expand/collapse.
 						child.setExpanded(!child.isExpanded());
 						this.ui.requestRender();
 						consumed = true;
 						return true;
 					} else if (child instanceof Container) {
-						// ChatBlock / wrappers: recurse one level with height cache.
 						let innerY = 0;
 						for (const grand of child.children) {
 							const gh = componentHeight(grand, width);
@@ -4968,19 +5020,153 @@ export class InteractiveMode implements InteractiveModeContext {
 									consumed = true;
 									return true;
 								}
+								break;
 							}
 							innerY += gh;
 						}
 					}
-					consumed = true;
-					return true;
+					break;
 				}
-				rowCursor = end;
+				rowCursor = endRow;
 			}
 			consumed = true;
 			return true;
 		});
 		return consumed ? { consume: true } : undefined;
+	}
+
+	/** Height of bottom-anchored chrome (editor, status, widgets). */
+	#bottomChromeHeight(width: number): number {
+		let bottomH = 0;
+		const chromeKids = [
+			this.hookWidgetContainerBelow,
+			this.editorContainer,
+			this.hookWidgetContainerAbove,
+			this.statusLine,
+			this.statusContainer,
+			this.modelCycleContainer,
+			this.errorBannerContainer,
+			this.omfgContainer,
+			this.btwContainer,
+			this.subagentContainer,
+			this.todoContainer,
+			this.pendingMessagesContainer,
+		];
+		for (const child of chromeKids) {
+			bottomH += componentHeight(child, width);
+		}
+		return bottomH;
+	}
+
+	/** Snapshot still-mounted welcome + chat rows for the history browser. */
+	#snapshotTranscriptLines(width: number): string[] {
+		const out: string[] = [];
+		try {
+			if (this.#welcomeComponent) {
+				out.push(...this.#welcomeComponent.render(width));
+			}
+		} catch {
+			/* welcome optional */
+		}
+		try {
+			out.push(...this.chatContainer.render(width));
+		} catch {
+			/* empty chat ok */
+		}
+		return out;
+	}
+
+	#closeChatScroll(): void {
+		this.#chatScrollHandle?.hide();
+		this.#chatScrollHandle = undefined;
+		this.#chatScrollOverlay = undefined;
+		// hide() may focus chrome bar (topVisible). ownsOverlayFocusTarget lets editor win.
+		if (this.editor) this.ui.setFocus(this.editor);
+		this.ui.requestRender();
+	}
+
+	/**
+	 * Keep the editor focused while sticky chrome is the only (or under-modal)
+	 * overlay. pi-tui otherwise parks focus on the bar after modal dismiss.
+	 * Never steals focus from chat-scroll or real modals.
+	 */
+	#ensureEditorFocusUnderChrome(_data: string): undefined {
+		if (this.#chatScrollOverlay && this.#chatScrollHandle && !this.#chatScrollHandle.isHidden()) {
+			return undefined;
+		}
+		const focused = this.ui.getFocused();
+		if (focused === this.quickAccessBar || focused === null) {
+			if (this.editor) this.ui.setFocus(this.editor);
+		}
+		return undefined;
+	}
+
+	#openChatScroll(initialWheel?: -1 | 1): void {
+		if (this.#chatScrollOverlay) {
+			if (initialWheel) this.#chatScrollOverlay.handleWheel(initialWheel);
+			return;
+		}
+		const focused = this.ui.getFocused();
+		if (
+			focused &&
+			focused !== this.editor &&
+			focused !== this.quickAccessBar &&
+			focused !== this.#chatScrollOverlay
+		) {
+			return;
+		}
+
+		const width = this.ui.terminal.columns;
+		const height = this.ui.terminal.rows;
+		const lines = this.#snapshotTranscriptLines(width);
+		const topChrome = Math.max(1, this.quickAccessBar.hitRowCount());
+		const bottomH = this.#bottomChromeHeight(width);
+		const bodyHeight = Math.max(3, height - bottomH - topChrome - 2);
+
+		this.#chatScrollOverlay = new ChatScrollOverlay({
+			lines,
+			bodyHeight,
+			onClose: () => this.#closeChatScroll(),
+			requestRender: () => this.ui.requestRender(),
+		});
+		this.#chatScrollHandle = this.ui.showOverlay(this.#chatScrollOverlay, {
+			anchor: "top-left",
+			width: "100%",
+			maxHeight: bodyHeight + 2,
+			offsetY: topChrome,
+			margin: 0,
+		});
+		if (initialWheel) this.#chatScrollOverlay.handleWheel(initialWheel);
+		this.ui.requestRender();
+	}
+
+	#handleChatWheel(delta: -1 | 1): void {
+		if (this.#chatScrollOverlay) {
+			this.#chatScrollOverlay.handleWheel(delta);
+			return;
+		}
+		// Wheel up opens history; wheel down at live tail is a no-op.
+		if (delta < 0) this.#openChatScroll(delta);
+	}
+
+	/**
+	 * PgUp opens the history browser when the editor does not need the key
+	 * (empty / single-line draft). Overlay handles keys while open.
+	 */
+	#handleMainScreenScrollKeys(data: string): { consume: true } | undefined {
+		if (this.#chatScrollOverlay) {
+			return undefined;
+		}
+		const focused = this.ui.getFocused();
+		if (focused && focused !== this.editor && focused !== this.quickAccessBar) {
+			return undefined;
+		}
+		const pageUp = matchesKey(data, "pageUp") || matchesKey(data, "ctrl+b");
+		if (!pageUp) return undefined;
+		const text = this.editor?.getText?.() ?? "";
+		if (text.includes("\n")) return undefined;
+		this.#openChatScroll(-1);
+		return { consume: true };
 	}
 
 	toggleThinkingBlockVisibility(): void {

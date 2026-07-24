@@ -34,6 +34,7 @@ import type { Settings } from "../../config/settings";
 import { AUTO_THINKING, type ConfiguredThinkingLevel, getConfiguredThinkingLevelMetadata } from "../../thinking";
 import { theme } from "../theme/theme";
 import { matchesSelectCancel, matchesSelectDown, matchesSelectUp } from "../utils/keybinding-matchers";
+import { enableOverlayScopedPaint, paintOverlayLocal } from "../utils/overlay-paint";
 import {
 	buildBrowserItems,
 	ModelBrowser,
@@ -242,6 +243,7 @@ export class ModelHubComponent implements Component {
 		this.#registry = registry;
 		this.#scopedModels = scopedModels;
 		this.#callbacks = callbacks;
+		enableOverlayScopedPaint(this.#tui, this);
 
 		this.#browser = new ModelBrowser(settings, {
 			emptyText: () => this.#emptyStateMessage(),
@@ -272,8 +274,13 @@ export class ModelHubComponent implements Component {
 				.catch(error => {
 					this.#configError = error instanceof Error ? error.message : String(error);
 				})
-				.finally(() => this.#tui.requestRender());
+				.finally(() => this.#paintLocal());
 		}
+	}
+
+	/** Overlay-local paint (B2.5) — spinner/nav/refresh while hub is focused. */
+	#paintLocal(): void {
+		paintOverlayLocal(this.#tui, this);
 	}
 
 	/** Cancel pending provider refresh timers and the spinner. Host calls this on overlay close. */
@@ -564,7 +571,7 @@ export class ModelHubComponent implements Component {
 	/** Refresh roles + dependent state after a settings mutation (assign/unassign). */
 	#refreshAfterMutation(): void {
 		this.#syncFromRegistryState();
-		this.#tui.requestRender();
+		this.#paintLocal();
 	}
 
 	/** Re-sync after an asynchronous callback finishes mutating settings. */
@@ -635,7 +642,7 @@ export class ModelHubComponent implements Component {
 			if (frameCount > 0) {
 				this.#refreshSpinnerFrame = (this.#refreshSpinnerFrame + 1) % frameCount;
 			}
-			this.#tui.requestRender();
+			this.#paintLocal();
 		}, 80);
 	}
 
@@ -694,7 +701,7 @@ export class ModelHubComponent implements Component {
 			this.#configError = error instanceof Error ? error.message : String(error);
 		} finally {
 			this.#setProviderRefreshing(providerId, false);
-			this.#tui.requestRender();
+			this.#paintLocal();
 		}
 	}
 

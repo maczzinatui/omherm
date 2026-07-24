@@ -20,7 +20,7 @@ List every profile, see which the **gateway** considers active, sticky default, 
 | Profile dirs, config, env, skills, memory | Hermes (`~/.hermes` + `profiles/<name>/`) |
 | Sticky default | Hermes `active_profile` file via `hermes profile use` |
 | Which home the live gateway uses | Gateway process (`config.get` key `profile` / launch HERMES_HOME) |
-| Coat list chrome + confirms | mtui |
+| Coat list chrome + confirms | omherm |
 
 **Never:** rewrite another profile's `config.yaml` from UI except through CLI.  
 **Never:** read or display `.env` secrets (boolean `has_env` only).  
@@ -48,7 +48,7 @@ ProfileInfo {
   name: string              // "default" or slug
   path: string              // absolute HERMES_HOME for that profile
   is_default: boolean
-  is_active: boolean        // matches gateway home, not mtui env alone
+  is_active: boolean        // matches gateway home, not omherm env alone
   is_sticky: boolean        // active_profile file
   gateway_running: boolean  // gateway.pid alive
   model: string | null
@@ -118,7 +118,7 @@ Settings panel imports **ProfilePort** only.
 ## Anti-patterns
 
 - Porting Herm Agents.tsx wholesale  
-- Treating mtui process env as “active” when gateway home differs  
+- Treating omherm process env as “active” when gateway home differs  
 - Editing sticky file or profile dirs with raw FS writes  
 - Showing `.env` contents  
 - Switching profile without warning about session/gateway restart  

@@ -1,8 +1,8 @@
 /**
- * mtui product settings policy — OMP schema is not Hermes.
+ * omherm product settings policy — OMP schema is not Hermes.
  * See docs/SETTINGS_REMAP.md (Cadillac).
  *
- * Product path (default mtui): only COAT + allowlisted BRIDGE rows appear.
+ * Product path (default omherm): only COAT + allowlisted BRIDGE rows appear.
  * PURGE never appears. HERMES rows appear only when allowlisted (backed soon
  * via HermesConfigPort); unmapped Hermes-relevant OMP keys stay hidden until mapped.
  */
@@ -24,14 +24,18 @@ export type SettingVerdict = {
 	group?: string;
 };
 
-/** mtui sets MESHINA_TUI_BRAND=hermes; can force off with MESHINA_TUI_RAW_OMP_SETTINGS=1 */
+/** omherm product settings ON unless raw OMP schema forced. Dual-reads OMHERM_* and legacy MESHINA_TUI_*. */
 export function isHermesProductSettings(): boolean {
-	if (process.env.MESHINA_TUI_RAW_OMP_SETTINGS === "1") return false;
-	if (process.env.MESHINA_TUI_PRODUCT_SETTINGS === "0") return false;
-	return (
-		process.env.MESHINA_TUI_BRAND === "hermes" ||
-		process.env.MESHINA_TUI_PRODUCT_SETTINGS === "1"
-	);
+	const raw =
+		process.env.OMHERM_RAW_OMP_SETTINGS === "1" || process.env.MESHINA_TUI_RAW_OMP_SETTINGS === "1";
+	if (raw) return false;
+	if (process.env.OMHERM_PRODUCT_SETTINGS === "0" || process.env.MESHINA_TUI_PRODUCT_SETTINGS === "0") {
+		return false;
+	}
+	const brand = (process.env.OMHERM_BRAND || process.env.MESHINA_TUI_BRAND || "").toLowerCase();
+	const productOn =
+		process.env.OMHERM_PRODUCT_SETTINGS === "1" || process.env.MESHINA_TUI_PRODUCT_SETTINGS === "1";
+	return brand === "omherm" || brand === "hermes" || brand === "1" || productOn;
 }
 
 type Rule = { re: RegExp; cls: SettingClass; reason: string };

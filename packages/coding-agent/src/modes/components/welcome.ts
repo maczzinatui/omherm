@@ -10,17 +10,30 @@ import {
 import { APP_NAME } from "@oh-my-pi/pi-utils";
 import { theme } from "../../modes/theme/theme";
 import { frame as hermesBrailleFrame, pickChrome, pickWordmark } from "./hermes-splash-art.ts";
+import hermesTipsText from "./hermes-tips.txt" with { type: "text" };
 import tipsText from "./tips.txt" with { type: "text" };
 
 function isHermesProduct(): boolean {
 	return process.env.MESHINA_TUI_BRAND === "hermes" || process.env.MESHINA_TUI_BRAND === "1";
 }
 
-/** Tips embedded at build time, one per line; blanks dropped. */
-const TIPS: readonly string[] = tipsText
-	.split("\n")
-	.map(line => line.trim())
-	.filter(line => line.length > 0);
+function loadTips(raw: string): readonly string[] {
+	return raw
+		.split("\n")
+		.map(line => line.trim())
+		.filter(line => line.length > 0);
+}
+
+/** Stock OMP tips (build-time embed). */
+const OMP_TIPS: readonly string[] = loadTips(tipsText);
+
+/** Hermes / omherm product tips — coat + mesh + Hermes Agent workflows. */
+const HERMES_TIPS: readonly string[] = loadTips(hermesTipsText);
+
+/** Tip pool for the current brand (runtime — launcher sets MESHINA_TUI_BRAND before paint). */
+function activeTips(): readonly string[] {
+	return isHermesProduct() ? HERMES_TIPS : OMP_TIPS;
+}
 
 /**
  * Fixed number of session rows in the welcome box so its height stays stable
@@ -167,10 +180,10 @@ export class WelcomeComponent implements Component {
 			if (theme.getSymbolPreset() === "unicode" && Math.random() < 0.1 && !isHermesProduct()) {
 				this.#selectedTip = "Please use nerdfont 😭.";
 			} else {
-				const pool = isHermesProduct()
-					? TIPS.filter((t) => !/\bomp\b/i.test(t) && !/oh-?my-?pi/i.test(t))
-					: TIPS;
-				this.#selectedTip = pickWeightedTip(pool.length ? pool : TIPS, Math.random());
+				// Hermes uses HERMES_TIPS exclusively (no OMP filter fallback).
+				// Stock OMP keeps tips.txt as-is. Pool is runtime so brand env is live.
+				const pool = activeTips();
+				this.#selectedTip = pickWeightedTip(pool.length ? pool : OMP_TIPS, Math.random());
 			}
 		}
 		return this.#selectedTip || undefined;

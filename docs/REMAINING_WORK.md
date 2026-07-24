@@ -1,11 +1,11 @@
-# Remaining work — mtui M1′ (concrete)
+# Remaining work — omherm M1′ (concrete)
 
-**Stamp:** 2026-07-24 ~11:40 EDT · tip includes `6b47bcd` perf B + quick-access chips · Cadillac: Hermes brain, OMP coat, one launch `mtui`.
+**Stamp:** 2026-07-24 ~12:45 EDT · tip `9e49754` + **dirty B2.1–B2.5** (uncommitted) · Cadillac: Hermes brain, OMP coat, one launch `omherm`.
 
 **Next-session brief (perf + residual):** [`docs/HANDOFF_PERF_WAVE_B.md`](./HANDOFF_PERF_WAVE_B.md)  
 **Parallel sessions:** do **not** edit `~/meshina` hub `plans/HANDOFF.md` / model-lineup from a TUI session.
 
-Dogfood mouse/chrome + P1 dashboard + **P2 inventory/mapper** landed. Relaunch `mtui` after coat/bridge edits (no HMR).
+Dogfood mouse/chrome + P1 dashboard + **P2 inventory/mapper** landed. Relaunch `omherm` after coat/bridge edits (no HMR).
 
 ---
 
@@ -19,6 +19,7 @@ Dogfood mouse/chrome + P1 dashboard + **P2 inventory/mapper** landed. Relaunch `
 | P2 overlays + mapper + trail + image + slash | inventory crash-harden + siblings |
 | Perf pass A | 8s TTL list cache (skills/tools/memory status); mutations invalidate; inventory hover coalesce; status-line `contextUsageRevision` after Hermes `refreshInfo` |
 | Perf pass B (`6b47bcd`) | mouse height WeakMap + assistant/tool note; splash frame LRU; slash cmd Map; ASCII pad |
+| **Perf B2.1–B2.5 (dirty, await commit)** | counters; height sum + editor note; thinking hit cache; coalesce; **overlay-paint** + soft reload local + hover coalesce + model-hub local |
 | Profile CLI | async `Bun.spawn` (no spawnSync on TUI path) |
 | Kanban board switch / slash pager | shipped |
 
@@ -28,33 +29,19 @@ Dogfood mouse/chrome + P1 dashboard + **P2 inventory/mapper** landed. Relaunch `
 
 | # | Item | Why | Owner path |
 |---|------|-----|------------|
-| 1 | **Approvals + clarify → ask-dialog** end-to-end dogfood | Unsafe if notices-only | `ask-dialog.ts` + bridge events |
-| 2 | **Slash exec** deep-link + result path | Fake if autocomplete only | slash router + brain |
-| 3 | **Port mutations fail-loud** | Partially done (banners); dogfood archive/complete CLI death | `hermes-port-list` |
-
-Headless smoke (2026-07-24): slash routes OK; skills 82 / tools 24 / memory ports OK; mapper subagent→notice; bridge **82+** tests.
+| 1 | Approvals + clarify → ask-dialog e2e | safety UX | ask-dialog + bridge |
+| 2 | Slash.exec live gateway results | pager only without live | router + brain |
+| 3 | Port mutations fail-loud under CLI death | silent fail | port-list banners |
 
 ---
 
-## P1 — residual
+## P1 — sessions / config / status
 
-| # | Item | Notes |
+| # | Item | Status |
 |---|------|--------|
-| 5b | Kanban **board switch** | **shipped** — `listBoards` / `switchBoard` + UI `B` / Board form |
-| 7 | Sessions picker = Hermes `session.list` / resume | **partial** — list + picker; **resume wire still open** |
-| 8 | Live `config.set` for hot keys | CLI-only today; ConfigPort exists |
-| 10b | Status line live refresh | revision bump after turn_end |
-
-### Sessions SoT debt (Cadillac #7)
-
-**Fingerprint:** OMP `showSessionSelector` / coat session files are **bookmarks only** while Hermes brain is ON. Transcript of record = Hermes session store via gateway.
-
-| Field | Value |
-|-------|--------|
-| Owner | Hermes `session.*` RPC (preferred) + `sessionsPort` CLI list |
-| Current | Hermes sessions overlay lists; resume path still incomplete vs coat bookmarks |
-| Exit | Wire selector to Hermes sessions + gateway resume/create |
-| Tracked | this file + `docs/HERMES_BRAIN.md` debt #10 + `HANDOFF_PERF_WAVE_B.md` |
+| Sessions resume SoT | list partial; resume incomplete |
+| Live `config.set` hot keys | ConfigPort |
+| Status-line invalidate after usage | revision path partial |
 
 ---
 
@@ -70,15 +57,16 @@ Dogfood: `docs/DOGFOOD_CHECKLIST.md`
 
 ---
 
-## Perf — wave B2 (next; see HANDOFF_PERF_WAVE_B)
+## Perf — wave B2
 
-| Done | Next (ordered) | Skip / non-goal |
-|------|----------------|-----------------|
-| Pass A TTL + hover coalesce | **B2.1** `MTUI_PERF=1` render counters | Markdown lex fork (pi-tui L1/L2 OK) |
-| Pass B height cache + frame LRU + slash Map + ascii pad | **B2.2** chrome/editor height note after grow | React flushSync / Activity (wrong stack) |
-| Shell microtask paint (bridge shell only) | **B2.3** thinking-header hit map cache | SettingsList internals upstream |
-| | **B2.4** Hermes brain paint coalesce in IM | Dual brain / Herm tab strip |
-| | **B2.5** overlay `#paintLocal` audit | Hub model-lineup |
+| Done | Next | Skip / non-goal |
+|------|------|-----------------|
+| Pass A TTL + hover coalesce | Operator dogfood B2 dirty + commit | Markdown lex fork |
+| Pass B height + frame LRU + slash Map | Live `MTUI_PERF=1` stream receipt optional | React flushSync / Activity |
+| **B2.1–B2.5 dirty** | Product P0 residual | Dual brain / Herm tab strip |
+| Shell microtask (bridge shell) | pi-tui overlay partial-compose (upstream) | Hub model-lineup |
+
+Tip debt (not B2): 3× `tool-execution-spinner` “does not tick …” fails on main.
 
 ---
 
@@ -94,5 +82,5 @@ Dual brain, Herm top tab bar, plasma-fractal OS, web dashboard chase, plain-whee
 - No Herm React tab strip / second coordinator  
 - Sessions dual-SoT **named + exit** (above)  
 - Debt named here if deferred  
-- **Relaunch `mtui` after coat/bridge edits** (no hot reload)  
+- **Relaunch `omherm` after coat/bridge edits** (no hot reload)  
 - **Parallel:** hub HANDOFF / VITALS / Config A* = other session  

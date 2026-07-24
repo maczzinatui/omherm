@@ -242,6 +242,14 @@ export class AssistantMessageComponent extends Container {
 	 * for header lines (expand/collapse click targets).
 	 */
 	#thinkingHeaderHits = new Map<number, number>();
+	/**
+	 * `#thinkingHeaderHits` is recomputed every render via
+	 * {@link #rebuildThinkingHeaderHits} — pure given (width, blockVersion).
+	 * Cache the (width, version) that produced the current map; idle ticks skip
+	 * the second child walk.
+	 */
+	#hitsCacheWidth = -1;
+	#hitsCacheVersion = -1;
 	/** Auto-compact finalized thinking longer than this many display chars. */
 	static readonly THINKING_AUTO_COLLAPSE_CHARS = 280;
 
@@ -309,6 +317,10 @@ export class AssistantMessageComponent extends Container {
 	}
 
 	#rebuildThinkingHeaderHits(width: number): void {
+		// Cheap gate: hit map is pure in (width, blockVersion).
+		if (this.#hitsCacheWidth === width && this.#hitsCacheVersion === this.#blockVersion) {
+			return;
+		}
 		this.#thinkingHeaderHits.clear();
 		let row = 0;
 		for (const child of this.#markerSlot.children) {
@@ -324,6 +336,8 @@ export class AssistantMessageComponent extends Container {
 			}
 			row += h;
 		}
+		this.#hitsCacheWidth = width;
+		this.#hitsCacheVersion = this.#blockVersion;
 	}
 
 	setHideThinkingBlock(hide: boolean): void {

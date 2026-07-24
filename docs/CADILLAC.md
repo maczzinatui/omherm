@@ -1,4 +1,4 @@
-# meshina-tui engineering bar (Cadillac)
+# omherm engineering bar (Cadillac)
 
 **Stamp:** 2026-07-23 · **Binding** for every package, doc, and PR in this repo.
 
@@ -10,7 +10,7 @@ Companion plans: `HERMES_GUT_PLAN.md`, `INTEGRATION_CROSSOVERS.md`, `KANBAN_PORT
 
 ## Product sentence
 
-**Hermes is the brain. OMP InteractiveMode is the coat. mtui is the product.**
+**Hermes is the brain. OMP InteractiveMode is the coat. omherm is the product.**
 
 One launch path. One agent loop. One place truth lives for each concern. Coat chrome may be beautiful; it does not get a second brain.
 
@@ -140,7 +140,7 @@ Unnamed debt is a defect.
 - "Just one more component on the thin shell" as product direction  
 - Absorbing multi-file grind into cloud chat when workers/ports should own it  
 - Shipping mapper claims without tests  
-- README / plan drift vs launch path (`mtui` default)
+- README / plan drift vs launch path (`omherm` default)
 
 ---
 
@@ -159,6 +159,6 @@ Unnamed debt is a defect.
 
 ## North star
 
-Someone clones this repo cold. They run `mtui`, read `docs/CADILLAC.md` and the gut plan, and think: **these people knew what they were building and refused to fake it.**
+Someone clones this repo cold. They run `omherm`, read `docs/CADILLAC.md` and the gut plan, and think: **these people knew what they were building and refused to fake it.**
 
 That is the bar. Every slice either raises it or does not ship.

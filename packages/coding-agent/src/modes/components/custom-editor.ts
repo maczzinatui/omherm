@@ -17,6 +17,7 @@ import { imageReferenceHyperlink, PLACEHOLDER_REGEX, renderPlaceholders } from "
 import { hasMagicKeyword, highlightMagicKeywords } from "../magic-keywords";
 import { isQueuedMessageList, parseQueueShorthand, QUEUE_LIST_MARKER_RE } from "../queue-input";
 import { fgOrPlain, theme } from "../theme/theme";
+import { noteComponentHeight } from "../utils/component-height";
 
 type ConfigurableEditorAction = Extract<
 	AppKeybinding,
@@ -923,5 +924,16 @@ export class CustomEditor extends Editor {
 		) {
 			this.insertText("\n");
 		}
+	}
+
+	/**
+	 * B2.2 — mouse hit geometry walks chrome via `componentHeight`. Note our
+	 * painted row count so multiline editor growth is visible on the next
+	 * click without a cold re-render of the editor leaf.
+	 */
+	override render(width: number): readonly string[] {
+		const lines = super.render(width);
+		noteComponentHeight(this, width, lines.length);
+		return lines;
 	}
 }

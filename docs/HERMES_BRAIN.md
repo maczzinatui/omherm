@@ -5,7 +5,7 @@
 
 ## Product sentence
 
-Hermes owns the agent loop. OMP InteractiveMode is the coat. One launch: `mtui`.
+Hermes owns the agent loop. OMP InteractiveMode is the coat. One launch: `omherm`.
 
 ## What landed
 
@@ -23,7 +23,7 @@ Hermes owns the agent loop. OMP InteractiveMode is the coat. One launch: `mtui`.
 
 | Env | Effect |
 |-----|--------|
-| default `mtui` (`MESHINA_TUI_BRAND=hermes`) | **Hermes brain ON** |
+| default `omherm` (`MESHINA_TUI_BRAND=hermes`) | **Hermes brain ON** |
 | `MESHINA_TUI_OMP_BRAIN=1` | Escape hatch: OMP AgentSession loop (coat dogfood only) |
 | `MESHINA_TUI_HERMES_BRAIN=0` | Force off |
 | install failure | Fail open to OMP loop + log error (operator not locked out) |
@@ -51,7 +51,7 @@ Hermes owns the agent loop. OMP InteractiveMode is the coat. One launch: `mtui`.
 4. ~~Approvals / clarify notices only~~ **shipped** ask-dialog host (sudo/secret still missing).  
 5. ~~Slash execution~~ **shipped** router + `slash.exec` (skill names may still need dogfood).  
 6. ~~Port create/edit~~ **shipped** basic field forms; rich Herm cron-editor fields (skills/toolsets/script multi-line) next; Profiles still inventory.  
-7. **Config write lane (Herm parity)** — Herm TUI routes hot keys via gateway `config.set` RPC aliases; mtui HermesConfigPort is **CLI-only**. Live mid-session apply for reasoning/display needs gateway RPC.  
+7. **Config write lane (Herm parity)** — Herm TUI routes hot keys via gateway `config.set` RPC aliases; omherm HermesConfigPort is **CLI-only**. Live mid-session apply for reasoning/display needs gateway RPC.  
 8. **Settings text rows** — never call OMP `settings.get/set` on `hermes:*` paths. Values: HermesConfigPort cache only.  
 9. **slash.exec output** — currently notice + status; pager overlay like Herm is nicer for long help.  
 10. **Sessions list/resume** still OMP chrome — **named debt 2026-07-24:** coat bookmarks only under Hermes brain; exit = gateway `session.list` / resume via brain or hide resume + label. See `docs/REMAINING_WORK.md` §Sessions SoT.  
@@ -61,7 +61,7 @@ Hermes owns the agent loop. OMP InteractiveMode is the coat. One launch: `mtui`.
 
 ## Dogfood gate
 
-1. `mtui`  
+1. `omherm`  
 2. Notice: hermes-brain installed + model  
 3. One real user message → assistant stream + tools  
 4. Esc interrupts Hermes turn  

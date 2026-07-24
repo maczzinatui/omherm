@@ -7,6 +7,7 @@ import { matchesKey, visibleWidth } from "@oh-my-pi/pi-tui"
 import { theme } from "../theme/theme"
 import { bottomBorder, fit, row, topBorder } from "./overlay-box"
 import { matchesSelectCancel, matchesSelectDown, matchesSelectPageDown, matchesSelectPageUp, matchesSelectUp } from "../utils/keybinding-matchers"
+import { enableOverlayScopedPaint, paintOverlayLocal } from "../utils/overlay-paint"
 
 function safeFg(color: "accent" | "dim" | "error" | "muted", text: string): string {
 	try {
@@ -30,11 +31,7 @@ export class HermesTextOverlayComponent implements Component {
 		this.#lines = (body || "(empty)").replace(/\r\n/g, "\n").split("\n")
 		this.#onClose = onClose
 		this.#pathHint = pathHint
-		try {
-			this.#tui.enableScopedInputRender?.(this)
-		} catch {
-			/* optional */
-		}
+		enableOverlayScopedPaint(this.#tui, this)
 	}
 
 	handleInput(data: string): void {
@@ -79,19 +76,7 @@ export class HermesTextOverlayComponent implements Component {
 	}
 
 	#paint(): void {
-		try {
-			if (typeof this.#tui.requestComponentRender === "function") {
-				this.#tui.requestComponentRender(this)
-			} else {
-				this.#tui.requestRender()
-			}
-		} catch {
-			try {
-				this.#tui.requestRender()
-			} catch {
-				/* swallow */
-			}
-		}
+		paintOverlayLocal(this.#tui, this)
 	}
 
 	render(width: number): string[] {

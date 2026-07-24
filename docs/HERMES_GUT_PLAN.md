@@ -1,7 +1,7 @@
-# Hermes gut-and-plug plan (OMP TUI → meshina-tui)
+# Hermes gut-and-plug plan (OMP TUI → omherm)
 
 **Decision (2026-07-23, operator):** stop rebuilding OMP UI piece-by-piece.  
-Clone OMP source, **gut agent runtime**, **plug Hermes gateway**. Ship `mtui`.
+Clone OMP source, **gut agent runtime**, **plug Hermes gateway**. Ship `omherm`.
 
 ## Non-goals
 
@@ -79,10 +79,10 @@ Map gateway events → existing UI event controller shapes in
 ## Phased work
 
 ### P0 — Boot stock OMP from this tree
-- [x] Clean meshina-tui of scratch scaffold
+- [x] Clean omherm of scratch scaffold
 - [x] Vendor oh-my-pi packages + lockfile
 - [ ] `bun install` green
-- [ ] `mtui` wrapper can still run **stock** `omp` for visual reference
+- [ ] `omherm` wrapper can still run **stock** `omp` for visual reference
 
 ### P1 — Hermes bridge package
 - [x] `packages/hermes-bridge/` with gateway client (stdio/WS)
@@ -93,7 +93,7 @@ Map gateway events → existing UI event controller shapes in
 - [x] bun test hermes-bridge session-event-map (3 pass)
 
 ### P2 — InteractiveMode on bridge
-- [x] New entry: `src/mtui.ts` — default full InteractiveMode; `--bridge` experimental
+- [x] New entry: `src/omherm.ts` — default full InteractiveMode; `--bridge` experimental
 - [x] Bridge shell uses OMP ToolExecution + Markdown (not LineBox) + model•effort footer
 - [x] Edge mapper + HermesBrain install (`docs/HERMES_BRAIN.md`) — product default Hermes loop under IM
 - [ ] Prefer fork InteractiveMode and delete AgentSession coat-only surface over time
@@ -106,7 +106,7 @@ See `docs/INTEGRATION_CROSSOVERS.md` — paint coalesce, native scrollback seal,
 See **`docs/CADILLAC.md`**. Public-scrutiny quality, one owner per concern, ports only, named debt. Every package/PR.
 
 ### Settings truth (binding)
-See **`docs/SETTINGS_REMAP.md`**. OMP/pi `settings-schema` (~428 keys) is **not** Hermes config. mtui product path filters via `settings-product-manifest.ts` (purge OMP agent lies; coat chrome only until HermesConfigPort). Ports (Kanban/Cron/Profiles) are hub panels, not OMP toggles.
+See **`docs/SETTINGS_REMAP.md`**. OMP/pi `settings-schema` (~428 keys) is **not** Hermes config. omherm product path filters via `settings-product-manifest.ts` (purge OMP agent lies; coat chrome only until HermesConfigPort). Ports (Kanban/Cron/Profiles) are hub panels, not OMP toggles.
 
 ### P3 — Hermes chrome inside OMP settings (no Herm top tab bar)
 
@@ -120,7 +120,7 @@ See **`docs/SETTINGS_REMAP.md`**. OMP/pi `settings-schema` (~428 keys) is **not*
 - Profiles = FS inventory + `hermes profile` mutations; gateway home = active
 
 ### P4 — Product cutover
-- [ ] bin `mtui` / `meshina-tui`
+- [ ] bin `omherm` / `omherm`
 - [ ] Stock `hermes --tui` remains fallback until dogfood OK
 - [ ] Document upgrade from OMP tip (`.omp-upstream-sha`)
 

@@ -15,7 +15,7 @@ import {
 	TUI,
 	type Component,
 } from "@oh-my-pi/pi-tui";
-import { HermesGateway, type SessionInfo, type UiEvent, type Usage } from "@meshina/hermes-bridge";
+import { HermesGateway, type SessionInfo, type UiEvent, type Usage } from "@omherm/hermes-bridge";
 import { ToolExecutionComponent, type ToolExecutionUi } from "./components/tool-execution.ts";
 import { getEditorTheme, getMarkdownTheme, initTheme, theme } from "./theme/theme.ts";
 

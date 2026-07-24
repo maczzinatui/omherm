@@ -1,5 +1,17 @@
 # Development Rules
 
+## Product: omherm
+
+This monorepo is **[omherm](https://github.com/maczzinatui/omherm)** — OMP InteractiveMode coat + Hermes brain ports.
+
+- CLI: `omh` (`scripts/omh`; full name `omherm`; legacy `mtui`)
+- Coat packages remain `@oh-my-pi/*` (upstream Oh My Pi)
+- Bridge package: `@omherm/hermes-bridge`
+- Attributions: `NOTICE` · License: MIT `LICENSE`
+- Prefer not to add dual-brain / Herm React tab strip as second coordinator
+
+---
+
 ## Default Context
 
 This repo contains multiple packages, but **`packages/coding-agent/`** is the primary focus. Unless otherwise specified, assume work refers to this package.

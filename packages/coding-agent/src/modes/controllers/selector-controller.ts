@@ -1080,7 +1080,7 @@ export class SelectorController {
 							this.ctx.showStatus(`${defaultStatusLabel} model: ${selector ?? model.id}`);
 							// Product path: keep Hermes config.yaml in lockstep with OMP default role
 							if (isHermesProductSettings()) {
-								void import("@meshina/hermes-bridge")
+								void import("@omherm/hermes-bridge")
 									.then(({ applyHermesModelGlobal }) =>
 										applyHermesModelGlobal(model.provider, model.id),
 									)

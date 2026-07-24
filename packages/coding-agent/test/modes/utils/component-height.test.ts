@@ -36,6 +36,35 @@ describe("componentHeight cache", () => {
 		expect(componentHeight(c, 40)).toBe(2);
 		expect(renders).toBe(1);
 	});
+
+	it("Container child-sum uses warm children without parent render (B2.2)", () => {
+		let parentRenders = 0;
+		const childA: Component = {
+			render() {
+				return ["a1", "a2"];
+			},
+		};
+		const childB: Component = {
+			render() {
+				return ["b1"];
+			},
+		};
+		noteComponentHeight(childA, 80, 2);
+		noteComponentHeight(childB, 80, 1);
+		const parent = {
+			children: [childA, childB],
+			render() {
+				parentRenders++;
+				return ["p"];
+			},
+		} as unknown as Component;
+		expect(componentHeight(parent, 80)).toBe(3);
+		expect(parentRenders).toBe(0);
+		// Child growth visible without parent cache masking
+		noteComponentHeight(childB, 80, 4);
+		expect(componentHeight(parent, 80)).toBe(6);
+		expect(parentRenders).toBe(0);
+	});
 });
 
 describe("hermes splash frame cache", () => {

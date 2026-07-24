@@ -14,7 +14,7 @@ import {
   isHermesBrainEnabled,
   type HermesBrainEvent,
   type HermesDialogHost,
-} from "@meshina/hermes-bridge"
+} from "@omherm/hermes-bridge"
 import type { AgentSession, AgentSessionEvent, PromptOptions } from "../session/agent-session.ts"
 import { logger } from "@oh-my-pi/pi-utils"
 import { getOrCreateSubagentTrailStore } from "./components/subagent-trail"

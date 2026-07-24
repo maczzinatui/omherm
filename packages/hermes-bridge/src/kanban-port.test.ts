@@ -10,7 +10,7 @@ import {
 describe("kanban list parse", () => {
 	test("parses hermes kanban list lines", () => {
 		const text = `
-▶ t_b7088a12  ready     (unassigned)          M1′: meshina-tui dogfood
+▶ t_b7088a12  ready     (unassigned)          M1′: omherm dogfood
 ✓ t_deadbeef  done      (herm)                shipped coat
 `
 		const tasks = parseKanbanListOutput(text)
@@ -18,7 +18,7 @@ describe("kanban list parse", () => {
 		expect(tasks[0].id).toBe("t_b7088a12")
 		expect(tasks[0].status).toBe("ready")
 		expect(tasks[0].assignee).toBe(null)
-		expect(tasks[0].title).toContain("meshina-tui")
+		expect(tasks[0].title).toContain("omherm")
 		expect(tasks[1].assignee).toBe("herm")
 	})
 

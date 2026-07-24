@@ -16,7 +16,7 @@ import {
 	type Tool,
 	type MemoryFile,
 	type MemoryStatus,
-} from "@meshina/hermes-bridge"
+} from "@omherm/hermes-bridge"
 import { theme } from "../theme/theme"
 import { bottomBorder, divider, fit, row, topBorder } from "./overlay-box"
 import {
@@ -26,6 +26,12 @@ import {
 	matchesSelectPageUp,
 	matchesSelectUp,
 } from "../utils/keybinding-matchers"
+import {
+	enableOverlayScopedPaint,
+	paintOverlayFull,
+	paintOverlayLocal,
+	paintOverlayReload,
+} from "../utils/overlay-paint"
 
 export type HermesInventoryKind = "skills" | "tools" | "memory"
 
@@ -102,36 +108,16 @@ export class HermesInventoryListComponent implements Component {
 		this.#tui = tui
 		this.#kind = kind
 		this.#onCancel = onCancel
-		try {
-			this.#tui.enableScopedInputRender?.(this)
-		} catch {
-			/* optional */
-		}
+		enableOverlayScopedPaint(this.#tui, this)
 		void this.reload()
 	}
 
 	#paintLocal(): void {
-		try {
-			if (typeof this.#tui.requestComponentRender === "function") {
-				this.#tui.requestComponentRender(this)
-			} else {
-				this.#tui.requestRender()
-			}
-		} catch {
-			try {
-				this.#tui.requestRender()
-			} catch {
-				/* swallow — never take down TUI */
-			}
-		}
+		paintOverlayLocal(this.#tui, this)
 	}
 
 	#paintFull(): void {
-		try {
-			this.#tui.requestRender()
-		} catch {
-			/* swallow */
-		}
+		paintOverlayFull(this.#tui)
 	}
 
 	async reload(): Promise<void> {
@@ -170,7 +156,7 @@ export class HermesInventoryListComponent implements Component {
 			this.#error = e instanceof Error ? e.message : String(e)
 		} finally {
 			this.#loading = false
-			this.#paintFull()
+			paintOverlayReload(this.#tui, this, false)
 		}
 	}
 
