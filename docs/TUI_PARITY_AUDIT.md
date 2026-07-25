@@ -59,8 +59,8 @@ Analytics, Journey, Herm leader chords, dual brain, computer-use stack, web dash
 |-------------|------|------|-----|
 | `slash.exec` | yes | **shipping** | P0 |
 | `cron.manage` | yes | CLI port | P1 |
-| `config.set` live aliases | yes | CLI only | P1 |
-| `session.steer` | yes | interrupt+new | P1 |
+| `config.set` live aliases | yes | RPC hot keys (config-lane) + CLI cold | P1 |
+| `session.steer` | yes | RPC path (steer) + interrupt+new fallback | P1 |
 | `session.list/resume/activate` | yes | weak | P1 |
 | `session.compress` / usage | yes | partial | P2 |
 | `approval.respond` / `clarify.respond` | dialogs | **shipping ask-dialog** | P0 |
