@@ -1,16 +1,20 @@
 # omherm engineering bar (Cadillac)
 
-**Stamp:** 2026-07-23 · **Binding** for every package, doc, and PR in this repo.
+**Stamp:** 2026-07-25 · **Binding** for every package, doc, and PR in this repo.
 
 This is not vibes. If the repo is public tomorrow, a cold reader should be able to audit ownership, contracts, and debt without asking us. Ship work you would sign.
 
 Companion plans: `HERMES_GUT_PLAN.md`, `INTEGRATION_CROSSOVERS.md`, `KANBAN_PORT.md`.
 
+**Brain CADILLAC (same bar, different body):** hermes-agent-lite  
+`docs/CADILLAC.md` · synergy `docs/lean/SYNERGY-OMHERM.md` · gains `docs/lean/GAINS-OVER-STOCK.md`  
+(live install `~/.hermes/hermes-agent` tracks that fork.)
+
 ---
 
 ## Product sentence
 
-**Hermes is the brain. OMP InteractiveMode is the coat. omherm is the product.**
+**Hermes-lite is the brain. OMP InteractiveMode is the coat. omherm is the product. The mesh is the body.**
 
 One launch path. One agent loop. One place truth lives for each concern. Coat chrome may be beautiful; it does not get a second brain.
 
