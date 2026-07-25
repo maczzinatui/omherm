@@ -1,7 +1,7 @@
 import { type Component, Container, Markdown } from "@oh-my-pi/pi-tui";
 import { formatBytes } from "@oh-my-pi/pi-utils";
 import { getMarkdownTheme, theme } from "../../modes/theme/theme";
-import { imageReferenceHyperlink, renderPlaceholders } from "../image-references";
+import { attachedImageHyperlink, imageReferenceHyperlink, renderPlaceholders } from "../image-references";
 import { highlightMagicKeywords } from "../magic-keywords";
 
 // OSC 133 shell integration: marks prompt zones for terminal multiplexers
@@ -39,10 +39,15 @@ export class UserMessageComponent extends Container {
 		const color = (value: string) =>
 			renderPlaceholders(value, {
 				renderText: baseText,
-				renderReference: (label, kind, index) =>
-					kind === "image"
-						? imageReferenceHyperlink(label, index, imageLinks, imageLabel)
-						: theme.fg("accent", `\x1b[1m${label}\x1b[22m`),
+				renderReference: (label, kind, index, path) => {
+					if (kind === "image") {
+						return imageReferenceHyperlink(label, index, imageLinks, imageLabel)
+					}
+					if (kind === "attached-image") {
+						return attachedImageHyperlink(label, path ?? "", imageLabel)
+					}
+					return theme.fg("accent", `\x1b[1m${label}\x1b[22m`)
+				},
 			});
 		const md = new Markdown(text, 1, 1, getMarkdownTheme(), {
 			bgColor,

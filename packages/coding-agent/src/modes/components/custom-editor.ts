@@ -13,7 +13,7 @@ import {
 import { BracketedPasteHandler } from "@oh-my-pi/pi-tui/bracketed-paste";
 import type { AppKeybinding } from "../../config/keybindings";
 import { isSettingsInitialized, settings } from "../../config/settings";
-import { imageReferenceHyperlink, PLACEHOLDER_REGEX, renderPlaceholders } from "../image-references";
+import { attachedImageHyperlink, imageReferenceHyperlink, PLACEHOLDER_REGEX, renderPlaceholders } from "../image-references";
 import { hasMagicKeyword, highlightMagicKeywords } from "../magic-keywords";
 import { isQueuedMessageList, parseQueueShorthand, QUEUE_LIST_MARKER_RE } from "../queue-input";
 import { fgOrPlain, theme } from "../theme/theme";
@@ -424,12 +424,19 @@ export class CustomEditor extends Editor {
 				}
 				return highlighted;
 			},
-			renderReference: (value, kind, index) =>
-				kind === "image"
-					? imageReferenceHyperlink(value, index, this.imageLinks, label =>
-							fgOrPlain("accent", label, `\x1b[1m\x1b[4m${label}\x1b[24m\x1b[22m`),
-						)
-					: fgOrPlain("accent", value, `\x1b[1m${value}\x1b[22m`),
+			renderReference: (value, kind, index, path) => {
+				if (kind === "image") {
+					return imageReferenceHyperlink(value, index, this.imageLinks, label =>
+						fgOrPlain("accent", label, `\x1b[1m\x1b[4m${label}\x1b[24m\x1b[22m`),
+					)
+				}
+				if (kind === "attached-image") {
+					return attachedImageHyperlink(value, path ?? "", label =>
+						fgOrPlain("accent", label, `\x1b[1m\x1b[4m${label}\x1b[24m\x1b[22m`),
+					)
+				}
+				return fgOrPlain("accent", value, `\x1b[1m${value}\x1b[22m`)
+			},
 		});
 	};
 

@@ -1,6 +1,6 @@
 # Hermes brain under InteractiveMode
 
-**Stamp:** 2026-07-23 · **Cadillac:** `CADILLAC.md`  
+**Stamp:** 2026-07-24 ~21:30 (Friday closeout — image wire + interrupt peel) · **Cadillac:** `CADILLAC.md`  
 **Companion:** `HERMES_GUT_PLAN.md` P2, `INTEGRATION_CROSSOVERS.md` §9–10, `TUI_PARITY_AUDIT.md`
 
 ## Product sentence
@@ -62,6 +62,8 @@ Hermes owns the agent loop. OMP InteractiveMode is the coat. One launch: `omherm
 14. ~~Role-model keyboard cycle OMP registry~~ **fixed 2026-07-24** — `cycleHermesModel` + `pickNextHermesModelRow`.
 15. ~~**Boot bloat**~~ **partial 2026-07-24** — interactive Hermes path applies `hermes-coat-boot.ts`: empty `toolNames` + `restrictToolNames`, MCP/LSP/IRC off, skip OMP extension discovery + model registry refresh. Still constructs AgentSession host for chrome/`!bash`. **CockpitSession facade shipped** — migrate call sites; full peel later.
 16. ~~**Synthetic 128k contextWindow**~~ **fixed 2026-07-24** — `resolveHermesContextWindow` maps `usage.context_max` into coat Model.
+17. ~~**Image paste via Hermes → clickable path link in user-bubble**~~ **shipped 2026-07-24** — `image-references.ts` recognises `[Attached image: <path>]` as a third placeholder kind (`attached-image`); `attachedImageHyperlink` emits an OSC 8 file:// hyperlink. The legacy `[Image #N]` / `[Paste #N]` pipeline is untouched. Gateway-side image rendering still out of scope (the bridge forwards `images` as opaque JSON-RPC params; gateway ignores unknown fields → text-only degrade).
+18. ~~**Restore-queued Esc path bypasses cockpit on brain-installed sessions**~~ **fixed 2026-07-24** — `input-controller.ts:1408` and `:1447` (`if (options?.abort)` branches inside `restoreQueuedMessagesToEditor`) now route through the existing `#abortStreamingTurn()` helper. One source of truth for cockpit-first / OMP-fallback interrupt.
 
 ## Dogfood gate
 
