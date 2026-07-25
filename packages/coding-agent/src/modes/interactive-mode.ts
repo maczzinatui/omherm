@@ -148,7 +148,6 @@ import {
 	VibeSessionRegistry,
 } from "../vibe/runtime";
 import type { AssistantMessageComponent } from "./components/assistant-message";
-import { AssistantMessageComponent as AssistantMessageComponentClass } from "./components/assistant-message";
 import { ToolExecutionComponent } from "./components/tool-execution";
 import type { BashExecutionComponent } from "./components/bash-execution";
 import { ChatBlock, type ChatBlockHost } from "./components/chat-block";
@@ -5023,53 +5022,57 @@ export class InteractiveMode implements InteractiveModeContext {
 				consumed = true;
 				return true;
 			}
-			const kids = this.chatContainer.children;
-			const heights: number[] = kids.map(c => componentHeight(c, width));
-			const total = heights.reduce((a, b) => a + b, 0);
-			let rowCursor = chatBottomExclusive - total;
-			for (let i = 0; i < kids.length; i++) {
-				const h = heights[i] ?? 0;
-				const startRow = rowCursor;
-				const endRow = rowCursor + h;
-				if (event.row >= startRow && event.row < endRow) {
-					const local = event.row - startRow;
-					const child = kids[i];
-					if (child instanceof AssistantMessageComponentClass) {
-						if (child.handleThinkingHeaderClick(local)) {
-							this.ui.requestRender();
-							consumed = true;
-							return true;
-						}
-					} else if (child instanceof ToolExecutionComponent) {
-						child.setExpanded(!child.isExpanded());
+			// Map screen row → transcript assembled geometry (strip edges + seps),
+			// then into the child's raw render line for thinking/tool hit APIs.
+			const assembledTotal = this.chatContainer.assembledRowCount(width);
+			const visibleChatRows = chatBottomExclusive;
+			// Bottom-align the assembled transcript in the region above chrome
+			// (matches TUI viewport showing the frame tail).
+			const assembledRow = assembledTotal - visibleChatRows + event.row;
+			const hit = this.chatContainer.hitTestAssembledRow(assembledRow, width);
+			if (hit) {
+				const child = hit.component;
+				const local = hit.localLine;
+				const thinking = child as { handleThinkingHeaderClick?: (n: number) => boolean };
+				if (typeof thinking.handleThinkingHeaderClick === "function") {
+					if (thinking.handleThinkingHeaderClick(local)) {
 						this.ui.requestRender();
 						consumed = true;
 						return true;
-					} else if (child instanceof Container) {
-						let innerY = 0;
-						for (const grand of child.children) {
-							const gh = componentHeight(grand, width);
-							if (local >= innerY && local < innerY + gh) {
-								if (grand instanceof AssistantMessageComponentClass) {
-									if (grand.handleThinkingHeaderClick(local - innerY)) {
-										this.ui.requestRender();
-										consumed = true;
-										return true;
-									}
-								} else if (grand instanceof ToolExecutionComponent) {
-									grand.setExpanded(!grand.isExpanded());
+					}
+				}
+				if (child instanceof ToolExecutionComponent) {
+					child.setExpanded(!child.isExpanded());
+					this.ui.requestRender();
+					consumed = true;
+					return true;
+				}
+				// Grouped blocks (TranscriptBlock / Container): walk grandchildren
+				// with the same strip-aware local offset approximation (raw local).
+				if (child instanceof Container) {
+					let innerY = 0;
+					for (const grand of child.children) {
+						const gh = componentHeight(grand, width);
+						if (local >= innerY && local < innerY + gh) {
+							const gLocal = local - innerY;
+							const gThink = grand as { handleThinkingHeaderClick?: (n: number) => boolean };
+							if (typeof gThink.handleThinkingHeaderClick === "function") {
+								if (gThink.handleThinkingHeaderClick(gLocal)) {
 									this.ui.requestRender();
 									consumed = true;
 									return true;
 								}
-								break;
+							} else if (grand instanceof ToolExecutionComponent) {
+								grand.setExpanded(!grand.isExpanded());
+								this.ui.requestRender();
+								consumed = true;
+								return true;
 							}
-							innerY += gh;
+							break;
 						}
+						innerY += gh;
 					}
-					break;
 				}
-				rowCursor = endRow;
 			}
 			consumed = true;
 			return true;

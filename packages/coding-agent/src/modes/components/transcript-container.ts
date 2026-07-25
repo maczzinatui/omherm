@@ -513,6 +513,106 @@ export class TranscriptContainer
 		this.#stableRowsFloor = Math.min(stableFloorBefore, stableRows, row);
 		return lines;
 	}
+
+	/**
+	 * Map a 0-based row within this container's last assembled frame to a child
+	 * and a 0-based line in that child's raw `render()` output.
+	 *
+	 * Mouse hit-tests must use this — not raw `componentHeight` sums — because
+	 * assembly strips plain blank edges and inserts a one-line separator between
+	 * blocks. Routing with unstripped heights lands clicks on the wrong block
+	 * (thinking "click to collapse" / tool chrome expand appear dead).
+	 */
+	hitTestAssembledRow(
+		assembledRow: number,
+		width: number,
+	): { component: Component; localLine: number } | undefined {
+		width = Math.max(1, width);
+		if (assembledRow < 0) return undefined;
+
+		// Prefer last compose segments when width matches; else rebuild strip+sep.
+		let segments = this.#segments;
+		let totalRows = this.#lines.length;
+		if (this.#renderWidth !== width || segments === EMPTY_SEGMENTS || segments.length !== this.children.length) {
+			const rebuilt = this.#buildHitSegments(width);
+			segments = rebuilt.segments;
+			totalRows = rebuilt.totalRows;
+		}
+		if (assembledRow >= totalRows) return undefined;
+
+		for (let i = 0; i < segments.length; i++) {
+			const seg = segments[i];
+			if (!seg || seg.rowCount === 0) continue;
+			const end = seg.startRow + seg.rowCount;
+			if (assembledRow < seg.startRow || assembledRow >= end) continue;
+			const within = assembledRow - seg.startRow;
+			if (within < seg.sep) return undefined; // blank separator between blocks
+			const contribIndex = within - seg.sep;
+			// Map stripped contribution index back into raw render coordinates.
+			const raw = seg.rawRef;
+			let lead = 0;
+			while (lead < raw.length && isPlainBlank(raw[lead]!)) lead++;
+			const localLine = lead + contribIndex;
+			if (localLine < 0 || localLine >= raw.length) return undefined;
+			return { component: seg.component, localLine };
+		}
+		return undefined;
+	}
+
+	/** Total assembled row count at last paint (or rebuild at `width`). */
+	assembledRowCount(width: number): number {
+		width = Math.max(1, width);
+		if (this.#renderWidth === width && this.#segments !== EMPTY_SEGMENTS) {
+			return this.#lines.length;
+		}
+		return this.#buildHitSegments(width).totalRows;
+	}
+
+	#buildHitSegments(width: number): { segments: BlockSegment[]; totalRows: number } {
+		const segments: BlockSegment[] = new Array(this.children.length);
+		let row = 0;
+		for (let i = 0; i < this.children.length; i++) {
+			const child = this.children[i]!;
+			let raw: readonly string[];
+			try {
+				raw = child.render(width);
+			} catch {
+				raw = [];
+			}
+			const contribution = stripPlainBlankEdges(raw);
+			if (contribution.length === 0) {
+				segments[i] = {
+					component: child,
+					rawRef: raw,
+					contribution,
+					width,
+					generation: this.#generation,
+					startRow: row,
+					rowCount: 0,
+					sep: 0,
+					finalized: true,
+					version: undefined,
+				};
+				continue;
+			}
+			const sep = row > 0 ? 1 : 0;
+			const rowCount = sep + contribution.length;
+			segments[i] = {
+				component: child,
+				rawRef: raw,
+				contribution,
+				width,
+				generation: this.#generation,
+				startRow: row,
+				rowCount,
+				sep,
+				finalized: true,
+				version: undefined,
+			};
+			row += rowCount;
+		}
+		return { segments, totalRows: row };
+	}
 }
 
 /**
