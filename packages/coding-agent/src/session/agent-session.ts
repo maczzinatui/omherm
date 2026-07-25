@@ -1100,6 +1100,11 @@ export interface PromptOptions {
 	toolChoice?: ToolChoice;
 	/** Send as developer/system message instead of user. Providers that support it use the developer role; others fall back to user. */
 	synthetic?: boolean;
+	/** Hermes plan-mode approval flag. Only honored when the Hermes brain is
+	 *  installed on the session. Other synthetic prompts (auto-continue, advisor
+	 *  re-prime, vibe) keep failing loud — they are not Hermes-port-equivalent
+	 *  yet. */
+	hermesPlanMode?: boolean;
 	/** Marks this prompt as a deliberate user action (typed message, `.`/`c`
 	 *  continue). Clears advisor auto-resume suppression that a user interrupt set.
 	 *  Defaults to `!synthetic`; manual-continue is synthetic yet user-initiated, so

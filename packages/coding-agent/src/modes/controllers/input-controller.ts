@@ -19,6 +19,7 @@ import type { InteractiveModeContext } from "../../modes/types";
 import manualContinuePrompt from "../../prompts/system/manual-continue.md" with { type: "text" };
 import { USER_INTERRUPT_LABEL } from "../../session/messages";
 import { executeBuiltinSlashCommand } from "../../slash-commands/builtin-registry";
+import { getInstalledCockpitSession } from "../hermes-brain-install";
 import { isTinyTitleLocalModelKey } from "../../tiny/models";
 import { isLowSignalTitleInput } from "../../tiny/text";
 import { tinyTitleClient } from "../../tiny/title-client";
@@ -229,6 +230,15 @@ export class InputController {
 	}
 
 	#abortStreamingTurn(): void {
+		// Peel: prefer CockpitSession facade over OMP session.abort when Hermes
+		// brain is installed. Same intent (interrupt in-flight turn), no
+		// synthetic OMP abort fallback. Falls back to session.abort when brain
+		// is not installed (MESHINA_TUI_OMP_BRAIN=1 escape / test paths).
+		const cockpit = getInstalledCockpitSession(this.ctx.session);
+		if (cockpit) {
+			void cockpit.interrupt();
+			return;
+		}
 		void this.ctx.session.abort({ reason: USER_INTERRUPT_LABEL });
 	}
 

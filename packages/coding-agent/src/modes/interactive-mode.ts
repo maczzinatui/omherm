@@ -3333,14 +3333,14 @@ export class InteractiveMode implements InteractiveModeContext {
 		// flips true between the check and dispatch (the same fire-and-forget race
 		// noted below), catch `AgentBusyError` and fall back to the same queue.
 		if (this.session.isStreaming) {
-			await this.session.followUp(planModePrompt, undefined, { synthetic: true });
+			await this.session.followUp(planModePrompt, undefined, { synthetic: true, hermesPlanMode: true });
 			return;
 		}
 		try {
-			await this.session.prompt(planModePrompt, { synthetic: true });
+			await this.session.prompt(planModePrompt, { synthetic: true, hermesPlanMode: true });
 		} catch (error) {
 			if (!(error instanceof AgentBusyError)) throw error;
-			await this.session.followUp(planModePrompt, undefined, { synthetic: true });
+			await this.session.followUp(planModePrompt, undefined, { synthetic: true, hermesPlanMode: true });
 		}
 	}
 	async #abortPlanApprovalTurnSilently(): Promise<void> {

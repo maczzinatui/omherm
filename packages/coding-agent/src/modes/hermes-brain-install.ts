@@ -38,6 +38,41 @@ const BRAIN_KEY = Symbol.for("omherm.hermesBrain")
 const HANDLE_KEY = Symbol.for("omherm.hermesBrainHandle")
 const COCKPIT_KEY = Symbol.for("omherm.cockpitSession")
 
+/**
+ * Decide whether a synthetic prompt may flow through the Hermes brain.
+ *
+ * Synthetic = OMP-attributed message (plan mode, advisor auto-continue, vibe
+ * re-prime, reminders). Default behavior: reject loud — those features are not
+ * Hermes-port-equivalent yet, and silently routing them would be a silent dual
+ * brain.
+ *
+ * Narrow exception: plan-mode approval (`hermesPlanMode: true`) — the user
+ * already saw the plan in the review overlay and clicked approve, so the
+ * execution turn is a deliberate user action. We tag it with an info notice so
+ * the operator sees the routing.
+ *
+ * Honest contract: `synthetic: true` alone is the dangerous case. Any future
+ * port adds a sibling flag, not a widening of this gate.
+ */
+export function shouldAcceptSyntheticPrompt(opts: {
+  synthetic?: boolean
+  hermesPlanMode?: boolean
+}): { accept: boolean; noticeLevel?: "info" | "warning"; notice?: string } {
+  if (!opts.synthetic) return { accept: true }
+  if (opts.hermesPlanMode) {
+    return {
+      accept: true,
+      noticeLevel: "info",
+      notice: "Hermes brain: plan-mode approval routed as a Hermes turn.",
+    }
+  }
+  return {
+    accept: false,
+    noticeLevel: "warning",
+    notice: "Hermes brain: synthetic coat prompts are not ported yet (plan/vibe modes).",
+  }
+}
+
 export function getInstalledHermesBrain(session: AgentSession): HermesBrain | undefined {
   return (session as unknown as Record<symbol, HermesBrain | undefined>)[BRAIN_KEY]
 }
@@ -107,18 +142,19 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
   }
 
   session.prompt = async (text: string, options?: PromptOptions): Promise<boolean> => {
-    // Synthetic coat-internal prompts (plan mode, etc.) must not hit Hermes until
-    // those features are ported — fail loud rather than silent dual-brain.
-    if (options?.synthetic) {
+    const gate = shouldAcceptSyntheticPrompt({
+      synthetic: options?.synthetic,
+      hermesPlanMode: options?.hermesPlanMode,
+    })
+    if (!gate.accept) {
       logger.warn("hermes-brain: rejecting synthetic OMP prompt (not ported)", {
         preview: text.slice(0, 80),
       })
-      session.emitNotice?.(
-        "warning",
-        "Hermes brain: synthetic coat prompts are not ported yet (plan/vibe modes).",
-        "hermes-brain",
-      )
+      session.emitNotice?.(gate.noticeLevel!, gate.notice!, "hermes-brain")
       return false
+    }
+    if (gate.notice) {
+      session.emitNotice?.(gate.noticeLevel!, gate.notice, "hermes-brain")
     }
     await brain.prompt(text)
     return true
