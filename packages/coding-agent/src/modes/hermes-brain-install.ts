@@ -22,6 +22,12 @@ import { logger } from "@oh-my-pi/pi-utils"
 import { getOrCreateSubagentTrailStore } from "./components/subagent-trail"
 import { bootMark } from "./utils/perf-counters"
 
+export type HermesBootNotice = {
+  level: "info" | "warning" | "error"
+  message: string
+  source?: string
+}
+
 export type HermesBrainHandle = {
   brain: HermesBrain
   /** Narrow facade — prefer for new coat call sites over raw brain. */
@@ -32,6 +38,12 @@ export type HermesBrainHandle = {
   setWorkingMessage?: (message?: string) => void
   /** Invalidate footer/status after Hermes identity (model/effort) changes. */
   invalidateChrome?: () => void
+  /**
+   * Lean handshake + model identity for startup paint. Emitted during install
+   * *before* InteractiveMode/EventController subscribe, so callers must push
+   * these into runInteractiveMode `notifs` (or flush on first subscribe).
+   */
+  startupNotices: HermesBootNotice[]
 }
 
 const BRAIN_KEY = Symbol.for("omherm.hermesBrain")
@@ -95,6 +107,26 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
   await brain.bootstrap()
   bootMark("hermes_brain_bootstrap_done")
 
+  // S0 lean handshake + model identity — must be painted AFTER IM subscribes.
+  // brain.bootstrap already #emit'd lean-handshake into an empty listener set;
+  // session.emitNotice here would also die silent (EventController not up yet).
+  const startupNotices: HermesBootNotice[] = [
+    {
+      level: brain.leanProduct?.lean ? "info" : "warning",
+      message: brain.formatLeanBootNotice(),
+      source: "lean-handshake",
+    },
+  ]
+  const info = brain.sessionInfo
+  if (info.model) {
+    startupNotices.push({
+      level: "info",
+      message: `Hermes brain · ${info.model}${info.reasoning_effort ? ` · ${info.reasoning_effort}` : ""}${
+        info.usage?.context_max ? ` · ctx ${info.usage.context_max.toLocaleString()}` : ""
+      }`,
+      source: "hermes-brain",
+    })
+  }
   const origSubscribe = session.subscribe.bind(session)
   const origPrompt = session.prompt.bind(session)
   const origFollowUp = session.followUp.bind(session)
@@ -285,6 +317,7 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
   const handle: HermesBrainHandle = {
     brain,
     cockpit,
+    startupNotices,
     setDialogHost: (host) => brain.setDialogHost(host),
     setWorkingMessage: undefined,
     dispose: () => {
@@ -319,16 +352,6 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
   ;(session as unknown as Record<symbol, HermesBrain>)[BRAIN_KEY] = brain
   ;(session as unknown as Record<symbol, HermesBrainHandle>)[HANDLE_KEY] = handle
   ;(session as unknown as Record<symbol, CockpitSession>)[COCKPIT_KEY] = cockpit
-
-  // Surface model from gateway into notice once
-  const info = brain.sessionInfo
-  if (info.model) {
-    session.emitNotice?.(
-      "info",
-      `Hermes brain · ${info.model}${info.reasoning_effort ? ` · ${info.reasoning_effort}` : ""}`,
-      "hermes-brain",
-    )
-  }
 
   return handle
 }

@@ -1602,9 +1602,20 @@ export async function runRootCommand(
 				if (isHermesBrainEnabled()) {
 					const handle = await logger.time("installHermesBrain", installHermesBrain, session)
 					disposeHermesBrain = handle.dispose
+					// Lean handshake + model identity: install runs before EventController
+					// subscribes, so brain notices would be dropped. Push into startup notifs
+					// (showStatus / showWarning after first paint).
+					for (const n of handle.startupNotices ?? []) {
+						const kind =
+							n.level === "error" ? "error" : n.level === "warning" ? "warn" : "info"
+						const msg = n.source ? `${n.source}: ${n.message}` : n.message
+						notifs.push({ kind, message: msg })
+					}
 					logger.info("hermes-brain installed under InteractiveMode", {
 						sessionId: handle.brain.sessionId,
 						model: handle.brain.sessionInfo.model,
+						lean: handle.brain.leanProduct,
+						startupNotices: handle.startupNotices?.length ?? 0,
 					})
 				}
 			} catch (err) {
