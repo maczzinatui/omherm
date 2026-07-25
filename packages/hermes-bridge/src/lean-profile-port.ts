@@ -160,6 +160,20 @@ export type LibraryPort = {
     include_toolsets?: boolean
     include_metrics?: boolean
   }): Promise<Record<string, unknown>>
+  /** E9: one-click hub docs_search smoke (no agent turn). */
+  docsProbe(opts?: {
+    query?: string
+    corpus?: string
+    top_k?: number
+  }): Promise<{
+    ok: boolean
+    query: string
+    corpus: string
+    status?: string
+    headings?: string[]
+    preview?: string
+    hub?: string
+  }>
 }
 
 export function createLibraryPort(gw?: GatewayRequester | null): LibraryPort {
@@ -197,6 +211,15 @@ export function createLibraryPort(gw?: GatewayRequester | null): LibraryPort {
         refresh: opts?.refresh === true,
         include_toolsets: opts?.include_toolsets === true,
         include_metrics: opts?.include_metrics === true,
+      })
+    },
+    async docsProbe(opts) {
+      const g = client()
+      if (!g) throw new Error("docs.probe requires a live gateway")
+      return g.request("docs.probe", {
+        query: opts?.query || "orch doors ADR-0100",
+        corpus: opts?.corpus || "meshina-wiki",
+        top_k: opts?.top_k ?? 2,
       })
     },
   }
