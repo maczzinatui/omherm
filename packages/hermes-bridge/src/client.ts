@@ -4,7 +4,15 @@ import { EventEmitter } from "node:events"
 import { existsSync } from "node:fs"
 import { homedir } from "node:os"
 import { delimiter, resolve } from "node:path"
-import { asGatewayEvent, mapGatewayToUi, type GatewayEvent, type SessionCreateResponse, type SessionInfo, type UiEvent } from "./types.ts"
+import {
+  asGatewayEvent,
+  mapGatewayToUi,
+  type GatewayEvent,
+  type LeanProductHandshake,
+  type SessionCreateResponse,
+  type SessionInfo,
+  type UiEvent,
+} from "./types.ts"
 import type { MessageImage } from "./cockpit-session.ts"
 
 const STARTUP_MS = 15_000
@@ -76,6 +84,9 @@ export class HermesGateway extends EventEmitter {
   private timer: ReturnType<typeof setTimeout> | null = null
   private sid: string | null = null
   private info: SessionInfo = {}
+  private lean: LeanProductHandshake | null = null
+  /** Last pipeline stage budget (S1) — iter/max from complete stages. */
+  private pipelineBudget: { iter?: number; maxIter?: number; stage?: string } = {}
   private uiListeners = new Set<(ev: UiEvent) => void>()
 
   get sessionId() {
@@ -83,6 +94,13 @@ export class HermesGateway extends EventEmitter {
   }
   get sessionInfo() {
     return this.info
+  }
+  /** S0 lean handshake (null if stock Hermes / missing). */
+  get leanProduct(): LeanProductHandshake | null {
+    return this.lean
+  }
+  get pipelineBudgetState() {
+    return this.pipelineBudget
   }
   get ready() {
     return this.ok
@@ -94,7 +112,18 @@ export class HermesGateway extends EventEmitter {
   }
 
   private emitUi(ev: UiEvent) {
-    if (ev.kind === "info") this.info = { ...this.info, ...ev.info }
+    if (ev.kind === "info") {
+      this.info = { ...this.info, ...ev.info }
+      if (ev.info.lean) this.lean = { ...this.lean, ...ev.info.lean }
+      if (ev.info.product && !this.lean) {
+        this.lean = { product: ev.info.product, lean: ev.info.product.includes("lite") }
+      }
+    }
+    if (ev.kind === "pipeline_stage") {
+      if (ev.iter != null) this.pipelineBudget.iter = ev.iter
+      if (ev.maxIter != null) this.pipelineBudget.maxIter = ev.maxIter
+      this.pipelineBudget.stage = ev.stage
+    }
     if (ev.kind === "turn_end" && ev.usage) {
       const u = ev.usage
       const mapped = {
@@ -315,9 +344,19 @@ export class HermesGateway extends EventEmitter {
       cwd: process.env.HERMES_CWD || process.cwd(),
     })
     this.sid = created.session_id
+    // S0: top-level lean on create response and/or nested info.lean
+    if (created.lean) this.lean = created.lean
+    else if (created.info?.lean) this.lean = created.info.lean
+    else if (created.product) {
+      this.lean = { product: created.product, lean: created.product.includes("lite") }
+    }
     if (created.info) {
-      this.info = created.info
-      this.emitUi({ kind: "info", info: created.info })
+      this.info = {
+        ...created.info,
+        lean: created.info.lean ?? this.lean ?? undefined,
+        product: created.info.product ?? created.product ?? this.lean?.product,
+      }
+      this.emitUi({ kind: "info", info: this.info })
     }
     return this.info
   }

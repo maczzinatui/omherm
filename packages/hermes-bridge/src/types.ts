@@ -11,6 +11,23 @@ export type Usage = {
   compressions?: number
 }
 
+/** S0 lean product handshake from hermes-agent-lite (session.create / session.info). */
+export type LeanProductHandshake = {
+  product?: string
+  lean?: boolean
+  version?: string
+  lean_entry?: boolean
+  lean_profile?: string
+  lean_profiles?: string[]
+  max_iterations?: number
+  max_iterations_requested?: number
+  oauth_safe?: boolean
+  oauth_iteration_cap?: number | null
+  provider?: string | null
+  pipeline_trace?: boolean
+  capabilities?: string[]
+}
+
 export type SessionInfo = {
   model?: string
   provider?: string
@@ -26,11 +43,17 @@ export type SessionInfo = {
   profile_name?: string
   running?: boolean
   yolo?: boolean
+  /** hermes-agent-lite product id */
+  product?: string
+  /** S0 capability snapshot */
+  lean?: LeanProductHandshake
 }
 
 export type SessionCreateResponse = {
   session_id: string
   info?: SessionInfo
+  product?: string
+  lean?: LeanProductHandshake
 }
 
 export type GatewayEvent =
@@ -175,6 +198,34 @@ export function asGatewayEvent(v: unknown): GatewayEvent | null {
   return v as GatewayEvent
 }
 
+/** Parse hermes-lite `[lean-pipeline] stage ▶|■ …` lifecycle lines (S1). */
+export function parseLeanPipelineText(text: string): Extract<UiEvent, { kind: "pipeline_stage" }> | null {
+  const t = text.trim()
+  if (!t.includes("[lean-pipeline]")) return null
+  // summary line — keep as pipeline_stage with stage=summary
+  if (t.includes("summary")) {
+    return { kind: "pipeline_stage", stage: "summary", open: false, text: t }
+  }
+  const head = t.match(/\[lean-pipeline\]\s+(\w+)\s+([▶■✗])/u)
+  if (!head) {
+    return { kind: "pipeline_stage", stage: "unknown", open: false, text: t }
+  }
+  const open = head[2] === "▶"
+  const msM = t.match(/\b(\d+)ms\b/)
+  const iterM = t.match(/\biter=(\d+)\/(\d+)\b/)
+  const provM = t.match(/\bprovider=(\S+)/)
+  return {
+    kind: "pipeline_stage",
+    stage: head[1] || "unknown",
+    open,
+    text: t,
+    ms: msM ? Number(msM[1]) : undefined,
+    iter: iterM ? Number(iterM[1]) : undefined,
+    maxIter: iterM ? Number(iterM[2]) : undefined,
+    provider: provM?.[1],
+  }
+}
+
 /** Drop last_reasoning when it was also stuffed into final_response text. */
 function stripReasoningFromCompleteText(text: string, reasoning: string): string {
   if (!text?.trim() || !reasoning?.trim()) return text ?? ""
@@ -197,6 +248,17 @@ export type UiEvent =
   | { kind: "stderr"; line: string }
   | { kind: "status"; text: string }
   | { kind: "lifecycle"; text: string }
+  /** S1: parsed lean pipeline stage from gateway lifecycle. */
+  | {
+      kind: "pipeline_stage"
+      stage: string
+      open: boolean
+      text: string
+      iter?: number
+      maxIter?: number
+      ms?: number
+      provider?: string
+    }
   | { kind: "user"; text: string }
   | { kind: "thinking"; text: string; done?: boolean }
   | { kind: "text"; text: string; done?: boolean }
@@ -272,6 +334,11 @@ export function mapGatewayToUi(ev: GatewayEvent): UiEvent | UiEvent[] | null {
       const kind = (ev.payload as { kind?: string } | undefined)?.kind
       if (!kind || kind === "status" || kind === "process") {
         return { kind: "status", text }
+      }
+      // S1: structured lean-pipeline stages for omherm working rail
+      if (kind === "lifecycle" && text.includes("[lean-pipeline]")) {
+        const parsed = parseLeanPipelineText(text)
+        if (parsed) return parsed
       }
       return { kind: "lifecycle", text }
     }

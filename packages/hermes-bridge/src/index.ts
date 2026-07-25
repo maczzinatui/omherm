@@ -1,5 +1,14 @@
 export { HermesGateway, hermesAgentRoot, gatewayUrl } from "./client.ts"
-export type { GatewayEvent, SessionInfo, UiEvent, Usage, SessionCreateResponse } from "./types.ts"
+export type {
+  GatewayEvent,
+  SessionInfo,
+  UiEvent,
+  Usage,
+  SessionCreateResponse,
+  LeanProductHandshake,
+} from "./types.ts"
+export { parseLeanPipelineText } from "./types.ts"
+export { formatPipelineStage } from "./session-event-map.ts"
 export { mapGatewayToUi, asGatewayEvent } from "./types.ts"
 export {
   GatewayTurnMapper,
