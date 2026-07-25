@@ -267,20 +267,22 @@ export class HermesBrain {
     this.#streaming = false
   }
 
-  /** Test / inject: feed a UiEvent as if from gateway. */
+  /**
+   * Test / inject: feed a UiEvent as if from gateway.
+   * Routes through `#onUi` so clarify/approval dialog host path is exercised
+   * (not only the mapper). Captures subscribed events for assertions.
+   */
   feedUiForTest(ev: UiEvent): HermesBrainEvent[] {
-    const out = this.mapper.feedUi(ev)
-    for (const e of out) {
-      this.#emit(e)
-      if (e.type === "agent_end") {
-        this.#streaming = false
-        this.#settleTurnWaiters()
-      }
-      if (e.type === "agent_start") {
-        this.#streaming = true
-      }
+    const captured: HermesBrainEvent[] = []
+    const unsub = this.subscribe((e) => {
+      captured.push(e)
+    })
+    try {
+      this.#onUi(ev)
+    } finally {
+      unsub()
     }
-    return out
+    return captured
   }
 
   #onUi(ev: UiEvent): void {

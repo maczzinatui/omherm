@@ -47,6 +47,15 @@ import {
 
 export type HermesPortKind = "kanban" | "cron" | "profiles"
 
+/**
+ * Port mutation / CLI-death banner tone.
+ * Errors must use warning (fail-loud), not accent success green.
+ * Exported so residual dogfood gates can unit-test the shipped contract.
+ */
+export function hermesPortBannerTone(isError: boolean, text: string): "warning" | "accent" {
+	return isError && !!text ? "warning" : "accent"
+}
+
 /** Pad plain text to width (no ANSI). Fast path for ASCII labels. */
 function pad(s: string, w: number): string {
 	if (w <= 0) return ""
@@ -220,10 +229,8 @@ export class HermesPortListComponent implements Component {
 	}
 
 	#bannerFg(text: string): string {
-		if (this.#bannerIsError) {
-			return theme.fg("warning", text)
-		}
-		return theme.fg("accent", text)
+		// hermesPortBannerTone: fail-loud CLI/port death uses warning, not accent green.
+		return theme.fg(hermesPortBannerTone(this.#bannerIsError, text), text)
 	}
 
 	async reload(): Promise<void> {

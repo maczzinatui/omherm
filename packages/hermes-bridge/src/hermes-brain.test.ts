@@ -69,3 +69,113 @@ describe("isHermesBrainEnabled", () => {
     }
   })
 })
+
+describe("HermesBrain dialog host (approvals + clarify)", () => {
+  test("approval event calls host.approval and approval.respond (not silent)", async () => {
+    const responded: string[] = []
+    const gateway = {
+      ready: true,
+      sessionInfo: {},
+      sessionId: null,
+      onUi: () => () => {},
+      bootstrap: async () => ({}),
+      kill: () => {},
+      respondApproval: async (choice: string) => {
+        responded.push(choice)
+      },
+      respondClarify: async () => {},
+    } as unknown as import("./client.ts").HermesGateway
+
+    const brain = new HermesBrain({ gateway })
+    const notices: string[] = []
+    brain.subscribe((e) => {
+      if (e.type === "notice") notices.push(String((e as { message?: string }).message ?? ""))
+    })
+
+    let approvalCalled = false
+    brain.setDialogHost({
+      clarify: async () => "",
+      approval: async (req) => {
+        approvalCalled = true
+        expect(req.command).toBe("rm -rf /tmp/x")
+        expect(req.choices?.length).toBeGreaterThan(0)
+        return "once"
+      },
+    })
+
+    brain.feedUiForTest({
+      kind: "approval",
+      command: "rm -rf /tmp/x",
+      description: "destructive",
+      choices: ["once", "session", "always", "deny"],
+    } as import("./types.ts").UiEvent)
+
+    // dialog is async
+    await new Promise((r) => setTimeout(r, 30))
+    expect(approvalCalled).toBe(true)
+    expect(responded).toEqual(["once"])
+    expect(notices.some((n) => n.includes("Approval:"))).toBe(true)
+  })
+
+  test("clarify event calls host.clarify and clarify.respond", async () => {
+    const answers: Array<{ id: string; answer: string }> = []
+    const gateway = {
+      ready: true,
+      sessionInfo: {},
+      sessionId: null,
+      onUi: () => () => {},
+      bootstrap: async () => ({}),
+      kill: () => {},
+      respondApproval: async () => {},
+      respondClarify: async (id: string, answer: string) => {
+        answers.push({ id, answer })
+      },
+    } as unknown as import("./client.ts").HermesGateway
+
+    const brain = new HermesBrain({ gateway })
+    brain.setDialogHost({
+      clarify: async (req) => {
+        expect(req.question).toContain("which board")
+        return "default"
+      },
+      approval: async () => "deny",
+    })
+
+    brain.feedUiForTest({
+      kind: "clarify",
+      id: "c-1",
+      question: "which board?",
+      choices: ["default", "mesh"],
+    } as import("./types.ts").UiEvent)
+
+    await new Promise((r) => setTimeout(r, 30))
+    expect(answers).toEqual([{ id: "c-1", answer: "default" }])
+  })
+
+  test("approval without dialog host does not call gateway (no silent auto-deny)", async () => {
+    const responded: string[] = []
+    const gateway = {
+      ready: true,
+      sessionInfo: {},
+      sessionId: null,
+      onUi: () => () => {},
+      bootstrap: async () => ({}),
+      kill: () => {},
+      respondApproval: async (choice: string) => {
+        responded.push(choice)
+      },
+      respondClarify: async () => {},
+    } as unknown as import("./client.ts").HermesGateway
+
+    const brain = new HermesBrain({ gateway })
+    // no setDialogHost
+    brain.feedUiForTest({
+      kind: "approval",
+      command: "echo hi",
+      description: "safe",
+    } as import("./types.ts").UiEvent)
+
+    await new Promise((r) => setTimeout(r, 20))
+    expect(responded).toEqual([])
+  })
+})
