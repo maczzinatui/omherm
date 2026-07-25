@@ -141,6 +141,7 @@ export {
 export {
   createLeanProfilePort,
   createLibraryPort,
+  bindLeanProfileGateway,
   type LeanProfilePort,
   type LeanProfileState,
   type LeanProfileMeta,
@@ -164,13 +165,15 @@ export {
 } from "./tools-port.ts"
 
 import type { GatewayRequester } from "./lean-profile-port.ts"
+import { bindLeanProfileGateway } from "./lean-profile-port.ts"
 import { rebindSkillsPort } from "./skills-port.ts"
 import { rebindToolsPort } from "./tools-port.ts"
 
-/** S2: point skills/tools inventory ports at live tui_gateway RPC. */
+/** S2: point skills/tools/lean/library ports at live tui_gateway RPC. */
 export function bindSkillsToolsGateway(gw?: GatewayRequester | null): void {
   rebindSkillsPort(gw ?? null)
   rebindToolsPort(gw ?? null)
+  bindLeanProfileGateway(gw ?? null)
 }
 export {
   createMemoryPort,

@@ -6,6 +6,8 @@ export type HermesPortDeepLink =
 	| "kanban"
 	| "cron"
 	| "profiles"
+	| "lean-profile"
+	| "library"
 	| "skills"
 	| "tools"
 	| "memory"

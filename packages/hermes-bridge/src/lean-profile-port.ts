@@ -29,10 +29,19 @@ export type LeanProfilePort = {
   listNames(): Promise<string[]>
 }
 
+/** Process-wide gateway for settings chrome (rebound on brain install). */
+let _boundGw: GatewayRequester | null = null
+
+export function bindLeanProfileGateway(gw?: GatewayRequester | null): void {
+  _boundGw = gw ?? null
+}
+
 export function createLeanProfilePort(gw?: GatewayRequester | null): LeanProfilePort {
+  const client = () => gw ?? _boundGw
   async function get(): Promise<LeanProfileState> {
-    if (gw) {
-      const r = await gw.request<LeanProfileState>("lean.profile.get", {})
+    const g = client()
+    if (g) {
+      const r = await g.request<LeanProfileState>("lean.profile.get", {})
       return {
         active: r.active ?? null,
         profiles: r.profiles ?? {},
@@ -40,19 +49,88 @@ export function createLeanProfilePort(gw?: GatewayRequester | null): LeanProfile
         on_demand_scope: r.on_demand_scope,
       }
     }
+    // Offline fallback for settings chrome without gateway (names only)
     return {
       active: process.env.HERMES_LEAN_PROFILE?.trim() || null,
-      profiles: {},
+      profiles: {
+        "l0-arm": {
+          description: "delegate_task / job board / local arm",
+          toolsets: ["file", "terminal", "web"],
+          skills: false,
+          memory: false,
+        },
+        "l1-head": {
+          description: "conductor / Herm / omherm",
+          toolsets: [
+            "file",
+            "terminal",
+            "web",
+            "skills",
+            "memory",
+            "code_execution",
+            "delegation",
+            "kanban",
+            "todo",
+            "session_search",
+            "clarify",
+          ],
+          skills: true,
+          memory: true,
+        },
+        "l1-head-oauth": {
+          description: "xai-oauth safe head + x_search",
+          toolsets: [
+            "file",
+            "terminal",
+            "skills",
+            "memory",
+            "code_execution",
+            "todo",
+            "session_search",
+            "clarify",
+            "x_search",
+          ],
+          skills: true,
+          memory: true,
+        },
+        "l1-worker": {
+          description: "Orca card / mesh worker",
+          toolsets: ["file", "terminal", "web", "skills", "code_execution", "todo", "session_search"],
+          skills: true,
+          memory: false,
+        },
+        "msg-optional": {
+          description: "head + messaging (operator pin)",
+          toolsets: [
+            "file",
+            "terminal",
+            "web",
+            "skills",
+            "memory",
+            "code_execution",
+            "delegation",
+            "kanban",
+            "todo",
+            "session_search",
+            "clarify",
+            "tts",
+            "vision",
+          ],
+          skills: true,
+          memory: true,
+        },
+      },
       on_demand: true,
       on_demand_scope: "library",
     }
   }
 
   async function set(name: string | null, opts?: { persist?: boolean }): Promise<LeanProfileState> {
-    if (!gw) {
+    const g = client()
+    if (!g) {
       throw new Error("lean.profile.set requires a live gateway (tui_gateway)")
     }
-    return gw.request<LeanProfileState>("lean.profile.set", {
+    return g.request<LeanProfileState>("lean.profile.set", {
       name,
       persist: opts?.persist !== false,
     })
@@ -79,31 +157,25 @@ export type LibraryPort = {
 }
 
 export function createLibraryPort(gw?: GatewayRequester | null): LibraryPort {
-  if (!gw) {
-    return {
-      async tools() {
-        return { count: 0, path: "", tools: [] }
-      },
-      async skills() {
-        return { count: 0, path: "", skills: [] }
-      },
-      async refresh() {
-        throw new Error("library.refresh requires a live gateway")
-      },
-    }
-  }
+  const client = () => gw ?? _boundGw
   return {
-    tools(opts) {
-      return gw.request("library.tools", { refresh: opts?.refresh === true })
+    async tools(opts) {
+      const g = client()
+      if (!g) return { count: 0, path: "", tools: [] }
+      return g.request("library.tools", { refresh: opts?.refresh === true })
     },
-    skills(opts) {
-      return gw.request("library.skills", {
+    async skills(opts) {
+      const g = client()
+      if (!g) return { count: 0, path: "", skills: [] }
+      return g.request("library.skills", {
         refresh: opts?.refresh === true,
         query: opts?.query || "",
       })
     },
-    refresh() {
-      return gw.request("library.refresh", {})
+    async refresh() {
+      const g = client()
+      if (!g) throw new Error("library.refresh requires a live gateway")
+      return g.request("library.refresh", {})
     },
   }
 }

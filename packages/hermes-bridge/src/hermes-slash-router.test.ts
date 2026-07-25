@@ -20,6 +20,9 @@ describe("hermes slash router", () => {
 		expect(routeHermesSlash("/subagents")).toEqual({ type: "port", port: "subagents" })
 		expect(routeHermesSlash("/sessions")).toEqual({ type: "port", port: "sessions" })
 		expect(routeHermesSlash("/resume")).toEqual({ type: "port", port: "sessions" })
+		expect(routeHermesSlash("/lean-profile")).toEqual({ type: "port", port: "lean-profile" })
+		expect(routeHermesSlash("/lean")).toEqual({ type: "port", port: "lean-profile" })
+		expect(routeHermesSlash("/library")).toEqual({ type: "port", port: "library" })
 	})
 
 	test("exec with args", () => {

@@ -91,6 +91,7 @@ import {
 	HermesInventoryListComponent,
 	type HermesInventoryKind,
 } from "../components/hermes-inventory-list";
+import { HermesLeanProfileListComponent } from "../components/hermes-lean-profile-list";
 import { SubagentTrailComponent, getOrCreateSubagentTrailStore } from "../components/subagent-trail";
 import { HermesTextOverlayComponent } from "../components/hermes-text-overlay";
 import { HermesSessionsListComponent } from "../components/hermes-sessions-list";
@@ -749,7 +750,17 @@ export class SelectorController {
 
 	/** Settings → Tasks Hermes ports (Kanban / Cron / Profiles / Skills / Tools / Memory / Subagents). */
 	showHermesPortList(
-		kind: "kanban" | "cron" | "profiles" | "skills" | "tools" | "memory" | "subagents" | "sessions",
+		kind:
+			| "kanban"
+			| "cron"
+			| "profiles"
+			| "skills"
+			| "tools"
+			| "memory"
+			| "subagents"
+			| "sessions"
+			| "lean-profile"
+			| "library",
 		opts?: { onDismiss?: () => void },
 	): void {
 		if (kind === "sessions") {
@@ -774,8 +785,14 @@ export class SelectorController {
 			// hide() already requestRenders; onDismiss does too — one more is waste.
 		}
 		try {
-			let panel: HermesPortListComponent | HermesInventoryListComponent | SubagentTrailComponent
-			if (kind === "skills" || kind === "tools" || kind === "memory") {
+			let panel:
+				| HermesPortListComponent
+				| HermesInventoryListComponent
+				| SubagentTrailComponent
+				| HermesLeanProfileListComponent
+			if (kind === "lean-profile" || kind === "library") {
+				panel = new HermesLeanProfileListComponent(this.ctx.ui, kind, done)
+			} else if (kind === "skills" || kind === "tools" || kind === "memory") {
 				panel = new HermesInventoryListComponent(this.ctx.ui, kind as HermesInventoryKind, done)
 			} else if (kind === "subagents") {
 				const store = getOrCreateSubagentTrailStore(this.ctx.session)
