@@ -36,5 +36,12 @@ if [[ -z "${HERMES_AGENT_ROOT:-}" && -d "$HOME/.hermes/hermes-agent" ]]; then
   export HERMES_AGENT_ROOT="$HOME/.hermes/hermes-agent"
 fi
 
-cd "$ROOT"
+# Workspace = caller's directory (where the operator ran `omh`), NOT the coat
+# checkout. Old `cd "$ROOT"` forced footer + Hermes session.create cwd to
+# ~/omherm even when launched from meshina/stable/mesh-beta. Bun resolves the
+# entry by absolute path; do not chdir into the coat tree.
+CALLER_CWD="$(pwd -P 2>/dev/null || pwd)"
+export HERMES_CWD="${HERMES_CWD:-$CALLER_CWD}"
+export OMHERM_LAUNCH_CWD="$CALLER_CWD"
+
 exec "$BUN" "$ROOT/packages/coding-agent/src/mtui.ts" "$@"

@@ -12,6 +12,27 @@ import { applyHermesBrandEnv, PRODUCT_CLI, PRODUCT_VERSION } from "./hermes-bran
 
 applyHermesBrandEnv()
 
+// Keep process.cwd() = operator workspace (mtui exports HERMES_CWD / OMHERM_LAUNCH_CWD).
+// If a parent script still chdir'd into the coat tree, snap back before CLI boot
+// so footer, SessionManager, and Hermes session.create share the same path.
+{
+	const launch =
+		process.env.HERMES_CWD?.trim() ||
+		process.env.OMHERM_LAUNCH_CWD?.trim() ||
+		""
+	if (launch) {
+		try {
+			const { realpathSync, statSync } = await import("node:fs")
+			const resolved = realpathSync(launch)
+			if (statSync(resolved).isDirectory() && process.cwd() !== resolved) {
+				process.chdir(resolved)
+			}
+		} catch {
+			/* leave cwd; Hermes still gets HERMES_CWD on session.create */
+		}
+	}
+}
+
 // Fail loud — silent black screens are unacceptable
 process.on("uncaughtException", (err) => {
 	console.error(`\n${PRODUCT_CLI} crash (uncaughtException):\n`, err)
