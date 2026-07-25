@@ -160,6 +160,7 @@ import type { HookInputComponent } from "./components/hook-input";
 import type { HookSelectorComponent, HookSelectorSlider } from "./components/hook-selector";
 import { PlanReviewOverlay } from "./components/plan-review-overlay";
 import { StatusLineComponent } from "./components/status-line";
+import { PIPELINE_FOOTER_KEY } from "./pipeline-footer.ts";
 import type { ToolExecutionHandle } from "./components/tool-execution";
 import { TranscriptContainer } from "./components/transcript-container";
 import { WelcomeComponent, type LspServerInfo as WelcomeLspServerInfo } from "./components/welcome";
@@ -890,6 +891,12 @@ export class InteractiveMode implements InteractiveModeContext {
 			handle.setWorkingMessage = (message?: string) => {
 				this.ensureLoadingAnimation();
 				this.setWorkingMessage(message);
+			};
+			// E11: lean pipeline stage in persistent status-line hook strip
+			handle.setPipelineFooter = (label?: string) => {
+				this.statusLine.setHookStatus(PIPELINE_FOOTER_KEY, label);
+				this.statusLine.invalidate();
+				this.ui.requestRender();
 			};
 			handle.invalidateChrome = () => {
 				this.statusLine.invalidate();
