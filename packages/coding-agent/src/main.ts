@@ -1605,11 +1605,18 @@ export async function runRootCommand(
 					// Lean handshake + model identity: install runs before EventController
 					// subscribes, so brain notices would be dropped. Push into startup notifs
 					// (showStatus / showWarning after first paint).
-					for (const n of handle.startupNotices ?? []) {
-						const kind =
-							n.level === "error" ? "error" : n.level === "warning" ? "warn" : "info"
-						const msg = n.source ? `${n.source}: ${n.message}` : n.message
-						notifs.push({ kind, message: msg })
+					// IMPORTANT: UiHelpers.showStatus replaces back-to-back status lines —
+					// push ONE multi-line info so lean-handshake is not eaten by the
+					// hermes-brain model line (operator saw only "Tip" + model, never S0).
+					const startup = handle.startupNotices ?? []
+					if (startup.length > 0) {
+						const anyError = startup.some((n) => n.level === "error")
+						const anyWarn = startup.some((n) => n.level === "warning")
+						const kind = anyError ? "error" : anyWarn ? "warn" : "info"
+						const message = startup
+							.map((n) => (n.source ? `${n.source}: ${n.message}` : n.message))
+							.join("\n")
+						notifs.push({ kind, message })
 					}
 					logger.info("hermes-brain installed under InteractiveMode", {
 						sessionId: handle.brain.sessionId,

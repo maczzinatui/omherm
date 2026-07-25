@@ -1166,11 +1166,27 @@ export class InteractiveMode implements InteractiveModeContext {
 			margin: 0,
 		});
 		this.ui.setFocus(this.editor);
-		// Main-screen mouse: thinking header expand/collapse + tool chrome clicks.
-		// Fullscreen overlays (settings, ask, approvals) still own tracking while open.
-		this.ui.setBaseMouseTracking(true);
-		this.ui.addInputListener(data => this.#handleMainScreenMouse(data));
-		// PgUp/PgDn → app history browser (SGR steals host scrollback navigation).
+		// Main-screen SGR mouse: thinking header expand/collapse + tool chrome.
+		// Fullscreen overlays still own tracking while open.
+		// Hermes product default: OFF so the host terminal keeps native
+		// select/copy (Shift+drag also works when tracking is on). Re-enable:
+		// OMHERM_BASE_MOUSE=1 or MESHINA_TUI_BASE_MOUSE=1. Stock omp keeps ON.
+		const hermesBrand =
+			process.env.MESHINA_TUI_BRAND === "hermes" ||
+			process.env.MESHINA_TUI_BRAND === "1" ||
+			process.env.OMHERM_BRAND === "omherm";
+		const forceBaseMouse =
+			process.env.OMHERM_BASE_MOUSE === "1" ||
+			process.env.MESHINA_TUI_BASE_MOUSE === "1" ||
+			process.env.OMHERM_BASE_MOUSE === "true";
+		const forceBaseMouseOff =
+			process.env.OMHERM_BASE_MOUSE === "0" || process.env.MESHINA_TUI_BASE_MOUSE === "0";
+		const baseMouse = forceBaseMouseOff ? false : hermesBrand ? forceBaseMouse : true;
+		this.ui.setBaseMouseTracking(baseMouse);
+		if (baseMouse) {
+			this.ui.addInputListener(data => this.#handleMainScreenMouse(data));
+		}
+		// PgUp/PgDn → app history browser (always; mouse-off still wants keys).
 		this.ui.addInputListener(data => this.#handleMainScreenScrollKeys(data));
 		// If focus ever lands on chrome (modal close → topVisible=bar), bounce to editor
 		// before keys are handled so CustomEditor.focused stays true (cursor marker).
