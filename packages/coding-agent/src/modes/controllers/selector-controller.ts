@@ -808,6 +808,7 @@ export class SelectorController {
 				maxHeight: "100%",
 				margin: 0,
 				fullscreen: true,
+				mouseTracking: true,
 			})
 			this.ctx.ui.setFocus(panel)
 			this.ctx.ui.requestRender()

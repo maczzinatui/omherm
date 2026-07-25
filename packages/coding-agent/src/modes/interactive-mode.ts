@@ -4787,6 +4787,9 @@ export class InteractiveMode implements InteractiveModeContext {
 			| "lean-profile"
 			| "library",
 	): void {
+		// Drop chat-history overlay quietly so wheel is not stuck on history;
+		// port list reasserts focus (do not bounce to editor here).
+		this.#dismissChatScrollQuiet();
 		this.#selectorController.showHermesPortList(kind);
 	}
 
@@ -4982,15 +4985,59 @@ export class InteractiveMode implements InteractiveModeContext {
 	 * input — we bail so CSI reaches them. Sticky chrome + chat history browser
 	 * are coat-owned and handled here.
 	 */
+	/**
+	 * Topmost product overlay (Hermes tools/skills/settings/kanban/…), skipping
+	 * sticky chrome + chat-history scrap. Owns all SGR while open — wheel must
+	 * not hang on chat (CADILLAC finger/mobile).
+	 */
+	#topProductOverlay(): Component | null {
+		const stack = this.ui.overlayStack;
+		for (let i = stack.length - 1; i >= 0; i--) {
+			const e = stack[i]!;
+			if (e.hidden) continue;
+			if (e.component === this.quickAccessBar) continue;
+			if (e.component === this.#chatScrollOverlay) continue;
+			return e.component;
+		}
+		return null;
+	}
+
+	/** @deprecated name kept for call sites — product overlay, not only fullscreen. */
+	#topFullscreenModal(): Component | null {
+		return this.#topProductOverlay();
+	}
+
 	#handleMainScreenMouse(data: string): { consume: true } | undefined {
 		if (!data.startsWith("\x1b[<")) return undefined;
 
-		// History browser open → it owns wheel/click.
+		// Product overlay owns wheel/click: dispatch DIRECTLY and consume.
+		// Returning undefined relied on post-listener focus delivery, which still
+		// lost wheel to chat when focus lagged or a second listener raced.
+		const modal = this.#topProductOverlay();
+		if (modal) {
+			if (this.ui.getFocused() !== modal) {
+				this.ui.setFocus(modal);
+			}
+			try {
+				modal.handleInput?.(data);
+			} catch {
+				/* never take down TUI */
+			}
+			// Scoped paint if the overlay opted in; else full frame.
+			try {
+				this.ui.requestRender();
+			} catch {
+				/* ignore */
+			}
+			return { consume: true };
+		}
+
+		// History browser open → it owns wheel/click (only when no product modal).
 		if (this.#chatScrollOverlay && this.#chatScrollHandle && !this.#chatScrollHandle.isHidden()) {
 			if (this.#chatScrollOverlay.handleMouseData(data)) return { consume: true };
 		}
 
-		// Modal / fullscreen overlay focused (settings hub, selectors, …).
+		// Modal / selector focused (settings hub, …) without being top product.
 		const focused = this.ui.getFocused();
 		if (
 			focused &&
@@ -5165,10 +5212,16 @@ export class InteractiveMode implements InteractiveModeContext {
 		return out;
 	}
 
-	#closeChatScroll(): void {
+	/** Hide history browser without focusing editor (caller sets focus). */
+	#dismissChatScrollQuiet(): void {
+		if (!this.#chatScrollHandle && !this.#chatScrollOverlay) return;
 		this.#chatScrollHandle?.hide();
 		this.#chatScrollHandle = undefined;
 		this.#chatScrollOverlay = undefined;
+	}
+
+	#closeChatScroll(): void {
+		this.#dismissChatScrollQuiet();
 		// hide() may focus chrome bar (topVisible). ownsOverlayFocusTarget lets editor win.
 		if (this.editor) this.ui.setFocus(this.editor);
 		this.ui.requestRender();
@@ -5180,6 +5233,10 @@ export class InteractiveMode implements InteractiveModeContext {
 	 * Never steals focus from chat-scroll or real modals.
 	 */
 	#ensureEditorFocusUnderChrome(_data: string): undefined {
+		// Never bounce focus off a product fullscreen modal (tools/skills/…).
+		if (this.#topFullscreenModal()) {
+			return undefined;
+		}
 		if (this.#chatScrollOverlay && this.#chatScrollHandle && !this.#chatScrollHandle.isHidden()) {
 			return undefined;
 		}
@@ -5191,6 +5248,8 @@ export class InteractiveMode implements InteractiveModeContext {
 	}
 
 	#openChatScroll(initialWheel?: -1 | 1): void {
+		// Never open history under a product fullscreen modal.
+		if (this.#topFullscreenModal()) return;
 		if (this.#chatScrollOverlay) {
 			if (initialWheel) this.#chatScrollOverlay.handleWheel(initialWheel);
 			return;
@@ -5243,6 +5302,10 @@ export class InteractiveMode implements InteractiveModeContext {
 	 * (empty / single-line draft). Overlay handles keys while open.
 	 */
 	#handleMainScreenScrollKeys(data: string): { consume: true } | undefined {
+		// Product fullscreen modals own PgUp/PgDn — do not open chat history.
+		if (this.#topFullscreenModal()) {
+			return undefined;
+		}
 		if (this.#chatScrollOverlay) {
 			return undefined;
 		}

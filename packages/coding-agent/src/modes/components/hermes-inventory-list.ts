@@ -32,6 +32,13 @@ import {
 	paintOverlayLocal,
 	paintOverlayReload,
 } from "../utils/overlay-paint"
+import {
+	overlayActionIndexAt,
+	overlayTableIndexAt,
+	overlayZoneAt,
+	routeOverlayWheel,
+	type OverlayZoneGeom,
+} from "../utils/overlay-pointer-zones"
 
 export type HermesInventoryKind = "skills" | "tools" | "memory"
 
@@ -338,9 +345,10 @@ export class HermesInventoryListComponent implements Component {
 
 	handleInput(data: string): void {
 		try {
-			const mouse = routeSgrMouseInput?.(data)
-			if (mouse) {
-				this.#onMouse(mouse)
+			// routeSgrMouseInput(data, handler) — second arg required (pi-tui).
+			// Passing only data → TypeError: handler is not a function on any
+			// SGR mouse while Skills/Tools/Memory inventory is open.
+			if (routeSgrMouseInput(data, (event) => this.#onMouse(event))) {
 				return
 			}
 			if (matchesSelectCancel(data) || matchesKey(data, "q") || matchesKey(data, "Q") || matchesKey(data, "escape")) {
@@ -422,15 +430,59 @@ export class HermesInventoryListComponent implements Component {
 		}
 	}
 
-	#onMouse(ev: SgrMouseEvent): void {
+	#geom(): OverlayZoneGeom {
+		return {
+			tableStart: this.#tableStartRow,
+			tableHit: this.#tableHitCount,
+			actionStart: this.#actionStartRow,
+			actionCount: this.#actionCount,
+		}
+	}
+
+	#wheelTable(delta: -1 | 1): void {
+		const n = this.#count()
+		if (n === 0) {
+			this.#paintLocal()
+			return
+		}
+		const next = Math.max(0, Math.min(n - 1, this.#sel + delta))
+		this.#focus = "table"
+		if (next !== this.#sel) {
+			this.#sel = next
+			this.#clampScroll()
+			this.#paintDetailFromList()
+			this.#paintFull()
+		} else {
+			this.#paintLocal()
+		}
+	}
+
+	#wheelActions(delta: -1 | 1): void {
+		const acts = this.#actions()
+		if (!acts.length) return
+		this.#focus = "actions"
+		this.#actionSel = Math.max(0, Math.min(acts.length - 1, this.#actionSel + delta))
+		this.#paintLocal()
+	}
+
+	/**
+	 * Shared CADILLAC contract (`overlay-pointer-zones`): wheel/hover/click follow
+	 * pointer hit-test — never sticky #focus from a prior region.
+	 */
+	#onMouse(ev: SgrMouseEvent): boolean {
 		try {
-			if (ev.kind === "move" || ev.kind === "drag") {
-				if (ev.row >= this.#tableStartRow && ev.row < this.#tableStartRow + this.#tableHitCount) {
-					const idx = this.#scroll + (ev.row - this.#tableStartRow)
-					if (idx >= 0 && idx < this.#count() && idx !== this.#hoverIdx) {
+			if (ev.release) return true
+
+			const geom = this.#geom()
+			const zone = overlayZoneAt(ev.row, geom, ev.col)
+
+			if (ev.motion) {
+				if (zone === "table") {
+					if (this.#focus !== "table") this.#focus = "table"
+					const idx = overlayTableIndexAt(ev.row, geom, this.#scroll, this.#count())
+					if (idx != null && idx !== this.#hoverIdx) {
 						this.#pendingHover = idx
 						if (this.#hoverRaf == null) {
-							// coalesce hover paints (~60fps max)
 							this.#hoverRaf = setTimeout(() => {
 								this.#hoverRaf = null
 								if (this.#pendingHover >= 0 && this.#pendingHover !== this.#hoverIdx) {
@@ -440,88 +492,166 @@ export class HermesInventoryListComponent implements Component {
 							}, 16)
 						}
 					}
-				}
-				return
-			}
-			if (ev.kind === "wheel") {
-				if (ev.button === "up") this.#sel = Math.max(0, this.#sel - 1)
-				else this.#sel = Math.min(Math.max(0, this.#count() - 1), this.#sel + 1)
-				this.#clampScroll()
-				this.#paintDetailFromList()
-				this.#paintLocal()
-				return
-			}
-			if (ev.kind === "down" && ev.button === "left") {
-				if (ev.row >= this.#tableStartRow && ev.row < this.#tableStartRow + this.#tableHitCount) {
-					const idx = this.#scroll + (ev.row - this.#tableStartRow)
-					if (idx >= 0 && idx < this.#count()) {
-						this.#sel = idx
-						this.#focus = "table"
-						this.#paintDetailFromList()
-						this.#paintLocal()
-					}
-					return
-				}
-				if (this.#actionStartRow >= 0 && this.#actionCount > 0) {
-					const aidx = ev.row - this.#actionStartRow
-					if (aidx >= 0 && aidx < this.#actionCount) {
+				} else if (zone === "actions") {
+					const aidx = overlayActionIndexAt(ev.row, geom)
+					if (aidx == null) return true
+					if (aidx !== this.#actionSel || this.#focus !== "actions" || this.#hoverIdx !== -1) {
 						this.#focus = "actions"
 						this.#actionSel = aidx
-						const a = this.#actions()[aidx]
-						if (a) void this.#runAction(a.id)
+						this.#hoverIdx = -1
+						this.#pendingHover = -2
+						if (this.#hoverRaf != null) {
+							clearTimeout(this.#hoverRaf)
+							this.#hoverRaf = null
+						}
 						this.#paintLocal()
 					}
+				} else if (this.#hoverIdx !== -1) {
+					this.#hoverIdx = -1
+					this.#pendingHover = -2
+					if (this.#hoverRaf != null) {
+						clearTimeout(this.#hoverRaf)
+						this.#hoverRaf = null
+					}
+					this.#paintLocal()
+				}
+				return true
+			}
+
+			if (ev.wheel != null) {
+				this.#hoverIdx = -1
+				routeOverlayWheel(zone, ev.wheel, {
+					table: (d) => this.#wheelTable(d),
+					actions: (d) => this.#wheelActions(d),
+					// detail/other → table list
+				})
+				return true
+			}
+
+			if (ev.leftClick) {
+				if (zone === "actions") {
+					const aidx = overlayActionIndexAt(ev.row, geom)
+					if (aidx == null) return true
+					this.#focus = "actions"
+					this.#actionSel = aidx
+					const a = this.#actions()[aidx]
+					if (a) void this.#runAction(a.id)
+					else this.#paintLocal()
+					return true
+				}
+				if (zone === "table") {
+					const idx = overlayTableIndexAt(ev.row, geom, this.#scroll, this.#count())
+					if (idx != null) {
+						const reTap = idx === this.#sel && this.#focus === "table"
+						this.#sel = idx
+						this.#focus = "table"
+						this.#hoverIdx = -1
+						this.#clampScroll()
+						this.#paintDetailFromList()
+						this.#paintLocal()
+						if (reTap && this.#kind !== "memory") {
+							void this.#runAction("toggle")
+						}
+					}
+					return true
 				}
 			}
 		} catch {
-			/* ignore mouse faults */
+			/* never take down TUI on mouse faults */
 		}
+		return true
 	}
 
-	#band(line: string, sel: boolean, hover: boolean, w: number): string {
-		const fitted = fit(line, w)
-		if (sel) return safeThemeBg(fitted)
-		if (hover) return safeThemeFg("accent", fitted)
+	/**
+	 * Full-width selection band. Selected rows MUST be plain text (no nested SGR):
+	 * wrapping theme.bg around mid-line success/dim resets left bg only on the
+	 * `#` prefix in some terminals — looked like "highlight only hits the #".
+	 */
+	#band(plainOrStyled: string, sel: boolean, hover: boolean, w: number): string {
+		const fitted = fit(plainOrStyled, w)
+		if (sel) {
+			try {
+				if (typeof theme?.bg === "function" && typeof theme?.fg === "function") {
+					// bold+accent on full padded width so the whole row reads as selected
+					const body =
+						typeof theme.bold === "function" ? theme.bold(theme.fg("accent", fitted)) : theme.fg("accent", fitted)
+					return theme.bg("selectedBg", body)
+				}
+			} catch {
+				/* fall through */
+			}
+			return safeThemeBg(fitted)
+		}
+		if (hover) {
+			try {
+				if (typeof theme?.bg === "function") {
+					return theme.bg("selectedBg", theme.fg("accent", fitted))
+				}
+			} catch {
+				/* fall through */
+			}
+			return safeThemeFg("accent", fitted)
+		}
 		return fitted
 	}
 
-	#renderSkillRow(s: Skill, sel: boolean, hover: boolean, w: number): string {
-		const mark = sel ? "›" : hover ? "·" : " "
+	#idxMark(idx: number, sel: boolean, hover: boolean): string {
+		const n = pad(String(idx + 1), 3)
+		if (sel) return `›${n}`
+		if (hover) return `·${n}`
+		return ` ${n}`
+	}
+
+	#renderSkillRow(s: Skill, sel: boolean, hover: boolean, w: number, idx: number): string {
+		const mark = this.#idxMark(idx, sel, hover)
 		const st = s.status === "enabled" ? "on " : s.status === "disabled" ? "off" : " ? "
+		const nameW = Math.max(8, Math.min(28, w - 22))
+		const name = pad(s.name, nameW)
+		const src = pad(s.source, 8)
+		// Selected/hover: plain line → full-width band (no nested SGR).
+		if (sel || hover) {
+			return this.#band(`${mark} ${st} ${name} ${src}`, sel, hover, w)
+		}
 		const stc =
 			s.status === "enabled"
 				? safeThemeFg("success", st)
 				: s.status === "disabled"
 					? safeThemeFg("dim", st)
 					: safeThemeFg("warning", st)
-		const nameW = Math.max(8, Math.min(32, w - 18))
-		const name = pad(s.name, nameW)
-		const src = pad(s.source, 8)
-		const line = `${mark} ${stc} ${name} ${safeThemeFg("dim", src)}`
-		return this.#band(line, sel, hover, w)
+		return this.#band(`${mark} ${stc} ${name} ${safeThemeFg("dim", src)}`, false, false, w)
 	}
 
-	#renderToolRow(t: Tool, sel: boolean, hover: boolean, w: number): string {
-		const mark = sel ? "›" : hover ? "·" : " "
+	#renderToolRow(t: Tool, sel: boolean, hover: boolean, w: number, idx: number): string {
+		const mark = this.#idxMark(idx, sel, hover)
 		const st = t.status === "enabled" ? "on " : t.status === "disabled" ? "off" : pad(t.status, 3)
+		const kind = pad(t.kind === "mcp-server" ? "mcp" : "bin", 4)
+		const nameW = Math.max(8, Math.min(28, w - 22))
+		const name = pad(t.name, nameW)
+		const plat = pad(String(t.platform), 8)
+		if (sel || hover) {
+			return this.#band(`${mark} ${st} ${kind} ${name} ${plat}`, sel, hover, w)
+		}
 		const stc =
 			t.status === "enabled"
 				? safeThemeFg("success", st)
 				: t.status === "disabled"
 					? safeThemeFg("dim", st)
 					: safeThemeFg("warning", st)
-		const kind = pad(t.kind === "mcp-server" ? "mcp" : "bin", 4)
-		const nameW = Math.max(8, Math.min(28, w - 22))
-		const name = pad(t.name, nameW)
-		const plat = pad(String(t.platform), 8)
-		const line = `${mark} ${stc} ${safeThemeFg("dim", kind)} ${name} ${safeThemeFg("dim", plat)}`
-		return this.#band(line, sel, hover, w)
+		return this.#band(
+			`${mark} ${stc} ${safeThemeFg("dim", kind)} ${name} ${safeThemeFg("dim", plat)}`,
+			false,
+			false,
+			w,
+		)
 	}
 
-	#renderMemRow(f: MemoryFile, sel: boolean, hover: boolean, w: number): string {
-		const mark = sel ? "›" : hover ? "·" : " "
-		const line = `${mark} ${formatMemoryLabel(f)}`
-		return this.#band(line, sel, hover, w)
+	#renderMemRow(f: MemoryFile, sel: boolean, hover: boolean, w: number, idx: number): string {
+		const mark = this.#idxMark(idx, sel, hover)
+		const label = formatMemoryLabel(f)
+		if (sel || hover) {
+			return this.#band(`${mark} ${label}`, sel, hover, w)
+		}
+		return this.#band(`${mark} ${label}`, false, false, w)
 	}
 
 	render(width: number): string[] {
@@ -550,9 +680,9 @@ export class HermesInventoryListComponent implements Component {
 
 			out.push(divider(w))
 			const inner = Math.max(0, w - 4)
-			if (this.#kind === "skills") out.push(row(safeThemeFg("dim", "st  name · source"), w))
-			else if (this.#kind === "tools") out.push(row(safeThemeFg("dim", "st  kind name · platform"), w))
-			else out.push(row(safeThemeFg("dim", "memory file"), w))
+			if (this.#kind === "skills") out.push(row(safeThemeFg("dim", "#   st  name · source"), w))
+			else if (this.#kind === "tools") out.push(row(safeThemeFg("dim", "#   st  kind name · platform"), w))
+			else out.push(row(safeThemeFg("dim", "#   memory file"), w))
 
 			const n = this.#count()
 			this.#tableStartRow = out.length
@@ -567,21 +697,39 @@ export class HermesInventoryListComponent implements Component {
 				if (this.#kind === "skills") {
 					out.push(
 						row(
-							this.#renderSkillRow(this.#skills[idx]!, idx === this.#sel, idx === this.#hoverIdx, inner),
+							this.#renderSkillRow(
+								this.#skills[idx]!,
+								idx === this.#sel,
+								idx === this.#hoverIdx,
+								inner,
+								idx,
+							),
 							w,
 						),
 					)
 				} else if (this.#kind === "tools") {
 					out.push(
 						row(
-							this.#renderToolRow(this.#tools[idx]!, idx === this.#sel, idx === this.#hoverIdx, inner),
+							this.#renderToolRow(
+								this.#tools[idx]!,
+								idx === this.#sel,
+								idx === this.#hoverIdx,
+								inner,
+								idx,
+							),
 							w,
 						),
 					)
 				} else {
 					out.push(
 						row(
-							this.#renderMemRow(this.#memFiles[idx]!, idx === this.#sel, idx === this.#hoverIdx, inner),
+							this.#renderMemRow(
+								this.#memFiles[idx]!,
+								idx === this.#sel,
+								idx === this.#hoverIdx,
+								inner,
+								idx,
+							),
 							w,
 						),
 					)
@@ -605,8 +753,8 @@ export class HermesInventoryListComponent implements Component {
 
 			const footer =
 				this.#kind === "memory"
-					? "↑↓ · R reload · Esc/q close"
-					: "↑↓ · e toggle · Tab actions · R reload · Esc/q"
+					? "↑↓/wheel · click row · R reload · Esc/q"
+					: "↑↓/wheel · click row · re-tap/e toggle · click action · Esc/q"
 			out.push(bottomBorder(w))
 			out.push(safeThemeFg("dim", fit(footer, w)))
 			return out

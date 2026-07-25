@@ -8,6 +8,13 @@
 import type { Component, TUI } from "@oh-my-pi/pi-tui"
 import { matchesKey, routeSgrMouseInput, type SgrMouseEvent, visibleWidth } from "@oh-my-pi/pi-tui"
 import {
+	overlayActionIndexAt,
+	overlayTableIndexAt,
+	overlayZoneAt,
+	routeOverlayWheel,
+	type OverlayZoneGeom,
+} from "../utils/overlay-pointer-zones"
+import {
 	cronPort,
 	kanbanPort,
 	profilePort,
@@ -1043,22 +1050,29 @@ export class HermesPortListComponent implements Component {
 		}
 	}
 
+	#pointerGeom(): OverlayZoneGeom {
+		return {
+			tableStart: this.#tableStartRow,
+			tableHit: this.#tableHitCount,
+			tableColEnd: this.#tableColEnd,
+			actionStart: this.#actionStartRow,
+			actionCount: this.#actionCount,
+		}
+	}
+
 	#handleMouse(data: string): void {
 		routeSgrMouseInput(data, (event: SgrMouseEvent) => {
 			if (event.release) return true
 
-			// Hover highlight — motion only paints, never selects. Coalesce ~60fps
-			// so SGR motion storms don't queue a paint per event (B2.5).
+			const geom = this.#pointerGeom()
+			const zone = overlayZoneAt(event.row, geom, event.col)
+
+			// CADILLAC: motion reclaims zone under pointer; wheel uses zone hit-test
+			// (never sticky #focus after floating off actions).
 			if (event.motion) {
-				if (
-					this.#focus === "table" &&
-					event.row >= this.#tableStartRow &&
-					event.row < this.#tableStartRow + this.#tableHitCount &&
-					event.col < this.#tableColEnd
-				) {
-					const idx = this.#scroll + (event.row - this.#tableStartRow)
-					const n = this.#count()
-					const next = idx >= 0 && idx < n ? idx : -1
+				if (zone === "table") {
+					if (this.#focus === "actions") this.#focus = "table"
+					const next = overlayTableIndexAt(event.row, geom, this.#scroll, this.#count()) ?? -1
 					const key = `${next}|${event.row}`
 					if (key !== this.#lastHoverKey) {
 						this.#lastHoverKey = key
@@ -1072,6 +1086,16 @@ export class HermesPortListComponent implements Component {
 								}
 							}, 16)
 						}
+					}
+				} else if (zone === "actions" && this.#focus !== "confirm" && this.#focus !== "form") {
+					const aidx = overlayActionIndexAt(event.row, geom)
+					if (aidx != null && (this.#focus !== "actions" || aidx !== this.#actionSel)) {
+						this.#focus = "actions"
+						this.#actionSel = aidx
+						this.#hoverIdx = -1
+						this.#pendingHoverIdx = -1
+						this.#lastHoverKey = ""
+						this.#paintLocal()
 					}
 				} else if (this.#hoverIdx !== -1 || this.#pendingHoverIdx !== -1) {
 					this.#hoverIdx = -1
@@ -1088,6 +1112,7 @@ export class HermesPortListComponent implements Component {
 
 			if (event.wheel !== null) {
 				this.#hoverIdx = -1
+				// Modal modes still own wheel while active (form/confirm).
 				if (this.#focus === "confirm") {
 					this.#actionSel = this.#actionSel === 0 ? 1 : 0
 					this.#paintLocal()
@@ -1100,32 +1125,31 @@ export class HermesPortListComponent implements Component {
 					this.#paintLocal()
 					return true
 				}
-				if (this.#focus === "actions") {
-					const acts = this.#actions()
-					if (acts.length) {
-						this.#actionSel = Math.max(0, Math.min(acts.length - 1, this.#actionSel + event.wheel))
+				routeOverlayWheel(zone, event.wheel, {
+					actions: (d) => {
+						const acts = this.#actions()
+						if (!acts.length) return
+						this.#focus = "actions"
+						this.#actionSel = Math.max(0, Math.min(acts.length - 1, this.#actionSel + d))
 						this.#paintLocal()
-					}
-					return true
-				}
-				// Table: move selection + viewport only — NEVER await network on every
-				// wheel tick (that locked the TUI when kanban/cron was opened from settings).
-				const n = this.#count()
-				if (n > 0) {
-					const next = Math.max(0, Math.min(n - 1, this.#sel + event.wheel))
-					if (next !== this.#sel) {
-						this.#sel = next
+					},
+					table: (d) => {
+						// NEVER await network on every wheel tick (kanban/cron lockup).
+						const n = this.#count()
+						if (n <= 0) return
+						const next = Math.max(0, Math.min(n - 1, this.#sel + d))
 						this.#focus = "table"
-						this.#clampScroll()
-						// Instant list detail — never spawnSync on wheel.
-						this.#paintDetailFromList()
-						this.#paintLocal()
-						if (this.#kind === "cron") this.#scheduleDetailRefresh(160)
-					} else {
-						// At edge: still paint so clamp feels responsive
-						this.#paintLocal()
-					}
-				}
+						if (next !== this.#sel) {
+							this.#sel = next
+							this.#clampScroll()
+							this.#paintDetailFromList()
+							this.#paintLocal()
+							if (this.#kind === "cron") this.#scheduleDetailRefresh(160)
+						} else {
+							this.#paintLocal()
+						}
+					},
+				})
 				return true
 			}
 			if (!event.leftClick) return true

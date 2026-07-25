@@ -1,12 +1,19 @@
 /**
  * Simple fullscreen text pager for slash.exec / long CLI dumps.
  * Never throw out of render/input.
+ * CADILLAC: SGR wheel scrolls the body (same as ↑↓ / PgUp/PgDn).
  */
 import type { Component, TUI } from "@oh-my-pi/pi-tui"
-import { matchesKey, visibleWidth } from "@oh-my-pi/pi-tui"
+import { matchesKey, routeSgrMouseInput } from "@oh-my-pi/pi-tui"
 import { theme } from "../theme/theme"
 import { bottomBorder, fit, row, topBorder } from "./overlay-box"
-import { matchesSelectCancel, matchesSelectDown, matchesSelectPageDown, matchesSelectPageUp, matchesSelectUp } from "../utils/keybinding-matchers"
+import {
+	matchesSelectCancel,
+	matchesSelectDown,
+	matchesSelectPageDown,
+	matchesSelectPageUp,
+	matchesSelectUp,
+} from "../utils/keybinding-matchers"
 import { enableOverlayScopedPaint, paintOverlayLocal } from "../utils/overlay-paint"
 
 function safeFg(color: "accent" | "dim" | "error" | "muted", text: string): string {
@@ -24,6 +31,8 @@ export class HermesTextOverlayComponent implements Component {
 	#onClose: () => void
 	#scroll = 0
 	#pathHint = ""
+	#bodyStart = 0
+	#bodyHit = 0
 
 	constructor(tui: TUI, title: string, body: string, onClose: () => void, pathHint = "") {
 		this.#tui = tui
@@ -36,29 +45,53 @@ export class HermesTextOverlayComponent implements Component {
 
 	handleInput(data: string): void {
 		try {
-			if (matchesSelectCancel(data) || data === "q" || matchesKey(data, "enter") || matchesKey(data, "return") || data === "\n") {
+			if (routeSgrMouseInput(data, (ev) => {
+				if (ev.release) return true
+				if (ev.wheel != null) {
+					// Anywhere over the pager scrolls the body (single zone).
+					this.#scrollBy(ev.wheel)
+					return true
+				}
+				if (ev.leftClick) {
+					// Click footer-ish bottom → close; body click focuses scroll only.
+					const page = this.#pageSize()
+					if (this.#bodyHit > 0 && ev.row >= this.#bodyStart + this.#bodyHit) {
+						this.#onClose()
+						return true
+					}
+					// click in body: no-op beyond consume (wheel does scroll)
+					void page
+					return true
+				}
+				return true
+			})) {
+				return
+			}
+			if (
+				matchesSelectCancel(data) ||
+				data === "q" ||
+				matchesKey(data, "enter") ||
+				matchesKey(data, "return") ||
+				data === "\n"
+			) {
 				this.#onClose()
 				return
 			}
-			const page = Math.max(5, (process.stdout.rows || 24) - 8)
+			const page = this.#pageSize()
 			if (matchesSelectUp(data)) {
-				this.#scroll = Math.max(0, this.#scroll - 1)
-				this.#paint()
+				this.#scrollBy(-1)
 				return
 			}
 			if (matchesSelectDown(data)) {
-				this.#scroll = Math.min(Math.max(0, this.#lines.length - 1), this.#scroll + 1)
-				this.#paint()
+				this.#scrollBy(1)
 				return
 			}
 			if (matchesSelectPageUp(data)) {
-				this.#scroll = Math.max(0, this.#scroll - page)
-				this.#paint()
+				this.#scrollBy(-page)
 				return
 			}
 			if (matchesSelectPageDown(data) || data === " ") {
-				this.#scroll = Math.min(Math.max(0, this.#lines.length - page), this.#scroll + page)
-				this.#paint()
+				this.#scrollBy(page)
 				return
 			}
 			if (data === "g") {
@@ -75,6 +108,17 @@ export class HermesTextOverlayComponent implements Component {
 		}
 	}
 
+	#pageSize(): number {
+		return Math.max(5, (process.stdout.rows || 24) - 8)
+	}
+
+	#scrollBy(delta: number): void {
+		const page = this.#pageSize()
+		const max = Math.max(0, this.#lines.length - page)
+		this.#scroll = Math.max(0, Math.min(max, this.#scroll + delta))
+		this.#paint()
+	}
+
 	#paint(): void {
 		paintOverlayLocal(this.#tui, this)
 	}
@@ -82,42 +126,34 @@ export class HermesTextOverlayComponent implements Component {
 	render(width: number): string[] {
 		try {
 			const w = Math.max(40, Math.floor(width) || 80)
-			const termRows = Math.max(12, process.stdout.rows || 24)
-			const bodyRows = Math.max(6, termRows - 6)
+			const page = this.#pageSize()
 			const out: string[] = []
-			const title = `${this.#title}  ${this.#scroll + 1}/${this.#lines.length}`
-			out.push(topBorder(fit(title, w - 4), w))
-			out.push(row(safeFg("dim", "↑↓ PgUp/PgDn space · g/G · Esc/q close"), w))
+			out.push(topBorder(w, this.#title))
 			if (this.#pathHint) {
-				out.push(row(safeFg("muted", fit(`full: ${this.#pathHint}`, w - 4)), w))
+				out.push(row(safeFg("dim", fit(this.#pathHint, w - 4)), w))
 			}
-			const end = Math.min(this.#lines.length, this.#scroll + bodyRows)
+			this.#bodyStart = out.length
+			this.#bodyHit = 0
+			const end = Math.min(this.#lines.length, this.#scroll + page)
 			for (let i = this.#scroll; i < end; i++) {
-				const line = this.#lines[i] ?? ""
-				// soft-wrap long lines by visible width
-				let rest = line
-				let first = true
-				while (rest.length > 0 || first) {
-					first = false
-					const chunk = fit(rest, w - 4)
-					out.push(row(chunk, w))
-					// advance by approx visible; if fit short-circuits empty, break
-					if (visibleWidth(rest) <= w - 4) break
-					// crude: drop chars until shorter
-					let cut = Math.max(1, Math.floor((w - 4) * 0.9))
-					while (cut < rest.length && visibleWidth(rest.slice(0, cut)) < w - 4) cut++
-					rest = rest.slice(Math.max(1, cut - 8))
-					if (out.length > termRows + 20) break
-				}
-				if (out.length > termRows + 20) break
+				out.push(row(fit(this.#lines[i] ?? "", w - 4), w))
+				this.#bodyHit++
 			}
-			if (end < this.#lines.length) {
-				out.push(row(safeFg("dim", `… +${this.#lines.length - end} lines`), w))
+			if (this.#bodyHit === 0) {
+				out.push(row(safeFg("dim", "(empty)"), w))
+				this.#bodyHit = 1
 			}
 			out.push(bottomBorder(w))
-			return out.slice(0, termRows)
+			out.push(
+				safeFg(
+					"dim",
+					fit(`wheel/↑↓ · PgUp/PgDn · q/Esc close · ${this.#scroll + 1}/${this.#lines.length}`, w),
+				),
+			)
+			return out
 		} catch (e) {
-			return [`text overlay error: ${e instanceof Error ? e.message : String(e)}`]
+			const w = Math.max(40, Math.floor(width) || 80)
+			return [topBorder(w, "pager error"), row(String(e), w), bottomBorder(w)]
 		}
 	}
 }

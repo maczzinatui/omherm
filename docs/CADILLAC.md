@@ -101,6 +101,7 @@ Upstream refresh: record SHA, re-apply a **small patch set**, keep hermes-bridge
 - Create/edit forms match real Hermes capability (Herm field parity where CLI/API supports it; no fake disabled buttons without copy explaining the gap).
 - Cron visibility is product-grade: last/next run, last status/error, scheduler heartbeat — not a dump of raw JSON.
 - Empty, loading, schema-mismatch, and gateway-down states are designed — not blank panes.
+- **Pointer scroll = hit-test, not sticky focus.** Wheel and hover follow the zone under the pointer (table vs actions vs detail). Floating over footer actions then back over the list scrolls the list without a click. Finger taps use the same `leftClick` path. Contract: `modes/utils/overlay-pointer-zones.ts`.
 - Performance: coalesce paint, seal scrollback, mutate text in place (see crossovers). Latency is part of craft.
 - Branding is Hermes end-to-end (title, footer, notify, Orca icon via OSC). Coat package names may still say oh-my-pi internally until rename is cheap.
 

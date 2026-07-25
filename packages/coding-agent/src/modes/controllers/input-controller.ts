@@ -693,6 +693,19 @@ export class InputController {
 				return;
 			}
 
+			// Hermes product deep-links FIRST — OMP builtins include /tools which
+			// lists dead OMP agent tools ("No tools visible to the agent") while
+			// Settings → Tools opens the live Hermes inventory. Port/settings/model
+			// must win before executeBuiltinSlashCommand (CADILLAC: one product path).
+			if (text?.startsWith("/")) {
+				const hermesDeep = await this.#tryHermesSlash(text, { deepLinksOnly: true });
+				if (hermesDeep) {
+					if (!shouldSkipHistory(text)) this.ctx.editor.addToHistory(text);
+					this.ctx.editor.setText("");
+					return;
+				}
+			}
+
 			// Handle built-in slash commands
 			if (text) {
 				const slashResult = await executeBuiltinSlashCommand(text, {
@@ -711,9 +724,9 @@ export class InputController {
 				}
 			}
 
-			// Hermes brain: coat deep-links + gateway slash.exec (not OMP builtins)
+			// Hermes gateway slash.exec (skills, /reasoning, etc.) after OMP builtins
 			if (text?.startsWith("/")) {
-				const hermesHandled = await this.#tryHermesSlash(text);
+				const hermesHandled = await this.#tryHermesSlash(text, { deepLinksOnly: false });
 				if (hermesHandled) {
 					if (!shouldSkipHistory(text)) this.ctx.editor.addToHistory(text);
 					this.ctx.editor.setText("");
@@ -2093,8 +2106,14 @@ export class InputController {
 	/**
 	 * Hermes product path: deep-link coat surfaces or gateway slash.exec.
 	 * Returns true if the slash was fully handled (do not prompt Hermes).
+	 *
+	 * @param opts.deepLinksOnly when true, only settings/model/port (run before
+	 *   OMP builtins so /tools → Hermes inventory, not empty OMP tool markdown).
 	 */
-	async #tryHermesSlash(text: string): Promise<boolean> {
+	async #tryHermesSlash(
+		text: string,
+		opts?: { deepLinksOnly?: boolean },
+	): Promise<boolean> {
 		try {
 			const { getInstalledCockpitSession, getInstalledHermesBrain } = await import("../hermes-brain-install.ts");
 			const cockpit = getInstalledCockpitSession(this.ctx.session);
@@ -2117,6 +2136,8 @@ export class InputController {
 				this.ctx.showHermesPortList(route.port);
 				return true;
 			}
+			// deep-link phase only — leave exec for after OMP builtins
+			if (opts?.deepLinksOnly) return false;
 			if (route.type === "exec") {
 				// Prefer global persistence for effort changes so config.get + footer + next session agree.
 				// cycleHermesThinking already appends --global; bare `/reasoning high` did not.
