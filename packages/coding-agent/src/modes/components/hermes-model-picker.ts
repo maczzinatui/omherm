@@ -31,6 +31,8 @@ const HEIGHT_FRACTION = 0.45
 
 /** Synthetic OMP Model for hub/picker chrome (Hermes is SoT for auth/routing). */
 export function hermesRowToModel(row: HermesModelRow): Model {
+  // Must declare thinking.efforts or OMP clamps every effort to undefined
+  // (same bug as hermesIdentityToModel — empty efforts ⇒ blank footer/menu).
   return buildModel({
     id: row.id,
     name: row.id.includes("/") ? row.id.split("/").pop() || row.id : row.id,
@@ -38,6 +40,10 @@ export function hermesRowToModel(row: HermesModelRow): Model {
     api: "openai-completions",
     baseUrl: "",
     reasoning: true,
+    thinking: {
+      efforts: ["minimal", "low", "medium", "high", "xhigh", "max"],
+      defaultLevel: "low",
+    },
     input: ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 128_000,

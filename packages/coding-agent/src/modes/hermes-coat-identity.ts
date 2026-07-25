@@ -66,6 +66,16 @@ export function hermesFooterModelName(modelId: string): string {
  * and status-line effort chip work; Hermes still runs the turn.
  * contextWindow: prefer Hermes usage.context_max (or explicit) over hardcoded 128k.
  */
+/** Hermes gateway efforts the coat may paint (must match mapHermesEffortToThinking). */
+const HERMES_COAT_THINKING_EFFORTS = [
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const
+
 export function hermesIdentityToModel(
   provider: string,
   modelId: string,
@@ -81,6 +91,10 @@ export function hermesIdentityToModel(
     typeof opts?.maxTokens === "number" && opts.maxTokens > 0
       ? Math.trunc(opts.maxTokens)
       : Math.min(8192, Math.max(1024, Math.floor(contextWindow / 8)))
+  // CRITICAL: reasoning:true alone is not enough. OMP setThinkingLevel →
+  // resolveThinkingLevelForModel → clampThinkingLevelForModel uses
+  // model.thinking.efforts; empty efforts array clamps *every* level to
+  // undefined so the footer never shows effort after /reasoning.
   return buildModel({
     id,
     name,
@@ -88,6 +102,10 @@ export function hermesIdentityToModel(
     api: "openai-completions",
     baseUrl: "",
     reasoning: true,
+    thinking: {
+      efforts: [...HERMES_COAT_THINKING_EFFORTS],
+      defaultLevel: "low",
+    },
     input: ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow,
@@ -131,9 +149,21 @@ export function applyHermesIdentityToSession(
   const level = mapHermesEffortToThinking(effort)
   if (level !== undefined) {
     try {
+      // persist=false: Hermes is SoT for effort; don't write OMP defaultThinkingLevel
       session.setThinkingLevel(level, false)
     } catch {
       /* optional */
+    }
+  } else if (effort != null && String(effort).trim() !== "") {
+    // Unmapped effort string — still force a paint attempt via Off only when
+    // Hermes reports explicit none/off; never silently drop "high".
+    const k = String(effort).trim().toLowerCase()
+    if (k === "none" || k === "off" || k === "false") {
+      try {
+        session.setThinkingLevel(ThinkingLevel.Off, false)
+      } catch {
+        /* optional */
+      }
     }
   }
 
@@ -153,6 +183,12 @@ export async function syncCoatFromHermesBrain(
     info = brain.sessionInfo
   }
   applyHermesIdentityToSession(session, info, override)
+  try {
+    const { getHermesBrainHandle } = await import("./hermes-brain-install.ts")
+    getHermesBrainHandle(session)?.invalidateChrome?.()
+  } catch {
+    /* IM may not attach invalidateChrome yet */
+  }
 }
 
 /**

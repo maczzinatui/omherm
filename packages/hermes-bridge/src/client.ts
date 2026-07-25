@@ -370,27 +370,35 @@ export class HermesGateway extends EventEmitter {
     } catch {
       /* usage optional */
     }
+    // Gateway config.get takes a singular `key` (not `keys: []`). Reasoning
+    // is key "reasoning" and returns { value, display } — and prefers the
+    // live session agent.reasoning_config when session_id is passed.
     try {
-      // Prefer gateway push for model; config.get may expose reasoning_effort
-      const cfg = await this.request<Record<string, unknown>>("config.get", {
-        keys: ["model", "reasoning_effort", "provider"],
+      const reasoning = await this.request<Record<string, unknown>>("config.get", {
+        key: "reasoning",
+        session_id: this.sessionId,
       })
-      if (cfg && typeof cfg === "object") {
-        const patch: SessionInfo = {}
-        if (typeof cfg.model === "string") patch.model = cfg.model
-        if (typeof cfg.provider === "string") patch.provider = cfg.provider
-        if (typeof cfg.reasoning_effort === "string") patch.reasoning_effort = cfg.reasoning_effort
-        // Some gateways nest under values
-        const values = cfg.values as Record<string, unknown> | undefined
-        if (values) {
-          if (typeof values.model === "string") patch.model = values.model
-          if (typeof values.provider === "string") patch.provider = values.provider
-          if (typeof values.reasoning_effort === "string") patch.reasoning_effort = values.reasoning_effort
+      if (reasoning && typeof reasoning === "object") {
+        const v = reasoning.value
+        if (typeof v === "string" && v.trim()) {
+          this.info = { ...this.info, reasoning_effort: v.trim() }
         }
+      }
+    } catch {
+      /* config optional — keep last session.info push */
+    }
+    try {
+      const provider = await this.request<Record<string, unknown>>("config.get", {
+        key: "provider",
+      })
+      if (provider && typeof provider === "object") {
+        const patch: SessionInfo = {}
+        if (typeof provider.model === "string") patch.model = provider.model
+        if (typeof provider.provider === "string") patch.provider = provider.provider
         if (Object.keys(patch).length) this.info = { ...this.info, ...patch }
       }
     } catch {
-      /* config optional */
+      /* optional */
     }
     this.emitUi({ kind: "info", info: this.info })
     return this.info

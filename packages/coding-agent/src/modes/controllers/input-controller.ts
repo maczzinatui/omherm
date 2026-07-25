@@ -2118,21 +2118,39 @@ export class InputController {
 				return true;
 			}
 			if (route.type === "exec") {
-				this.ctx.showStatus(`Running ${route.command}…`);
+				// Prefer global persistence for effort changes so config.get + footer + next session agree.
+				// cycleHermesThinking already appends --global; bare `/reasoning high` did not.
+				let execCmd = route.command;
+				const execParts = execCmd.trim().split(/\s+/);
+				const execName = execParts[0]?.replace(/^\//, "").toLowerCase() ?? "";
+				if (
+					execName === "reasoning" &&
+					execParts.length >= 2 &&
+					!execParts.some(p => p === "--global" || p === "-g") &&
+					!["full", "all", "clamp", "collapse", "short", "show", "hide"].includes(
+						(execParts[1] || "").toLowerCase(),
+					)
+				) {
+					execCmd = `${execCmd.trim()} --global`;
+				}
+				this.ctx.showStatus(`Running ${execCmd}…`);
 				try {
 					const { output, warning } = cockpit
-						? await cockpit.slashExec(route.command)
-						: await brain!.slashExec(route.command);
+						? await cockpit.slashExec(execCmd)
+						: await brain!.slashExec(execCmd);
 					const body = [warning ? `warning: ${warning}` : "", output].filter(Boolean).join("\n").trim();
 					const text = body || "(no output)";
 					// Identity-changing Hermes slashes must repaint coat footer (model / effort).
 					// Keyboard cycleHermesThinking already does this; bare slash.exec did not.
-					const cmdName = route.command.trim().split(/\s+/)[0]?.replace(/^\//, "").toLowerCase() ?? "";
-					if (cmdName === "reasoning" || cmdName === "model") {
+					if (execName === "reasoning" || execName === "model") {
 						try {
 							const { syncCoatFromHermesBrain } = await import("../hermes-coat-identity.ts");
 							const liveBrain = cockpit?.brain ?? brain!;
 							await syncCoatFromHermesBrain(this.ctx.session, liveBrain);
+							const effort = liveBrain.sessionInfo.reasoning_effort;
+							if (effort) {
+								this.ctx.showStatus(`Hermes reasoning → ${effort}`);
+							}
 						} catch {
 							/* coat paint optional */
 						}

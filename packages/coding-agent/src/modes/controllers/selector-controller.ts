@@ -724,9 +724,15 @@ export class SelectorController {
 			const currentSelector =
 				cat.rows.find(r => r.isCurrentModel)?.selector ||
 				(cat.provider && cat.model ? `${cat.provider}/${cat.model}` : undefined);
+			const brain = getInstalledHermesBrain(this.ctx.session);
+			const effort = brain?.sessionInfo?.reasoning_effort?.trim();
+			const thinkingHint = this.ctx.session.thinkingLevel
+				? ` · coat ${this.ctx.session.thinkingLevel}`
+				: "";
+			const hermesHint = effort ? ` · hermes effort ${effort}` : "";
 			const summary = `Hermes · ${cat.providers.length} providers · ${cat.rows.length} models${
 				currentSelector ? ` · current ${currentSelector}` : ""
-			}`;
+			}${hermesHint}${thinkingHint}`;
 			return {
 				scoped,
 				providerLabels: hermesProviderLabels(cat),
@@ -1163,9 +1169,22 @@ export class SelectorController {
 							});
 							if (brain) {
 								try {
-									const { applyHermesIdentityToSession, syncCoatFromHermesBrain } = await import(
-										"../hermes-coat-identity.ts"
-									);
+									const {
+										applyHermesIdentityToSession,
+										syncCoatFromHermesBrain,
+										mapThinkingToHermesEffort,
+									} = await import("../hermes-coat-identity.ts");
+									// Model hub thinking tier must hit Hermes /reasoning — previously only
+									// OMP coat was painted and gateway effort stayed stale.
+									if (!isAuto && concreteThinking && concreteThinking !== ThinkingLevel.Inherit) {
+										const effort = mapThinkingToHermesEffort(concreteThinking);
+										if (effort) {
+											await brain.slashExec(`/reasoning ${effort} --global`);
+										}
+									} else if (isAuto) {
+										// Hermes has no "auto" — pin medium as a sane default for hub auto.
+										await brain.slashExec(`/reasoning medium --global`);
+									}
 									applyHermesIdentityToSession(this.ctx.session, brain.sessionInfo, {
 										provider: model.provider,
 										modelId: model.id,
@@ -1174,6 +1193,11 @@ export class SelectorController {
 										provider: model.provider,
 										modelId: model.id,
 									});
+									if (isAuto) {
+										this.ctx.session.setThinkingLevel(AUTO_THINKING, true);
+									} else if (concreteThinking && concreteThinking !== ThinkingLevel.Inherit) {
+										this.ctx.session.setThinkingLevel(concreteThinking, false);
+									}
 								} catch {
 									/* footer optional */
 								}
@@ -1192,8 +1216,14 @@ export class SelectorController {
 									? "live Hermes session + config.yaml"
 									: "config.yaml only (no live gateway — relaunch if still wrong)";
 							const warn = live.warning ? ` · ${live.warning.slice(0, 120)}` : "";
+							const effortNote =
+								!isAuto && concreteThinking && concreteThinking !== ThinkingLevel.Inherit
+									? ` · thinking ${concreteThinking}`
+									: isAuto
+										? " · thinking auto→medium (Hermes)"
+										: "";
 							this.ctx.showStatus(
-								`${defaultStatusLabel} model: ${selectorValue} · ${via}${warn}`,
+								`${defaultStatusLabel} model: ${selectorValue}${effortNote} · ${via}${warn}`,
 							);
 							if (live.mode === "config") {
 								this.ctx.session?.emitNotice?.(
