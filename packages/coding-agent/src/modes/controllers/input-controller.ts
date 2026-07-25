@@ -1405,7 +1405,9 @@ export class InputController {
 		if (allQueued.length === 0) {
 			this.ctx.updatePendingMessagesDisplay();
 			if (options?.abort) {
-				void this.ctx.session.abort({ reason: USER_INTERRUPT_LABEL });
+				// Peel: route through cockpit-favoring abort helper so brain-installed
+				// sessions don't double-fire (synthetic OMP abort fallback not desired).
+				this.#abortStreamingTurn();
 			}
 			return 0;
 		}
@@ -1444,7 +1446,9 @@ export class InputController {
 		}
 		this.ctx.updatePendingMessagesDisplay();
 		if (options?.abort) {
-			void this.ctx.session.abort({ reason: USER_INTERRUPT_LABEL });
+			// Peel: same as the allQueued-empty path above — use the cockpit-favoring
+			// abort helper so brain-installed sessions don't double-fire.
+			this.#abortStreamingTurn();
 		}
 		return allQueued.length;
 	}
