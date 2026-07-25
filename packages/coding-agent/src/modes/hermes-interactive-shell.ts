@@ -16,6 +16,7 @@ import {
 	type Component,
 } from "@oh-my-pi/pi-tui";
 import { HermesGateway, type SessionInfo, type UiEvent, type Usage } from "@omherm/hermes-bridge";
+import { applyPipelineStageToFooter } from "./pipeline-footer.ts";
 import { ToolExecutionComponent, type ToolExecutionUi } from "./components/tool-execution.ts";
 import { getEditorTheme, getMarkdownTheme, initTheme, theme } from "./theme/theme.ts";
 
@@ -316,7 +317,7 @@ export async function runHermesShell(): Promise<void> {
 			}
 			case "turn_end":
 				footer.state.streaming = false;
-				footer.state.status = undefined;
+				// Keep last lean pipeline stage visible (E11) until next user turn
 				if (ev.usage) footer.state.usage = { ...footer.state.usage, ...ev.usage };
 				void gw.refreshInfo().catch(() => {});
 				paint();
@@ -344,6 +345,12 @@ export async function runHermesShell(): Promise<void> {
 				footer.state.status = ev.text;
 				paint();
 				break;
+			case "pipeline_stage": {
+				// E11: persistent footer stage strip (keep last stage after turn)
+				applyPipelineStageToFooter(footer.state, ev);
+				paint();
+				break;
+			}
 			default:
 				break;
 		}

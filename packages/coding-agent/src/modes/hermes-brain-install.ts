@@ -20,7 +20,10 @@ import {
 import type { AgentSession, AgentSessionEvent, PromptOptions } from "../session/agent-session.ts"
 import { logger } from "@oh-my-pi/pi-utils"
 import { getOrCreateSubagentTrailStore } from "./components/subagent-trail"
+import { isLeanPipelineFooterMessage, PIPELINE_FOOTER_KEY } from "./pipeline-footer.ts"
 import { bootMark } from "./utils/perf-counters"
+
+export { PIPELINE_FOOTER_KEY }
 
 export type HermesBootNotice = {
   level: "info" | "warning" | "error"
@@ -36,6 +39,11 @@ export type HermesBrainHandle = {
   setDialogHost: (host: HermesDialogHost | null) => void
   /** OMP InteractiveMode.setWorkingMessage — kaomoji / status line (not transcript). */
   setWorkingMessage?: (message?: string) => void
+  /**
+   * E11: persistent status-line / footer strip for lean pipeline stage
+   * (current or last). Clear with undefined on next user turn if desired.
+   */
+  setPipelineFooter?: (label?: string) => void
   /** Invalidate footer/status after Hermes identity (model/effort) changes. */
   invalidateChrome?: () => void
   /**
@@ -152,6 +160,7 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
           // use emit path: optional coat hook hung on session after IM starts.
           const coat = session as unknown as {
             setWorkingMessage?: (m?: string) => void
+            setPipelineFooter?: (m?: string) => void
           }
           // Prefer live IM hook installed below via HANDLE_KEY / setCoatWorkingMessage
           const h = getHermesBrainHandle(session)
@@ -159,6 +168,12 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
             h.setWorkingMessage(ev.message)
           } else if (typeof coat.setWorkingMessage === "function") {
             coat.setWorkingMessage(ev.message)
+          }
+          // E11: lean pipeline labels are persistent footer (status line hook strip)
+          const msg = String(ev.message || "")
+          if (isLeanPipelineFooterMessage(msg)) {
+            if (h?.setPipelineFooter) h.setPipelineFooter(msg)
+            else if (typeof coat.setPipelineFooter === "function") coat.setPipelineFooter(msg)
           }
         } catch {
           /* coat not ready */
