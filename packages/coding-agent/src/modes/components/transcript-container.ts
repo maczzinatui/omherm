@@ -571,6 +571,8 @@ export class TranscriptContainer
 	#buildHitSegments(width: number): { segments: BlockSegment[]; totalRows: number } {
 		const segments: BlockSegment[] = new Array(this.children.length);
 		let row = 0;
+		// Mirror render()'s sep rule: one blank between bodies, never double.
+		const assembled: string[] = [];
 		for (let i = 0; i < this.children.length; i++) {
 			const child = this.children[i]!;
 			let raw: readonly string[];
@@ -595,8 +597,10 @@ export class TranscriptContainer
 				};
 				continue;
 			}
-			const sep = row > 0 ? 1 : 0;
+			const sep = row > 0 && !isPlainBlank(assembled[row - 1]!) ? 1 : 0;
 			const rowCount = sep + contribution.length;
+			if (sep) assembled.push("");
+			for (let j = 0; j < contribution.length; j++) assembled.push(contribution[j]!);
 			segments[i] = {
 				component: child,
 				rawRef: raw,

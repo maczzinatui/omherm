@@ -1338,6 +1338,15 @@ export class TUI extends Container {
 	}
 
 	/**
+	 * Frame row currently shown at screen row 0 (TUI window top).
+	 * Main-screen mouse hit-tests convert `screenRow → frameRow` as
+	 * `windowTopRow + screenRow`.
+	 */
+	get windowTopRow(): number {
+		return this.#windowTopRow;
+	}
+
+	/**
 	 * Transient viewport-only paints emitted by the non-multiplexer resize fast
 	 * path. These never touch native scrollback or the commit ledger, so they
 	 * are counted apart from {@link fullRedraws}.

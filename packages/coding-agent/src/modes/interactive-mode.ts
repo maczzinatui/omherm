@@ -5015,69 +5015,101 @@ export class InteractiveMode implements InteractiveModeContext {
 				consumed = true;
 				return true;
 			}
-			const termRows = this.ui.terminal.rows;
-			const bottomH = this.#bottomChromeHeight(width);
-			const chatBottomExclusive = Math.max(0, termRows - bottomH);
-			if (event.row >= chatBottomExclusive) {
-				consumed = true;
-				return true;
-			}
-			// Map screen row → transcript assembled geometry (strip edges + seps),
-			// then into the child's raw render line for thinking/tool hit APIs.
-			const assembledTotal = this.chatContainer.assembledRowCount(width);
-			const visibleChatRows = chatBottomExclusive;
-			// Bottom-align the assembled transcript in the region above chrome
-			// (matches TUI viewport showing the frame tail).
-			const assembledRow = assembledTotal - visibleChatRows + event.row;
-			const hit = this.chatContainer.hitTestAssembledRow(assembledRow, width);
-			if (hit) {
-				const child = hit.component;
-				const local = hit.localLine;
-				const thinking = child as { handleThinkingHeaderClick?: (n: number) => boolean };
-				if (typeof thinking.handleThinkingHeaderClick === "function") {
-					if (thinking.handleThinkingHeaderClick(local)) {
-						this.ui.requestRender();
-						consumed = true;
-						return true;
-					}
-				}
-				if (child instanceof ToolExecutionComponent) {
-					child.setExpanded(!child.isExpanded());
-					this.ui.requestRender();
-					consumed = true;
-					return true;
-				}
-				// Grouped blocks (TranscriptBlock / Container): walk grandchildren
-				// with the same strip-aware local offset approximation (raw local).
-				if (child instanceof Container) {
-					let innerY = 0;
-					for (const grand of child.children) {
-						const gh = componentHeight(grand, width);
-						if (local >= innerY && local < innerY + gh) {
-							const gLocal = local - innerY;
-							const gThink = grand as { handleThinkingHeaderClick?: (n: number) => boolean };
-							if (typeof gThink.handleThinkingHeaderClick === "function") {
-								if (gThink.handleThinkingHeaderClick(gLocal)) {
-									this.ui.requestRender();
-									consumed = true;
-									return true;
-								}
-							} else if (grand instanceof ToolExecutionComponent) {
-								grand.setExpanded(!grand.isExpanded());
-								this.ui.requestRender();
-								consumed = true;
-								return true;
-							}
-							break;
-						}
-						innerY += gh;
-					}
-				}
+			if (this.#routeChatClick(event.row, width)) {
+				this.ui.requestRender();
 			}
 			consumed = true;
 			return true;
 		});
 		return consumed ? { consume: true } : undefined;
+	}
+
+	/**
+	 * Map a screen-row click into the transcript and toggle thinking/tool chrome.
+	 * Uses TUI `windowTopRow` + root child geometry so short sessions (content
+	 * top-aligned) and long ones (viewport on frame tail) both hit correctly.
+	 */
+	#routeChatClick(screenRow: number, width: number): boolean {
+		const rootKids = (this.ui as Container).children;
+		// Build absolute frame ranges for each root child (TUI concatenates them).
+		type Seg = { child: Component; start: number; height: number };
+		const segs: Seg[] = [];
+		let frameLen = 0;
+		for (const child of rootKids) {
+			const h =
+				child === this.chatContainer
+					? this.chatContainer.assembledRowCount(width)
+					: componentHeight(child, width);
+			segs.push({ child, start: frameLen, height: h });
+			frameLen += h;
+		}
+		const windowTop =
+			typeof (this.ui as { windowTopRow?: number }).windowTopRow === "number"
+				? (this.ui as { windowTopRow: number }).windowTopRow
+				: Math.max(0, frameLen - this.ui.terminal.rows);
+		const frameRow = windowTop + screenRow;
+		if (frameRow < 0 || frameRow >= frameLen) return false;
+
+		let chatSeg: Seg | undefined;
+		for (const s of segs) {
+			if (frameRow >= s.start && frameRow < s.start + s.height) {
+				if (s.child !== this.chatContainer) return false; // chrome / status / editor
+				chatSeg = s;
+				break;
+			}
+		}
+		if (!chatSeg) return false;
+
+		const assembledRow = frameRow - chatSeg.start;
+		const hit = this.chatContainer.hitTestAssembledRow(assembledRow, width);
+		if (!hit) return false;
+
+		if (this.#toggleThinkingOrTool(hit.component, hit.localLine, width)) return true;
+
+		// Fuzzy: strip/wrap drift of a few rows still on the same block.
+		for (const delta of [-2, -1, 1, 2, 3, -3]) {
+			if (this.#toggleThinkingOrTool(hit.component, hit.localLine + delta, width)) return true;
+		}
+
+		// Collapsed thinking: whole assistant block is a hit target (header is
+		// one dim line; operators often click the body area of the collapsed row).
+		const collapsed = hit.component as {
+			hasCollapsedThinking?: () => boolean;
+			toggleThinkingCollapsed?: () => boolean;
+		};
+		if (
+			typeof collapsed.hasCollapsedThinking === "function" &&
+			collapsed.hasCollapsedThinking() &&
+			typeof collapsed.toggleThinkingCollapsed === "function"
+		) {
+			return collapsed.toggleThinkingCollapsed();
+		}
+		return false;
+	}
+
+	#toggleThinkingOrTool(child: Component, localLine: number, width: number): boolean {
+		const thinking = child as { handleThinkingHeaderClick?: (n: number) => boolean };
+		if (typeof thinking.handleThinkingHeaderClick === "function") {
+			if (thinking.handleThinkingHeaderClick(localLine)) return true;
+		}
+		if (child instanceof ToolExecutionComponent) {
+			// Only treat the first chrome lines as toggle (not deep in expanded body).
+			if (localLine <= 3) {
+				child.setExpanded(!child.isExpanded());
+				return true;
+			}
+		}
+		if (child instanceof Container) {
+			let innerY = 0;
+			for (const grand of child.children) {
+				const gh = componentHeight(grand, width);
+				if (localLine >= innerY && localLine < innerY + gh) {
+					return this.#toggleThinkingOrTool(grand, localLine - innerY, width);
+				}
+				innerY += gh;
+			}
+		}
+		return false;
 	}
 
 	/** Height of bottom-anchored chrome (editor, status, widgets). */
