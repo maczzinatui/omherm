@@ -45,6 +45,8 @@ class HermesFooter implements Component {
 		model?: string;
 		effort?: string;
 		profile?: string;
+		/** G9: hermes-agent version from lean handshake (tip drift). */
+		hermesVersion?: string;
 		usage?: Usage;
 		streaming: boolean;
 		status?: string;
@@ -75,6 +77,8 @@ class HermesFooter implements Component {
 		}
 		leftParts.push(theme.fg("dim", ctx));
 		if (s.profile) leftParts.push(theme.fg("dim", s.profile));
+		// G9: version badge (tip drift vs coat)
+		if (s.hermesVersion) leftParts.push(theme.fg("dim", `v${s.hermesVersion}`));
 		const leftStr = leftParts.join(" ");
 
 		// Always surface model • effort when known.
@@ -149,13 +153,17 @@ export async function runHermesShell(): Promise<void> {
 	};
 
 	const applyInfo = (info: SessionInfo) => {
+		const ver =
+			info.lean?.version ||
+			(typeof info.product === "string" && info.product.includes("lite") ? undefined : undefined);
 		footer.state = {
 			...footer.state,
 			cwd: info.cwd || footer.state.cwd,
 			branch: info.branch ?? footer.state.branch,
 			model: info.model ?? footer.state.model,
 			effort: info.reasoning_effort !== undefined ? info.reasoning_effort : footer.state.effort,
-			profile: info.profile_name ?? footer.state.profile,
+			profile: info.profile_name ?? info.lean?.lean_profile ?? footer.state.profile,
+			hermesVersion: ver || footer.state.hermesVersion,
 			usage: info.usage ? { ...footer.state.usage, ...info.usage } : footer.state.usage,
 			streaming: info.running != null ? !!info.running : footer.state.streaming,
 		};
@@ -369,6 +377,10 @@ export async function runHermesShell(): Promise<void> {
 
 	try {
 		const info = await gw.bootstrap();
+		// G9: lean handshake version on create (session.info may omit lean block)
+		const lean = gw.leanProduct;
+		if (lean?.version) footer.state.hermesVersion = lean.version;
+		if (lean?.lean_profile) footer.state.profile = lean.lean_profile;
 		applyInfo(info);
 		// Pull full session.info if create payload was sparse (model/effort)
 		if (!info.model || info.reasoning_effort == null) {

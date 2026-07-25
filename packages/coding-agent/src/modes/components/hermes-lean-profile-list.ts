@@ -180,6 +180,14 @@ export class HermesLeanProfileListComponent implements Component {
 						},
 						active: false,
 					},
+					{
+						name: "docs_search-smoke",
+						meta: {
+							description: "E9: MCP docs_search probe (meshina-wiki) — hub smoke",
+							toolsets: [],
+						},
+						active: false,
+					},
 				]
 			}
 			if (this.#libBrowse === "menu" || this.#kind === "lean-profile") {
@@ -421,6 +429,10 @@ export class HermesLeanProfileListComponent implements Component {
 			await this.#refreshLibrary()
 			return
 		}
+		if (row?.name === "docs_search-smoke") {
+			await this.#docsProbe()
+			return
+		}
 		if (row?.name === "tools-catalog") {
 			this.#libBrowse = "tools"
 			this.#libQuery = ""
@@ -577,6 +589,27 @@ export class HermesLeanProfileListComponent implements Component {
 			this.#banner = e instanceof Error ? e.message : String(e)
 			this.invalidate()
 		}
+	}
+
+	/** E9: one-click hub docs_search without an agent turn. */
+	async #docsProbe(): Promise<void> {
+		this.#banner = "docs_search probe…"
+		this.invalidate()
+		try {
+			const lib = createLibraryPort()
+			const r = await lib.docsProbe({
+				query: "orch doors ADR-0100",
+				corpus: "meshina-wiki",
+				top_k: 2,
+			})
+			const heads = (r.headings || []).slice(0, 3).join(" · ")
+			this.#banner = r.ok
+				? `docs_search ok · ${r.corpus} · ${heads || "(no headings)"}`
+				: `docs_search fail · ${r.status || "error"}`
+		} catch (e) {
+			this.#banner = e instanceof Error ? e.message : String(e)
+		}
+		this.invalidate()
 	}
 
 	#ensureScroll(): void {

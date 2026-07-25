@@ -898,6 +898,12 @@ export class InteractiveMode implements InteractiveModeContext {
 				this.statusLine.invalidate();
 				this.ui.requestRender();
 			};
+			// G9: hermes version badge (tip drift)
+			const ver = handle.brain?.leanProduct?.version;
+			if (ver) {
+				this.statusLine.setHookStatus("hermes-version", `v${ver}`);
+				this.statusLine.invalidate();
+			}
 			handle.invalidateChrome = () => {
 				this.statusLine.invalidate();
 				this.updateEditorBorderColor();
