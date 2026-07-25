@@ -94,6 +94,25 @@ export type TurnMapperOptions = {
 	provider?: string;
 };
 
+/** Compact coat label for lean pipeline stages (S1). */
+export function formatPipelineStage(ev: {
+	stage: string
+	open: boolean
+	text: string
+	iter?: number
+	maxIter?: number
+	ms?: number
+	provider?: string
+}): string {
+	if (ev.stage === "summary") return ev.text
+	const arrow = ev.open ? "▶" : "■"
+	const bits = [`[lean] ${ev.stage} ${arrow}`]
+	if (ev.ms != null && !ev.open) bits.push(`${Math.round(ev.ms)}ms`)
+	if (ev.iter != null && ev.maxIter != null) bits.push(`${ev.iter}/${ev.maxIter}`)
+	if (ev.provider) bits.push(ev.provider)
+	return bits.join(" ")
+}
+
 function emptyUsage() {
 	return {
 		input: 0,
@@ -724,6 +743,22 @@ export class GatewayTurnMapper {
 				return this.finishTurn(undefined, "error", ev.text);
 			case "status":
 				return [{ type: "working_status", message: ev.text }];
+			case "pipeline_stage": {
+				// S1: dense working rail for stages; notice only for summary / policy
+				const label = formatPipelineStage(ev)
+				const out: MappedAgentSessionEvent[] = [
+					{ type: "working_status", message: label },
+				]
+				if (ev.stage === "summary" || ev.stage === "policy" || (!ev.open && ev.stage === "egress")) {
+					out.push({
+						type: "notice",
+						level: "info",
+						message: label,
+						source: "lean-pipeline",
+					})
+				}
+				return out
+			}
 			case "stderr":
 			case "ready":
 			case "clarify":
@@ -741,6 +776,19 @@ export class GatewayTurnMapper {
 				return [];
 			case "lifecycle":
 				// Durable system-ish line without killing the turn.
+				// lean-pipeline lines are usually remapped to pipeline_stage upstream;
+				// if they land here raw, still surface densely.
+				if (ev.text.includes("[lean-pipeline]")) {
+					return [
+						{ type: "working_status", message: ev.text },
+						{
+							type: "notice",
+							level: "info",
+							message: ev.text,
+							source: "lean-pipeline",
+						},
+					]
+				}
 				return [
 					{ type: "working_status", message: ev.text },
 					{ type: "notice", level: "info", message: ev.text, source: "hermes-gateway" },

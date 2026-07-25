@@ -18,7 +18,7 @@ import {
   GatewayTurnMapper,
   type MappedAgentSessionEvent,
 } from "./session-event-map.ts"
-import type { SessionInfo, UiEvent } from "./types.ts"
+import type { LeanProductHandshake, SessionInfo, UiEvent } from "./types.ts"
 
 export type HermesBrainEvent = MappedAgentSessionEvent
 
@@ -98,6 +98,31 @@ export class HermesBrain {
     return this.gateway.sessionId
   }
 
+  /** S0 lean handshake from hermes-agent-lite (null if stock / missing). */
+  get leanProduct(): LeanProductHandshake | null {
+    return this.gateway.leanProduct
+  }
+
+  get pipelineBudget() {
+    return this.gateway.pipelineBudgetState
+  }
+
+  /** One-line coat notice for boot (S0). */
+  formatLeanBootNotice(): string {
+    const lean = this.leanProduct
+    if (!lean?.lean && lean?.product !== "hermes-agent-lite") {
+      return "Hermes brain: stock/unknown product (not hermes-agent-lite handshake)"
+    }
+    const bits = [
+      "hermes-agent-lite",
+      lean.lean_profile ? `profile=${lean.lean_profile}` : null,
+      lean.max_iterations != null ? `max_iter=${lean.max_iterations}` : null,
+      lean.oauth_safe ? "oauth-safe" : null,
+      lean.pipeline_trace ? "pipeline" : null,
+    ].filter(Boolean)
+    return `Hermes brain: ${bits.join(" · ")}`
+  }
+
   /** Wire OMP ask-dialog (call after InteractiveMode builds ExtensionUiController). */
   setDialogHost(host: HermesDialogHost | null): void {
     this.#dialogHost = host
@@ -125,6 +150,13 @@ export class HermesBrain {
     const info = await this.gateway.bootstrap()
     this.mapper.setIdentity(info.model, info.provider, info.reasoning_effort)
     this.#bootstrapped = true
+    // S0: always emit lean handshake notice so operator sees product pair
+    this.#emit({
+      type: "notice",
+      level: this.leanProduct?.lean ? "info" : "warning",
+      message: this.formatLeanBootNotice(),
+      source: "lean-handshake",
+    })
     return info
   }
 
