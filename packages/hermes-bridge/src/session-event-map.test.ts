@@ -3,6 +3,19 @@ import { GatewayTurnMapper } from "./session-event-map.ts";
 import { mapGatewayToUi, type GatewayEvent } from "./types.ts";
 
 describe("GatewayTurnMapper", () => {
+	test("session.info retains reasoning_effort on setIdentity paint path", () => {
+		const m = new GatewayTurnMapper({ model: "old", provider: "old-p" });
+		m.feedUi({
+			kind: "info",
+			info: { model: "grok-4.5", provider: "xai", reasoning_effort: "high" },
+		});
+		expect(m.model).toBe("grok-4.5");
+		expect(m.provider).toBe("xai");
+		expect(m.reasoningEffort).toBe("high");
+		m.setIdentity("m2", "p2", "low");
+		expect(m.reasoningEffort).toBe("low");
+	});
+
 	test("streams thinking + text into message_update deltas", () => {
 		const m = new GatewayTurnMapper({ model: "grok-4.5", provider: "xai" });
 		const evs = [

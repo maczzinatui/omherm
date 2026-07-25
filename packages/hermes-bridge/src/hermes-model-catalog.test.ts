@@ -112,6 +112,7 @@ describe("hermes slash catalog", () => {
     const c = buildHermesSlashCatalog("/nonexistent-home-for-skills-test")
     expect(c.some((e) => e.name === "model")).toBe(true)
     expect(c.some((e) => e.name === "kanban")).toBe(true)
+    expect(c.some((e) => e.name === "reasoning")).toBe(true)
   })
 
   test("listHermesSkills from live home", () => {

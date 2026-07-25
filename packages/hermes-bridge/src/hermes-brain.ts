@@ -123,7 +123,7 @@ export class HermesBrain {
     if (this.#bootstrapped) return this.gateway.sessionInfo
     this.#unsubUi = this.gateway.onUi((ev: UiEvent) => this.#onUi(ev))
     const info = await this.gateway.bootstrap()
-    this.mapper.setIdentity(info.model, info.provider)
+    this.mapper.setIdentity(info.model, info.provider, info.reasoning_effort)
     this.#bootstrapped = true
     return info
   }
@@ -285,7 +285,7 @@ export class HermesBrain {
 
   #onUi(ev: UiEvent): void {
     if (ev.kind === "info") {
-      this.mapper.setIdentity(ev.info.model, ev.info.provider)
+      this.mapper.setIdentity(ev.info.model, ev.info.provider, ev.info.reasoning_effort)
       for (const l of this.#identityListeners) {
         try {
           l(ev.info)

@@ -618,9 +618,15 @@ export class GatewayTurnMapper {
 		this.provider = opts.provider || "hermes";
 	}
 
-	setIdentity(model?: string, provider?: string) {
+	/** Last reasoning_effort from session.info (paint path for coat footer). */
+	reasoningEffort?: string;
+
+	setIdentity(model?: string, provider?: string, reasoningEffort?: string) {
 		if (model) this.model = model;
 		if (provider) this.provider = provider;
+		if (reasoningEffort !== undefined && reasoningEffort !== null && reasoningEffort !== "") {
+			this.reasoningEffort = String(reasoningEffort);
+		}
 	}
 
 	private snapshot(stopReason: MappedAssistantMessage["stopReason"] = "stop", err?: string): MappedAssistantMessage {
@@ -697,7 +703,7 @@ export class GatewayTurnMapper {
 	feedUi(ev: UiEvent): MappedAgentSessionEvent[] {
 		switch (ev.kind) {
 			case "info":
-				this.setIdentity(ev.info.model, ev.info.provider);
+				this.setIdentity(ev.info.model, ev.info.provider, ev.info.reasoning_effort);
 				return [];
 			case "user":
 				// New user turn — close previous agent if still open (defensive)

@@ -2125,6 +2125,18 @@ export class InputController {
 						: await brain!.slashExec(route.command);
 					const body = [warning ? `warning: ${warning}` : "", output].filter(Boolean).join("\n").trim();
 					const text = body || "(no output)";
+					// Identity-changing Hermes slashes must repaint coat footer (model / effort).
+					// Keyboard cycleHermesThinking already does this; bare slash.exec did not.
+					const cmdName = route.command.trim().split(/\s+/)[0]?.replace(/^\//, "").toLowerCase() ?? "";
+					if (cmdName === "reasoning" || cmdName === "model") {
+						try {
+							const { syncCoatFromHermesBrain } = await import("../hermes-coat-identity.ts");
+							const liveBrain = cockpit?.brain ?? brain!;
+							await syncCoatFromHermesBrain(this.ctx.session, liveBrain);
+						} catch {
+							/* coat paint optional */
+						}
+					}
 					// Short → notice. Long → pager overlay (+ optional disk dump).
 					if (text.length <= 400 && text.split("\n").length <= 8) {
 						this.ctx.session.emitNotice?.("info", text, "hermes-slash");

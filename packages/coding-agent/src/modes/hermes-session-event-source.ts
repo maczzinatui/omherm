@@ -24,7 +24,7 @@ export class HermesSessionEventSource {
 		if (this.#unsub) return () => this.stop();
 		this.#unsub = this.gw.onUi((ev: UiEvent) => {
 			if (ev.kind === "info") {
-				this.mapper.setIdentity(ev.info.model, ev.info.provider);
+				this.mapper.setIdentity(ev.info.model, ev.info.provider, ev.info.reasoning_effort);
 			}
 			const mapped = this.mapper.feedUi(ev);
 			for (const e of mapped) this.#emit(e);
