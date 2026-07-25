@@ -53,12 +53,12 @@ describe("HermesLeanProfileListComponent library chrome", () => {
 				tools: async () => ({
 					count: 41,
 					path: "/home/nixos/.hermes/library/tools-catalog.json",
-					tools: [{ name: "x" }],
+					tools: [{ name: "x", description: "tool x" }],
 				}),
 				skills: async () => ({
 					count: 80,
 					path: "/home/nixos/.hermes/library/skills-catalog.json",
-					skills: [{ name: "y" }],
+					skills: [{ name: "y", description: "skill y", category: "devops" }],
 				}),
 				refresh: async () => ({
 					tools_path: "/t",
@@ -66,6 +66,12 @@ describe("HermesLeanProfileListComponent library chrome", () => {
 					ok: true,
 				}),
 			}),
+			skillsPort: {
+				inspect: async (name: string) => `# ${name}\nbody`,
+				list: async () => [],
+				enable: async () => "ok",
+				disable: async () => "ok",
+			},
 		}))
 
 		const { HermesLeanProfileListComponent } = await import(

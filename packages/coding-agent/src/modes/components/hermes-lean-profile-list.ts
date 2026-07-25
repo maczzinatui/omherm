@@ -7,6 +7,7 @@ import { matchesKey, routeSgrMouseInput, type SgrMouseEvent, visibleWidth } from
 import {
 	createLeanProfilePort,
 	createLibraryPort,
+	skillsPort,
 	type LeanProfileMeta,
 	type LeanProfileState,
 } from "@omherm/hermes-bridge"
@@ -45,6 +46,11 @@ function pad(s: string, w: number): string {
 
 type Row = { name: string; meta: LeanProfileMeta; active: boolean }
 
+/** Library chrome: menu → browse tools/skills → optional skill detail. */
+type LibBrowse = "menu" | "tools" | "skills" | "detail"
+
+type LibItem = { name: string; description: string; category?: string }
+
 export type HermesLeanChromeKind = "lean-profile" | "library"
 
 export class HermesLeanProfileListComponent implements Component {
@@ -67,6 +73,13 @@ export class HermesLeanProfileListComponent implements Component {
 	#hoverIdx = -1
 	#pendingHover = -2
 	#hoverRaf: ReturnType<typeof setTimeout> | null = null
+	// Library browse (CADILLAC: search + open body without leaving coat)
+	#libBrowse: LibBrowse = "menu"
+	#libQuery = ""
+	#libItems: LibItem[] = []
+	#libDetailTitle = ""
+	#libDetailLines: string[] = []
+	#queryEdit = false
 
 	constructor(tui: TUI, kind: HermesLeanChromeKind, onCancel: () => void) {
 		this.#tui = tui
@@ -77,12 +90,11 @@ export class HermesLeanProfileListComponent implements Component {
 	}
 
 	async reload(): Promise<void> {
-		const cold = this.#rows.length === 0
+		const cold = this.#rows.length === 0 && this.#libItems.length === 0
 		this.#loading = cold
 		this.#error = ""
 		if (cold) paintOverlayFull(this.#tui)
 		try {
-			// Prefer gateway via bound brain if available — ports work without gw too
 			const port = createLeanProfilePort()
 			const lib = createLibraryPort()
 			if (this.#kind === "lean-profile") {
@@ -97,9 +109,12 @@ export class HermesLeanProfileListComponent implements Component {
 					meta: profiles[name] ?? { description: "", toolsets: [] },
 					active: this.#state!.active === name,
 				}))
-				// Prefer active row selected
 				const ai = this.#rows.findIndex((r) => r.active)
 				if (ai >= 0) this.#sel = ai
+			} else if (this.#libBrowse === "tools" || this.#libBrowse === "skills") {
+				await this.#loadLibBrowse(false)
+			} else if (this.#libBrowse === "detail") {
+				/* keep detail */
 			} else {
 				try {
 					this.#state = await port.get()
@@ -121,7 +136,7 @@ export class HermesLeanProfileListComponent implements Component {
 					{
 						name: "tools-catalog",
 						meta: {
-							description: `${this.#libTools} tools in library (out of context)`,
+							description: `${this.#libTools} tools · Enter browse/search`,
 							toolsets: [],
 						},
 						active: false,
@@ -129,7 +144,7 @@ export class HermesLeanProfileListComponent implements Component {
 					{
 						name: "skills-catalog",
 						meta: {
-							description: `${this.#libSkills} skills in library (out of context)`,
+							description: `${this.#libSkills} skills · Enter browse · / query`,
 							toolsets: [],
 						},
 						active: false,
@@ -144,7 +159,11 @@ export class HermesLeanProfileListComponent implements Component {
 					},
 				]
 			}
-			if (this.#sel >= this.#rows.length) this.#sel = Math.max(0, this.#rows.length - 1)
+			if (this.#libBrowse === "menu" || this.#kind === "lean-profile") {
+				if (this.#sel >= this.#rows.length) this.#sel = Math.max(0, this.#rows.length - 1)
+			} else if (this.#libBrowse === "tools" || this.#libBrowse === "skills") {
+				if (this.#sel >= this.#libItems.length) this.#sel = Math.max(0, this.#libItems.length - 1)
+			}
 		} catch (e) {
 			this.#error = e instanceof Error ? e.message : String(e)
 			this.#rows = []
@@ -153,14 +172,60 @@ export class HermesLeanProfileListComponent implements Component {
 		paintOverlayReload(this.#tui, this, false)
 	}
 
+	async #loadLibBrowse(resetSel: boolean): Promise<void> {
+		const lib = createLibraryPort()
+		const q = this.#libQuery.trim()
+		if (this.#libBrowse === "tools") {
+			const t = await lib.tools()
+			let items = (t.tools || []).map((x) => ({
+				name: String(x.name || ""),
+				description: String(x.description || "").slice(0, 120),
+			}))
+			if (q) {
+				const ql = q.toLowerCase()
+				items = items.filter(
+					(i) => i.name.toLowerCase().includes(ql) || i.description.toLowerCase().includes(ql),
+				)
+			}
+			items.sort((a, b) => a.name.localeCompare(b.name))
+			this.#libItems = items
+			this.#libTools = t.count
+			this.#libPath = t.path || this.#libPath
+			this.#banner = q ? `tools filter “${q}” · ${items.length} hits` : `tools library · ${items.length}`
+		} else if (this.#libBrowse === "skills") {
+			const s = await lib.skills({ query: q || undefined })
+			const raw = s.skills || []
+			this.#libItems = raw.map((sk) => ({
+				name: String(sk.name || sk.id || ""),
+				description: String(sk.description || sk.short || "").slice(0, 120),
+				category: sk.category != null ? String(sk.category) : undefined,
+			}))
+			this.#libSkills = s.count
+			this.#libPath = s.path || this.#libPath
+			this.#banner = q
+				? `skills “${q}” · ${this.#libItems.length} hits (library.skills)`
+				: `skills library · ${this.#libItems.length}`
+		}
+		if (resetSel) {
+			this.#sel = 0
+			this.#scroll = 0
+		}
+	}
+
 	invalidate(): void {
 		paintOverlayLocal(this.#tui, this)
 	}
 
+	#listLen(): number {
+		if (this.#kind === "library" && (this.#libBrowse === "tools" || this.#libBrowse === "skills")) {
+			return this.#libItems.length
+		}
+		if (this.#kind === "library" && this.#libBrowse === "detail") return 0
+		return this.#rows.length
+	}
+
 	handleInput(data: string): void {
 		try {
-			// CADILLAC: fullscreen overlays own SGR mouse — handler required (pi-tui).
-			// Finger taps = leftClick; wheel = scroll selection (mobile/glass).
 			if (routeSgrMouseInput(data, (event) => this.#onMouse(event))) {
 				return
 			}
@@ -171,10 +236,50 @@ export class HermesLeanProfileListComponent implements Component {
 					this.invalidate()
 					return
 				}
+				if (this.#queryEdit) {
+					this.#queryEdit = false
+					this.invalidate()
+					return
+				}
+				if (this.#kind === "library" && this.#libBrowse === "detail") {
+					this.#libBrowse = "skills"
+					this.#libDetailLines = []
+					void this.reload()
+					return
+				}
+				if (this.#kind === "library" && (this.#libBrowse === "tools" || this.#libBrowse === "skills")) {
+					this.#libBrowse = "menu"
+					this.#libQuery = ""
+					this.#libItems = []
+					this.#sel = 0
+					this.#scroll = 0
+					void this.reload()
+					return
+				}
 				this.#onCancel()
 				return
 			}
 			if (this.#loading) return
+
+			// Library query edit: type to filter, Enter applies, Esc cancels edit
+			if (this.#kind === "library" && this.#queryEdit) {
+				if (matchesKey(data, "return") || data === "\n") {
+					this.#queryEdit = false
+					void this.#loadLibBrowse(true).then(() => this.invalidate())
+					return
+				}
+				if (data === "\x7f" || data === "\b" || matchesKey(data, "backspace")) {
+					this.#libQuery = this.#libQuery.slice(0, -1)
+					this.invalidate()
+					return
+				}
+				if (data.length === 1 && data >= " " && data !== "/") {
+					this.#libQuery += data
+					this.invalidate()
+					return
+				}
+				return
+			}
 
 			if (this.#confirm && this.#kind === "lean-profile") {
 				if (data === "y" || data === "Y" || matchesKey(data, "return")) {
@@ -189,8 +294,21 @@ export class HermesLeanProfileListComponent implements Component {
 				}
 			}
 
+			// Start filter when browsing tools/skills
+			if (
+				this.#kind === "library" &&
+				(this.#libBrowse === "tools" || this.#libBrowse === "skills") &&
+				(data === "/" || data === "f")
+			) {
+				this.#queryEdit = true
+				this.#banner = `filter: ${this.#libQuery}_  (type · Enter apply · Esc cancel)`
+				this.invalidate()
+				return
+			}
+
+			const n = Math.max(0, this.#listLen() - 1)
 			if (matchesSelectDown(data)) {
-				this.#sel = Math.min(this.#rows.length - 1, this.#sel + 1)
+				this.#sel = Math.min(n, this.#sel + 1)
 				this.#ensureScroll()
 				this.invalidate()
 				return
@@ -202,7 +320,7 @@ export class HermesLeanProfileListComponent implements Component {
 				return
 			}
 			if (matchesSelectPageDown(data)) {
-				this.#sel = Math.min(this.#rows.length - 1, this.#sel + 8)
+				this.#sel = Math.min(n, this.#sel + 8)
 				this.#ensureScroll()
 				this.invalidate()
 				return
@@ -241,13 +359,69 @@ export class HermesLeanProfileListComponent implements Component {
 			this.invalidate()
 			return
 		}
+		// library
+		if (this.#libBrowse === "detail") {
+			this.#libBrowse = "skills"
+			this.#libDetailLines = []
+			await this.reload()
+			return
+		}
+		if (this.#libBrowse === "tools") {
+			const it = this.#libItems[this.#sel]
+			this.#banner = it
+				? `tool ${it.name} — use tool_search / enable in /tools inventory`
+				: "empty tools list"
+			this.invalidate()
+			return
+		}
+		if (this.#libBrowse === "skills") {
+			const it = this.#libItems[this.#sel]
+			if (!it?.name) return
+			this.#banner = `loading skill_view ${it.name}…`
+			this.invalidate()
+			try {
+				const text = await skillsPort.inspect(it.name)
+				this.#libDetailTitle = it.name
+				this.#libDetailLines = (text || "(empty)").split(/\r?\n/).slice(0, 80)
+				this.#libBrowse = "detail"
+				this.#scroll = 0
+				this.#banner = `skill body · Esc back · ${it.name}`
+			} catch (e) {
+				this.#banner = e instanceof Error ? e.message : String(e)
+			}
+			this.invalidate()
+			return
+		}
+		// menu
 		const row = this.#rows[this.#sel]
 		if (row?.name === "refresh") {
 			await this.#refreshLibrary()
 			return
 		}
-		this.#banner = "Use /skills or /tools for inventory; tap refresh to rebuild catalogs"
-		this.invalidate()
+		if (row?.name === "tools-catalog") {
+			this.#libBrowse = "tools"
+			this.#libQuery = ""
+			this.#sel = 0
+			this.#scroll = 0
+			this.#loading = true
+			this.invalidate()
+			await this.#loadLibBrowse(true)
+			this.#loading = false
+			this.invalidate()
+			return
+		}
+		if (row?.name === "skills-catalog") {
+			this.#libBrowse = "skills"
+			this.#libQuery = ""
+			this.#sel = 0
+			this.#scroll = 0
+			this.#loading = true
+			this.invalidate()
+			await this.#loadLibBrowse(true)
+			this.#loading = false
+			this.invalidate()
+			return
+		}
 	}
 
 	/**
@@ -287,10 +461,12 @@ export class HermesLeanProfileListComponent implements Component {
 				return true
 			}
 
+			const listN = this.#listLen()
+
 			if (ev.motion) {
 				if (ev.row >= this.#tableStart && ev.row < this.#tableStart + this.#tableHit) {
 					const idx = this.#scroll + (ev.row - this.#tableStart)
-					if (idx >= 0 && idx < this.#rows.length && idx !== this.#hoverIdx) {
+					if (idx >= 0 && idx < listN && idx !== this.#hoverIdx) {
 						this.#pendingHover = idx
 						if (this.#hoverRaf == null) {
 							this.#hoverRaf = setTimeout(() => {
@@ -316,9 +492,13 @@ export class HermesLeanProfileListComponent implements Component {
 
 			if (ev.wheel != null) {
 				this.#hoverIdx = -1
-				const n = this.#rows.length
-				if (n === 0) return true
-				this.#sel = Math.max(0, Math.min(n - 1, this.#sel + ev.wheel))
+				if (this.#libBrowse === "detail") {
+					this.#scroll = Math.max(0, this.#scroll + ev.wheel)
+					this.invalidate()
+					return true
+				}
+				if (listN === 0) return true
+				this.#sel = Math.max(0, Math.min(listN - 1, this.#sel + ev.wheel))
 				this.#ensureScroll()
 				this.invalidate()
 				return true
@@ -327,13 +507,12 @@ export class HermesLeanProfileListComponent implements Component {
 			if (ev.leftClick) {
 				if (ev.row >= this.#tableStart && ev.row < this.#tableStart + this.#tableHit) {
 					const idx = this.#scroll + (ev.row - this.#tableStart)
-					if (idx >= 0 && idx < this.#rows.length) {
+					if (idx >= 0 && idx < listN) {
 						const reTap = idx === this.#sel
 						this.#sel = idx
 						this.#hoverIdx = -1
 						this.#ensureScroll()
 						this.invalidate()
-						// Finger: first tap select, second tap activate (set profile / refresh)
 						if (reTap) void this.#activateSelected()
 					}
 					return true
@@ -379,8 +558,10 @@ export class HermesLeanProfileListComponent implements Component {
 
 	#ensureScroll(): void {
 		const vis = Math.max(4, this.#tableHit)
+		const n = this.#listLen()
 		if (this.#sel < this.#scroll) this.#scroll = this.#sel
 		if (this.#sel >= this.#scroll + vis) this.#scroll = this.#sel - vis + 1
+		this.#scroll = Math.max(0, Math.min(this.#scroll, Math.max(0, n - vis)))
 	}
 
 	render(w: number): string[] {
@@ -396,11 +577,36 @@ export class HermesLeanProfileListComponent implements Component {
 		}
 	}
 
+	#paintSelRow(line: string, sel: boolean, hover: boolean, w: number): string {
+		const body = fit(line, w - 4)
+		if (sel) {
+			try {
+				return theme.bg("selectedBg", theme.bold(theme.fg("accent", body)))
+			} catch {
+				return safeBg(body)
+			}
+		}
+		if (hover) {
+			try {
+				return theme.bg("selectedBg", theme.fg("accent", body))
+			} catch {
+				return safeFg("accent", body)
+			}
+		}
+		return body
+	}
+
 	#renderInner(w: number): string[] {
 		const title =
 			this.#kind === "lean-profile"
 				? "Mesh lean profile (S2)"
-				: "On-demand library (tools + skills)"
+				: this.#libBrowse === "tools"
+					? "Library · tools browse"
+					: this.#libBrowse === "skills"
+						? "Library · skills browse"
+						: this.#libBrowse === "detail"
+							? `Library · ${this.#libDetailTitle || "skill"}`
+							: "On-demand library (tools + skills)"
 		const out: string[] = []
 		out.push(topBorder(title, w))
 		if (this.#loading) {
@@ -411,89 +617,120 @@ export class HermesLeanProfileListComponent implements Component {
 		if (this.#error) {
 			out.push(row(safeFg("warning", fit(this.#error, w - 4)), w))
 		}
-		if (this.#banner) {
-			out.push(row(safeFg("accent", fit(this.#banner, w - 4)), w))
+		if (this.#banner || this.#queryEdit) {
+			const b = this.#queryEdit
+				? `filter: ${this.#libQuery}_  (Enter apply · Esc cancel edit)`
+				: this.#banner
+			out.push(row(safeFg("accent", fit(b, w - 4)), w))
 		}
-		if (this.#state) {
+		if (this.#state && this.#libBrowse === "menu") {
 			const od = this.#state.on_demand ? "on-demand ON" : "on-demand off"
 			const sc = this.#state.on_demand_scope || "?"
 			const act = this.#state.active || "(default)"
 			out.push(row(safeFg("muted", fit(`active=${act} · ${od} · scope=${sc}`, w - 4)), w))
 		}
-		if (this.#kind === "library" && this.#libPath) {
+		if (this.#kind === "library" && this.#libPath && this.#libBrowse !== "detail") {
 			out.push(row(safeFg("muted", fit(this.#libPath, w - 4)), w))
 		}
 		out.push(divider(w))
-		const header =
-			this.#kind === "lean-profile"
+
+		// Skill detail pager
+		if (this.#kind === "library" && this.#libBrowse === "detail") {
+			const bodyH = Math.max(8, Math.min(22, (process.stdout.rows || 24) - 10))
+			this.#tableStart = out.length
+			this.#tableHit = bodyH
+			const end = Math.min(this.#libDetailLines.length, this.#scroll + bodyH)
+			for (let i = this.#scroll; i < end; i++) {
+				out.push(row(fit(this.#libDetailLines[i] ?? "", w - 4), w))
+			}
+			if (!this.#libDetailLines.length) {
+				out.push(row(safeFg("muted", "(empty skill body)"), w))
+			}
+			out.push(divider(w))
+			out.push(row(safeFg("muted", "wheel/↑↓ scroll · Esc back to skills · Enter back"), w))
+			out.push(bottomBorder(w))
+			return out
+		}
+
+		const browsing = this.#kind === "library" && (this.#libBrowse === "tools" || this.#libBrowse === "skills")
+		const header = browsing
+			? `${pad(" ", 2)}${pad("NAME", 24)} ${pad("DETAIL", 40)}`
+			: this.#kind === "lean-profile"
 				? `${pad(" ", 2)}${pad("PROFILE", 16)} ${pad("TOOLSETS", 28)} ${pad("DESC", 24)}`
 				: `${pad(" ", 2)}${pad("ENTRY", 18)} ${pad("DETAIL", 40)}`
 		out.push(row(safeFg("muted", fit(header, w - 4)), w))
 		out.push(divider(w))
 
-		const bodyH = Math.max(6, Math.min(16, this.#rows.length || 1))
+		const listN = browsing ? this.#libItems.length : this.#rows.length
+		const bodyH = Math.max(6, Math.min(16, listN || 1))
 		this.#tableStart = out.length
 		this.#tableHit = bodyH
-		const end = Math.min(this.#rows.length, this.#scroll + bodyH)
+		const end = Math.min(listN, this.#scroll + bodyH)
 		for (let i = this.#scroll; i < end; i++) {
-			const r = this.#rows[i]!
-			const mark = r.active ? "●" : i === this.#sel ? "›" : i === this.#hoverIdx ? "·" : " "
 			const sel = i === this.#sel
 			const hover = !sel && i === this.#hoverIdx
 			let line: string
-			if (this.#kind === "lean-profile") {
-				const ts = (r.meta.toolsets || []).join(",")
-				line = `${mark} ${pad(r.name, 16)} ${pad(ts, 28)} ${pad(r.meta.description || "", 24)}`
+			if (browsing) {
+				const it = this.#libItems[i]!
+				const mark = i === this.#sel ? "›" : i === this.#hoverIdx ? "·" : " "
+				const cat = it.category ? `[${it.category}] ` : ""
+				line = `${mark} ${pad(it.name, 24)} ${pad(cat + (it.description || ""), 40)}`
 			} else {
-				line = `${mark} ${pad(r.name, 18)} ${pad(r.meta.description || "", 40)}`
-			}
-			// Full-width selectedBg on plain text (no nested SGR mid-line — that
-			// only highlighted the caret/index in some terminals).
-			const body = fit(line, w - 4)
-			let painted = body
-			if (sel) {
-				try {
-					const accent = theme.bold(theme.fg("accent", body))
-					painted = theme.bg("selectedBg", accent)
-				} catch {
-					painted = safeBg(body)
-				}
-			} else if (hover) {
-				try {
-					painted = theme.bg("selectedBg", theme.fg("accent", body))
-				} catch {
-					painted = safeFg("accent", body)
+				const r = this.#rows[i]!
+				const mark = r.active ? "●" : i === this.#sel ? "›" : i === this.#hoverIdx ? "·" : " "
+				if (this.#kind === "lean-profile") {
+					const ts = (r.meta.toolsets || []).join(",")
+					line = `${mark} ${pad(r.name, 16)} ${pad(ts, 28)} ${pad(r.meta.description || "", 24)}`
+				} else {
+					line = `${mark} ${pad(r.name, 18)} ${pad(r.meta.description || "", 40)}`
 				}
 			}
-			out.push(row(painted, w))
+			out.push(row(this.#paintSelRow(line, sel, hover, w), w))
 		}
-		if (!this.#rows.length) {
-			out.push(row(safeFg("muted", "No profiles (gateway lean.profile.get?)"), w))
+		if (!listN) {
+			out.push(
+				row(
+					safeFg(
+						"muted",
+						browsing ? "No matches · / to filter · Esc menu" : "No profiles (gateway lean.profile.get?)",
+					),
+					w,
+				),
+			)
 		}
 		out.push(divider(w))
 		const help =
 			this.#kind === "lean-profile"
 				? "↑↓/wheel · click/re-tap set · r reload · Esc"
-				: "↑↓/wheel · click/re-tap refresh · r reload · Esc"
+				: browsing
+					? "↑↓/wheel · / filter · Enter open · r reload · Esc menu"
+					: "↑↓/wheel · Enter browse tools/skills · r refresh · Esc"
 		out.push(row(safeFg("muted", fit(help, w - 4)), w))
-		// detail
-		const cur = this.#rows[this.#sel]
-		if (cur && this.#kind === "lean-profile") {
-			out.push(divider(w))
-			out.push(row(safeFg("accent", fit(cur.name, w - 4)), w))
-			out.push(row(fit(cur.meta.description || "", w - 4), w))
-			out.push(
-				row(
-					safeFg(
-						"muted",
-						fit(
-							`toolsets: ${(cur.meta.toolsets || []).join(", ") || "—"} · skills=${cur.meta.skills ?? "?"} · memory=${cur.meta.memory ?? "?"}`,
-							w - 4,
+		if (!browsing && this.#kind === "lean-profile") {
+			const cur = this.#rows[this.#sel]
+			if (cur) {
+				out.push(divider(w))
+				out.push(row(safeFg("accent", fit(cur.name, w - 4)), w))
+				out.push(row(fit(cur.meta.description || "", w - 4), w))
+				out.push(
+					row(
+						safeFg(
+							"muted",
+							fit(
+								`toolsets: ${(cur.meta.toolsets || []).join(", ") || "—"} · skills=${cur.meta.skills ?? "?"} · memory=${cur.meta.memory ?? "?"}`,
+								w - 4,
+							),
 						),
+						w,
 					),
-					w,
-				),
-			)
+				)
+			}
+		}
+		if (browsing && this.#libItems[this.#sel]) {
+			const it = this.#libItems[this.#sel]!
+			out.push(divider(w))
+			out.push(row(safeFg("accent", fit(it.name, w - 4)), w))
+			out.push(row(fit(it.description || "", w - 4), w))
 		}
 		out.push(bottomBorder(w))
 		return out

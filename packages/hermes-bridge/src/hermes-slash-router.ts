@@ -66,6 +66,13 @@ export function routeHermesSlash(text: string): HermesSlashDeepLink {
 		case "library":
 			if (!p.rest) return { type: "port", port: "library" }
 			return { type: "exec", command: p.raw }
+		case "docs":
+		case "docs-search":
+		case "corpora":
+			// Coat: open library chrome (browse skills → docs-corpora-search).
+			// Agents: still use MCP docs_search; skill docs-corpora-search has CLI.
+			if (!p.rest) return { type: "port", port: "library" }
+			return { type: "exec", command: p.raw }
 		case "skills":
 			if (!p.rest) return { type: "port", port: "skills" }
 			return { type: "exec", command: p.raw }
