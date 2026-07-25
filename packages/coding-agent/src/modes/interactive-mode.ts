@@ -1168,20 +1168,14 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.ui.setFocus(this.editor);
 		// Main-screen SGR mouse: thinking header expand/collapse + tool chrome.
 		// Fullscreen overlays still own tracking while open.
-		// Hermes product default: OFF so the host terminal keeps native
-		// select/copy (Shift+drag also works when tracking is on). Re-enable:
-		// OMHERM_BASE_MOUSE=1 or MESHINA_TUI_BASE_MOUSE=1. Stock omp keeps ON.
-		const hermesBrand =
-			process.env.MESHINA_TUI_BRAND === "hermes" ||
-			process.env.MESHINA_TUI_BRAND === "1" ||
-			process.env.OMHERM_BRAND === "omherm";
-		const forceBaseMouse =
-			process.env.OMHERM_BASE_MOUSE === "1" ||
-			process.env.MESHINA_TUI_BASE_MOUSE === "1" ||
-			process.env.OMHERM_BASE_MOUSE === "true";
+		// Default ON (Hermes + stock omp) so click-expand works. Opt out for
+		// pure host select/copy: OMHERM_BASE_MOUSE=0 or MESHINA_TUI_BASE_MOUSE=0.
+		// With tracking on, most terminals still allow Shift+drag to select.
 		const forceBaseMouseOff =
-			process.env.OMHERM_BASE_MOUSE === "0" || process.env.MESHINA_TUI_BASE_MOUSE === "0";
-		const baseMouse = forceBaseMouseOff ? false : hermesBrand ? forceBaseMouse : true;
+			process.env.OMHERM_BASE_MOUSE === "0" ||
+			process.env.MESHINA_TUI_BASE_MOUSE === "0" ||
+			process.env.OMHERM_BASE_MOUSE === "false";
+		const baseMouse = !forceBaseMouseOff;
 		this.ui.setBaseMouseTracking(baseMouse);
 		if (baseMouse) {
 			this.ui.addInputListener(data => this.#handleMainScreenMouse(data));
