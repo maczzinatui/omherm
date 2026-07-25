@@ -13,6 +13,7 @@
  */
 
 import { HermesGateway } from "./client.ts"
+import type { MessageImage } from "./cockpit-session.ts"
 import {
   GatewayTurnMapper,
   type MappedAgentSessionEvent,
@@ -134,7 +135,7 @@ export class HermesBrain {
    * Does NOT emit a user message_start — InteractiveMode already paints
    * optimistic user bubbles. Hermes tools/assistant stream via mapper.
    */
-  async prompt(text: string): Promise<void> {
+  async prompt(text: string, images?: readonly MessageImage[]): Promise<void> {
     if (!this.#bootstrapped) await this.bootstrap()
     const trimmed = text.trim()
     if (!trimmed) return
@@ -142,7 +143,7 @@ export class HermesBrain {
     this.#streaming = true
     const wait = this.#waitForTurnEnd()
     try {
-      await this.gateway.submit(trimmed)
+      await this.gateway.submit(trimmed, images)
       await wait
     } catch (e) {
       for (const ev of this.mapper.forceEnd("error")) this.#emit(ev)
@@ -167,12 +168,12 @@ export class HermesBrain {
    * Mid-stream steer when gateway supports it; else interrupt + new prompt
    * (named debt — not dual brain, still Hermes-only).
    */
-  async steer(text: string): Promise<void> {
+  async steer(text: string, images?: readonly MessageImage[]): Promise<void> {
     if (!this.#bootstrapped) await this.bootstrap()
     const trimmed = text.trim()
     if (!trimmed) return
     if (this.#streaming) {
-      const r = await this.gateway.steer(trimmed)
+      const r = await this.gateway.steer(trimmed, images)
       if (r.mode === "steer") {
         // Turn continues; refresh usage opportunistically.
         void this.refreshInfo().catch(() => {})
@@ -180,7 +181,7 @@ export class HermesBrain {
       }
       await this.interrupt()
     }
-    await this.prompt(trimmed)
+    await this.prompt(trimmed, images)
   }
 
   async refreshInfo(): Promise<SessionInfo> {

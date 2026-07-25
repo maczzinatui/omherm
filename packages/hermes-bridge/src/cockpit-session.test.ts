@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { createCockpitSession, isCockpitSession } from "./cockpit-session.ts"
+import { createCockpitSession, isCockpitSession, type MessageImage } from "./cockpit-session.ts"
 import type { HermesBrain } from "./hermes-brain.ts"
 import type { SessionInfo } from "./types.ts"
 
@@ -20,14 +20,18 @@ function fakeBrain(overrides: Partial<HermesBrain> = {}): HermesBrain {
       listeners.add(cb)
       return () => listeners.delete(cb)
     },
-    prompt: async (text: string) => {
-      ;(brain as { lastPrompt?: string }).lastPrompt = text
+    prompt: async (text: string, images?: readonly MessageImage[]) => {
+      const b = brain as { lastPrompt?: string; lastImages?: readonly MessageImage[] }
+      b.lastPrompt = text
+      b.lastImages = images
     },
     interrupt: async () => {
       ;(brain as { interrupted?: boolean }).interrupted = true
     },
-    steer: async (text: string) => {
-      ;(brain as { lastSteer?: string }).lastSteer = text
+    steer: async (text: string, images?: readonly MessageImage[]) => {
+      const b = brain as { lastSteer?: string; lastSteerImages?: readonly MessageImage[] }
+      b.lastSteer = text
+      b.lastSteerImages = images
     },
     refreshInfo: async () => info,
     slashExec: async (cmd: string) => ({ output: `ok:${cmd}` }),
@@ -75,6 +79,34 @@ describe("CockpitSession", () => {
     unsub2()
     expect(typeof unsub).toBe("function")
     void saw
+  })
+
+  test("submit forwards optional images to brain prompt", async () => {
+    const brain = fakeBrain()
+    const cock = createCockpitSession(brain)
+    const images: readonly MessageImage[] = [
+      { url: "/tmp/a.png", alt: "alpha" },
+      { url: "https://example.com/b.jpg" },
+    ]
+    await cock.submit("describe", images)
+    expect((brain as { lastPrompt?: string }).lastPrompt).toBe("describe")
+    expect((brain as { lastImages?: readonly MessageImage[] }).lastImages).toBe(images)
+  })
+
+  test("steer forwards optional images to brain steer", async () => {
+    const brain = fakeBrain()
+    const cock = createCockpitSession(brain)
+    const images: readonly MessageImage[] = [{ url: "/tmp/c.png" }]
+    await cock.steer("nudge", images)
+    expect((brain as { lastSteer?: string }).lastSteer).toBe("nudge")
+    expect((brain as { lastSteerImages?: readonly MessageImage[] }).lastSteerImages).toBe(images)
+  })
+
+  test("submit without images leaves brain.prompt images undefined", async () => {
+    const brain = fakeBrain()
+    const cock = createCockpitSession(brain)
+    await cock.submit("plain")
+    expect((brain as { lastImages?: readonly MessageImage[] }).lastImages).toBeUndefined()
   })
 
   test("isCockpitSession rejects junk", () => {

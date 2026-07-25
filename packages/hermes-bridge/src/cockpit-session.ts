@@ -14,17 +14,32 @@ import type { SessionInfo } from "./types.ts"
  * Minimal cockpit surface. Expand only when a coat call site needs it —
  * do not mirror full AgentSession.
  */
+
+/**
+ * Image attachment handed to the gateway. Shape is intentionally small and
+ * forwarded unmodified into the gateway JSON-RPC params. The Hermes gateway
+ * is allowed to ignore unknown fields; older builds will drop the image
+ * silently and continue with text-only (degraded mode is the same one the
+ * coat already has on the wire today).
+ */
+export type MessageImage = {
+  /** URL or file path. Path-only is the current best-effort under Hermes. */
+  url: string
+  /** Optional alt text. */
+  alt?: string
+}
+
 export type CockpitSession = {
   /** Live session snapshot (model, effort, cwd, usage, …). */
   info(): SessionInfo
   /** Subscribe to mapped turn / notice events. Returns unsubscribe. */
   onEvent(cb: HermesBrainListener): () => void
   /** User turn → Hermes gateway (not OMP Agent.prompt). */
-  submit(text: string): Promise<void>
+  submit(text: string, images?: readonly MessageImage[]): Promise<void>
   /** Abort in-flight Hermes turn. */
   interrupt(): Promise<void>
   /** Mid-stream steer when supported; else interrupt+submit. */
-  steer(text: string): Promise<void>
+  steer(text: string, images?: readonly MessageImage[]): Promise<void>
   /** Refresh identity/usage from gateway. */
   refreshInfo(): Promise<SessionInfo>
   /** Gateway slash.exec (not a chat turn). */
@@ -53,9 +68,9 @@ export function createCockpitSession(brain: HermesBrain): CockpitSession {
     },
     info: () => brain.sessionInfo,
     onEvent: (cb: HermesBrainListener) => brain.subscribe(cb),
-    submit: (text: string) => brain.prompt(text),
+    submit: (text: string, images?: readonly MessageImage[]) => brain.prompt(text, images),
     interrupt: () => brain.interrupt(),
-    steer: (text: string) => brain.steer(text),
+    steer: (text: string, images?: readonly MessageImage[]) => brain.steer(text, images),
     refreshInfo: () => brain.refreshInfo(),
     slashExec: (command: string) => brain.slashExec(command),
   }

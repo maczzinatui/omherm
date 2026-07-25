@@ -5,6 +5,7 @@ import { existsSync } from "node:fs"
 import { homedir } from "node:os"
 import { delimiter, resolve } from "node:path"
 import { asGatewayEvent, mapGatewayToUi, type GatewayEvent, type SessionCreateResponse, type SessionInfo, type UiEvent } from "./types.ts"
+import type { MessageImage } from "./cockpit-session.ts"
 
 const STARTUP_MS = 15_000
 const REQUEST_MS = 120_000
@@ -321,24 +322,24 @@ export class HermesGateway extends EventEmitter {
     return this.info
   }
 
-  async submit(text: string): Promise<void> {
+  async submit(text: string, images?: readonly MessageImage[]): Promise<void> {
     this.emitUi({ kind: "user", text })
-    await this.request("prompt.submit", { text })
+    const params: Record<string, unknown> = { text }
+    if (images && images.length) params.images = images
+    await this.request("prompt.submit", params)
   }
 
   async interrupt(): Promise<void> {
     await this.request("session.interrupt", {})
   }
 
-  /**
-   * Mid-stream steer. Prefer gateway `session.steer` when present; otherwise
-   * fail loud so coat can fall back to interrupt+queue without silent dual paths.
-   */
-  async steer(text: string): Promise<{ mode: "steer" | "unsupported" }> {
+  async steer(text: string, images?: readonly MessageImage[]): Promise<{ mode: "steer" | "unsupported" }> {
     const trimmed = text.trim()
     if (!trimmed) return { mode: "unsupported" }
+    const params: Record<string, unknown> = { text: trimmed }
+    if (images && images.length) params.images = images
     try {
-      await this.request("session.steer", { text: trimmed })
+      await this.request("session.steer", params)
       return { mode: "steer" }
     } catch {
       return { mode: "unsupported" }
