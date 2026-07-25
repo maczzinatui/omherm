@@ -154,6 +154,12 @@ export type LibraryPort = {
     skills: Array<Record<string, unknown>>
   }>
   refresh(): Promise<{ tools_path: string; skills_path: string; ok: boolean }>
+  /** Batched S2 open — one RPC for profile + catalogs + optional toolsets. */
+  snapshot(opts?: {
+    refresh?: boolean
+    include_toolsets?: boolean
+    include_metrics?: boolean
+  }): Promise<Record<string, unknown>>
 }
 
 export function createLibraryPort(gw?: GatewayRequester | null): LibraryPort {
@@ -176,6 +182,22 @@ export function createLibraryPort(gw?: GatewayRequester | null): LibraryPort {
       const g = client()
       if (!g) throw new Error("library.refresh requires a live gateway")
       return g.request("library.refresh", {})
+    },
+    async snapshot(opts) {
+      const g = client()
+      if (!g) {
+        return {
+          on_demand: true,
+          tools_catalog_count: 0,
+          skills_catalog_count: 0,
+          always_on_tools: [],
+        }
+      }
+      return g.request("lean.inventory.snapshot", {
+        refresh: opts?.refresh === true,
+        include_toolsets: opts?.include_toolsets === true,
+        include_metrics: opts?.include_metrics === true,
+      })
     },
   }
 }

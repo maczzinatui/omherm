@@ -54,6 +54,10 @@ export type Tool = {
 	description?: string
 	/** Platform this row applies to (parsed from the section header). */
 	platform: ToolPlatform | "default"
+	/** Lean: in always-on model schema (when on-demand active). */
+	alwaysOn?: boolean
+	/** Lean: out of context — reach via tool_search / library. */
+	library?: boolean
 	/** Original line when parsed from text. */
 	raw?: string
 }
@@ -237,7 +241,11 @@ export function createToolsPort(gw?: ToolsGateway | null): ToolPort {
 							name: string
 							description?: string
 							enabled?: boolean
+							always_on?: boolean
+							library?: boolean
 						}>
+						on_demand?: boolean
+						always_on_tools?: string[]
 					}>("tools.list", {})
 					if (r.toolsets?.length) {
 						const parsed: Tool[] = r.toolsets.map((ts) => ({
@@ -246,6 +254,8 @@ export function createToolsPort(gw?: ToolsGateway | null): ToolPort {
 							status: ts.enabled === false ? ("disabled" as const) : ("enabled" as const),
 							description: ts.description,
 							platform: (opts.platform || "cli") as ToolPlatform,
+							alwaysOn: ts.always_on === true,
+							library: ts.library === true,
 						}))
 						listCache.set(cacheKey, parsed)
 						return parsed

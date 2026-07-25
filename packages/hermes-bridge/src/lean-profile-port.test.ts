@@ -60,4 +60,27 @@ describe("lean-profile-port", () => {
     expect((await lib.refresh()).ok).toBe(true)
     expect(methods).toEqual(["library.tools", "library.skills", "library.refresh"])
   })
+
+  test("library.snapshot hits lean.inventory.snapshot", async () => {
+    const methods: string[] = []
+    const gw = {
+      request: async <T>(method: string, params: Record<string, unknown> = {}) => {
+        methods.push(method)
+        if (method === "lean.inventory.snapshot") {
+          return {
+            on_demand: true,
+            tools_catalog_count: 41,
+            skills_catalog_count: 80,
+            always_on_tools: ["read_file", "terminal"],
+            ...params,
+          } as T
+        }
+        throw new Error(method)
+      },
+    }
+    const lib = createLibraryPort(gw)
+    const snap = await lib.snapshot({ include_toolsets: true })
+    expect(snap.tools_catalog_count).toBe(41)
+    expect(methods).toEqual(["lean.inventory.snapshot"])
+  })
 })

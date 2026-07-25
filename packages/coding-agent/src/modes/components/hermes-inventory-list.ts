@@ -193,11 +193,18 @@ export class HermesInventoryListComponent implements Component {
 					this.#detailLines = []
 					return
 				}
+				const leanLine =
+					t.alwaysOn === true
+						? "lean: ALWAYS-ON (in model schema every turn)"
+						: t.library === true
+							? "lean: LIBRARY (out of context — tool_search / enable)"
+							: "lean: (unknown — restart gateway on lean tip for A/L badges)"
 				this.#detailLines = [
 					`name: ${t.name}`,
 					`kind: ${t.kind}`,
 					`status: ${t.status}`,
 					`platform: ${t.platform}`,
+					leanLine,
 					t.description ? `desc: ${t.description}` : "",
 					"",
 					formatToolDescription(t),
@@ -624,12 +631,15 @@ export class HermesInventoryListComponent implements Component {
 	#renderToolRow(t: Tool, sel: boolean, hover: boolean, w: number, idx: number): string {
 		const mark = this.#idxMark(idx, sel, hover)
 		const st = t.status === "enabled" ? "on " : t.status === "disabled" ? "off" : pad(t.status, 3)
+		// Lean badge: A=always-on (in model schema) L=library (tool_search) ·=unknown
+		const lean =
+			t.alwaysOn === true ? "A" : t.library === true ? "L" : t.kind === "mcp-server" ? "M" : "·"
 		const kind = pad(t.kind === "mcp-server" ? "mcp" : "bin", 4)
-		const nameW = Math.max(8, Math.min(28, w - 22))
+		const nameW = Math.max(8, Math.min(26, w - 26))
 		const name = pad(t.name, nameW)
 		const plat = pad(String(t.platform), 8)
 		if (sel || hover) {
-			return this.#band(`${mark} ${st} ${kind} ${name} ${plat}`, sel, hover, w)
+			return this.#band(`${mark} ${st}${lean} ${kind} ${name} ${plat}`, sel, hover, w)
 		}
 		const stc =
 			t.status === "enabled"
@@ -637,8 +647,14 @@ export class HermesInventoryListComponent implements Component {
 				: t.status === "disabled"
 					? safeThemeFg("dim", st)
 					: safeThemeFg("warning", st)
+		const leanC =
+			t.alwaysOn === true
+				? safeThemeFg("accent", lean)
+				: t.library === true
+					? safeThemeFg("muted", lean)
+					: safeThemeFg("dim", lean)
 		return this.#band(
-			`${mark} ${stc} ${safeThemeFg("dim", kind)} ${name} ${safeThemeFg("dim", plat)}`,
+			`${mark} ${stc}${leanC} ${safeThemeFg("dim", kind)} ${name} ${safeThemeFg("dim", plat)}`,
 			false,
 			false,
 			w,
@@ -681,7 +697,8 @@ export class HermesInventoryListComponent implements Component {
 			out.push(divider(w))
 			const inner = Math.max(0, w - 4)
 			if (this.#kind === "skills") out.push(row(safeThemeFg("dim", "#   st  name · source"), w))
-			else if (this.#kind === "tools") out.push(row(safeThemeFg("dim", "#   st  kind name · platform"), w))
+			else if (this.#kind === "tools")
+				out.push(row(safeThemeFg("dim", "#   stL kind name · platform  (A=always-on L=library)"), w))
 			else out.push(row(safeThemeFg("dim", "#   memory file"), w))
 
 			const n = this.#count()

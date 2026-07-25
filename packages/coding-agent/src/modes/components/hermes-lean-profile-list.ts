@@ -122,15 +122,38 @@ export class HermesLeanProfileListComponent implements Component {
 					this.#state = null
 				}
 				try {
-					const t = await lib.tools()
-					const s = await lib.skills()
-					this.#libTools = typeof t?.count === "number" ? t.count : (t?.tools?.length ?? 0)
-					this.#libSkills = typeof s?.count === "number" ? s.count : (s?.skills?.length ?? 0)
-					this.#libPath = t?.path || s?.path || ""
+					// Prefer batched snapshot (one RPC) when gateway supports it
+					const snap = await lib.snapshot({ include_metrics: false })
+					const tc = Number(snap.tools_catalog_count ?? 0)
+					const sc = Number(snap.skills_catalog_count ?? 0)
+					if (tc > 0 || sc > 0) {
+						this.#libTools = tc
+						this.#libSkills = sc
+						const ao = Array.isArray(snap.always_on_tools)
+							? (snap.always_on_tools as string[]).length
+							: 0
+						this.#banner = snap.on_demand
+							? `on-demand · always-on tools=${ao} · catalogs t=${tc} s=${sc}`
+							: `full index · catalogs t=${tc} s=${sc}`
+					} else {
+						const t = await lib.tools()
+						const s = await lib.skills()
+						this.#libTools = typeof t?.count === "number" ? t.count : (t?.tools?.length ?? 0)
+						this.#libSkills = typeof s?.count === "number" ? s.count : (s?.skills?.length ?? 0)
+						this.#libPath = t?.path || s?.path || ""
+					}
 				} catch (e) {
-					this.#libTools = 0
-					this.#libSkills = 0
-					this.#error = e instanceof Error ? e.message : String(e)
+					try {
+						const t = await lib.tools()
+						const s = await lib.skills()
+						this.#libTools = typeof t?.count === "number" ? t.count : (t?.tools?.length ?? 0)
+						this.#libSkills = typeof s?.count === "number" ? s.count : (s?.skills?.length ?? 0)
+						this.#libPath = t?.path || s?.path || ""
+					} catch (e2) {
+						this.#libTools = 0
+						this.#libSkills = 0
+						this.#error = e2 instanceof Error ? e2.message : String(e2)
+					}
 				}
 				this.#rows = [
 					{
