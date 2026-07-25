@@ -57,6 +57,13 @@ export function routeHermesSlash(text: string): HermesSlashDeepLink {
 		case "agents":
 			if (!p.rest) return { type: "port", port: "profiles" }
 			return { type: "exec", command: p.raw }
+		case "lean-profile":
+		case "lean":
+			if (!p.rest || p.rest === "profile") return { type: "port", port: "lean-profile" }
+			return { type: "exec", command: p.raw }
+		case "library":
+			if (!p.rest) return { type: "port", port: "library" }
+			return { type: "exec", command: p.raw }
 		case "skills":
 			if (!p.rest) return { type: "port", port: "skills" }
 			return { type: "exec", command: p.raw }

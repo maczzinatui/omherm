@@ -127,6 +127,7 @@ export {
 export {
   createSkillsPort,
   skillsPort,
+  rebindSkillsPort,
   parseSkillsListOutput,
   parseSkillsListRow,
   formatSkillLabel,
@@ -135,10 +136,21 @@ export {
   type SkillPort,
   type SkillSource,
   type SkillTrust,
+  type SkillsGateway,
 } from "./skills-port.ts"
+export {
+  createLeanProfilePort,
+  createLibraryPort,
+  type LeanProfilePort,
+  type LeanProfileState,
+  type LeanProfileMeta,
+  type LibraryPort,
+  type GatewayRequester,
+} from "./lean-profile-port.ts"
 export {
   createToolsPort,
   toolsPort,
+  rebindToolsPort,
   parseToolsListOutput,
   parseToolRow,
   formatToolLabel,
@@ -148,7 +160,18 @@ export {
   type ToolPlatform,
   type ToolStatus,
   type ToolKind,
+  type ToolsGateway,
 } from "./tools-port.ts"
+
+import type { GatewayRequester } from "./lean-profile-port.ts"
+import { rebindSkillsPort } from "./skills-port.ts"
+import { rebindToolsPort } from "./tools-port.ts"
+
+/** S2: point skills/tools inventory ports at live tui_gateway RPC. */
+export function bindSkillsToolsGateway(gw?: GatewayRequester | null): void {
+  rebindSkillsPort(gw ?? null)
+  rebindToolsPort(gw ?? null)
+}
 export {
   createMemoryPort,
   memoryPort,

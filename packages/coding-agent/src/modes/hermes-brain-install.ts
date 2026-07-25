@@ -306,8 +306,10 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
   // Herm config lane: attach live gateway so settings hot keys use config.set RPC
   // (not CLI-only). Research gold: ~/herm/src/config/lane.ts
   try {
-    const { hermesConfigPort } = await import("@omherm/hermes-bridge")
+    const { hermesConfigPort, bindSkillsToolsGateway } = await import("@omherm/hermes-bridge")
     hermesConfigPort().setGateway(brain.gateway)
+    // S2: skills/tools inventory + library over JSON-RPC (CLI fallback remains)
+    bindSkillsToolsGateway(brain.gateway)
   } catch {
     /* optional — settings still CLI */
   }
@@ -325,8 +327,9 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
       unsubInfo()
       unsubIdentity()
       void import("@omherm/hermes-bridge")
-        .then(({ hermesConfigPort }) => {
+        .then(({ hermesConfigPort, bindSkillsToolsGateway }) => {
           hermesConfigPort().setGateway(null)
+          bindSkillsToolsGateway(null)
         })
         .catch(() => {})
       brain.dispose()

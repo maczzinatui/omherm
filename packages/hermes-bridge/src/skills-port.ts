@@ -40,6 +40,11 @@ export type SkillPort = {
 	listModified(): Promise<string[]>
 }
 
+/** Optional gateway JSON-RPC (S2) — prefer over CLI spawn when live. */
+export type SkillsGateway = {
+	request<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>
+}
+
 function hermesBin(): string {
 	return process.env.HERMES_BIN?.trim() || "hermes"
 }
@@ -165,12 +170,43 @@ export function parseSkillsListOutput(text: string): Skill[] {
 	return out
 }
 
-export function createSkillsPort(): SkillPort {
+function skillFromLibraryRow(row: Record<string, unknown>): Skill {
+	const name = String(row.name || "")
+	const enabled = row.enabled !== false
+	return {
+		name,
+		category: String(row.category || "general"),
+		source: normalizeSource(String(row.source || "local")),
+		trust: "unknown",
+		status: enabled ? "enabled" : "disabled",
+	}
+}
+
+export function createSkillsPort(gw?: SkillsGateway | null): SkillPort {
 	return {
 		async list(opts = {}) {
 			const cacheKey = `list:${opts.source ?? "all"}:${opts.enabledOnly ? "1" : "0"}`
 			const hit = listCache.get(cacheKey)
 			if (hit) return hit
+			// S2: library.skills JSON-RPC (out-of-context catalog)
+			if (gw) {
+				try {
+					const r = await gw.request<{
+						skills?: Array<Record<string, unknown>>
+					}>("library.skills", {})
+					let parsed = (r.skills || []).map(skillFromLibraryRow)
+					if (opts.enabledOnly) parsed = parsed.filter((s) => s.status === "enabled")
+					if (opts.source && opts.source !== "all") {
+						parsed = parsed.filter((s) => s.source === opts.source)
+					}
+					if (parsed.length) {
+						listCache.set(cacheKey, parsed)
+						return parsed
+					}
+				} catch {
+					/* fall through to CLI */
+				}
+			}
 			const args = ["list"]
 			if (opts.source && opts.source !== "all") args.push("--source", opts.source)
 			if (opts.enabledOnly) args.push("--enabled-only")
@@ -185,6 +221,17 @@ export function createSkillsPort(): SkillPort {
 		},
 
 		async inspect(name) {
+			if (gw) {
+				try {
+					const r = await gw.request<{ info?: unknown }>("skills.manage", {
+						action: "inspect",
+						query: name,
+					})
+					if (r.info != null) return typeof r.info === "string" ? r.info : JSON.stringify(r.info, null, 2)
+				} catch {
+					/* CLI */
+				}
+			}
 			const r = await runSkills(["inspect", name])
 			if (!r.ok && !r.stdout.trim()) {
 				throw new Error(r.stderr.trim() || `inspect failed (${r.code})`)
@@ -193,15 +240,31 @@ export function createSkillsPort(): SkillPort {
 		},
 
 		async enable(name) {
-			const r = await runSkills(["enable", name])
 			listCache.invalidate()
+			if (gw) {
+				try {
+					await gw.request("skills.manage", { action: "enable", name, query: name })
+					return `enabled ${name}`
+				} catch {
+					/* CLI */
+				}
+			}
+			const r = await runSkills(["enable", name])
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `enable failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},
 
 		async disable(name) {
-			const r = await runSkills(["disable", name])
 			listCache.invalidate()
+			if (gw) {
+				try {
+					await gw.request("skills.manage", { action: "disable", name, query: name })
+					return `disabled ${name}`
+				} catch {
+					/* CLI */
+				}
+			}
+			const r = await runSkills(["disable", name])
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `disable failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},
@@ -220,7 +283,14 @@ export function createSkillsPort(): SkillPort {
 	}
 }
 
-export const skillsPort = createSkillsPort()
+/** Mutable singleton — rebind via {@link bindSkillsToolsGateway}. */
+export let skillsPort: SkillPort = createSkillsPort()
+
+export function rebindSkillsPort(gw?: SkillsGateway | null): SkillPort {
+	skillsPort = createSkillsPort(gw)
+	listCache.invalidate()
+	return skillsPort
+}
 
 /** One-line label for table list. */
 export function formatSkillLabel(s: Skill): string {

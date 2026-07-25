@@ -66,6 +66,11 @@ export type ToolPort = {
 	postSetup(name: string, platform?: ToolPlatform): Promise<string>
 }
 
+/** Optional gateway JSON-RPC (S2). */
+export type ToolsGateway = {
+	request<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>
+}
+
 const VALID_PLATFORMS: ReadonlySet<ToolPlatform> = new Set<ToolPlatform>([
 	"cli",
 	"telegram",
@@ -218,12 +223,37 @@ export function parseToolsListOutput(text: string): Tool[] {
 	return out
 }
 
-export function createToolsPort(): ToolPort {
+export function createToolsPort(gw?: ToolsGateway | null): ToolPort {
 	return {
 		async list(opts = {}) {
 			const cacheKey = `list:${opts.platform ?? "default"}`
 			const hit = listCache.get(cacheKey)
 			if (hit) return hit
+			// S2: tools.list / library.tools via gateway
+			if (gw) {
+				try {
+					const r = await gw.request<{
+						toolsets?: Array<{
+							name: string
+							description?: string
+							enabled?: boolean
+						}>
+					}>("tools.list", {})
+					if (r.toolsets?.length) {
+						const parsed: Tool[] = r.toolsets.map((ts) => ({
+							name: ts.name,
+							kind: "builtin" as const,
+							status: ts.enabled === false ? ("disabled" as const) : ("enabled" as const),
+							description: ts.description,
+							platform: (opts.platform || "cli") as ToolPlatform,
+						}))
+						listCache.set(cacheKey, parsed)
+						return parsed
+					}
+				} catch {
+					/* CLI */
+				}
+			}
 			const args = ["list"]
 			if (opts.platform) args.push("--platform", opts.platform)
 			const r = await runTools(args)
@@ -236,21 +266,43 @@ export function createToolsPort(): ToolPort {
 		},
 
 		async enable(name, platform) {
+			listCache.invalidate()
+			if (gw) {
+				try {
+					await gw.request("tools.configure", {
+						action: "enable",
+						names: [name],
+					})
+					return `enabled ${name}`
+				} catch {
+					/* CLI */
+				}
+			}
 			const args = ["enable"]
 			if (platform) args.push("--platform", platform)
 			args.push(name)
 			const r = await runTools(args)
-			listCache.invalidate()
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `enable failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},
 
 		async disable(name, platform) {
+			listCache.invalidate()
+			if (gw) {
+				try {
+					await gw.request("tools.configure", {
+						action: "disable",
+						names: [name],
+					})
+					return `disabled ${name}`
+				} catch {
+					/* CLI */
+				}
+			}
 			const args = ["disable"]
 			if (platform) args.push("--platform", platform)
 			args.push(name)
 			const r = await runTools(args)
-			listCache.invalidate()
 			if (!r.ok) throw new Error(r.stderr.trim() || r.stdout.trim() || `disable failed (${r.code})`)
 			return (r.stdout || r.stderr).trim()
 		},
@@ -267,7 +319,14 @@ export function createToolsPort(): ToolPort {
 	}
 }
 
-export const toolsPort = createToolsPort()
+/** Mutable singleton — rebind via {@link bindSkillsToolsGateway}. */
+export let toolsPort: ToolPort = createToolsPort()
+
+export function rebindToolsPort(gw?: ToolsGateway | null): ToolPort {
+	toolsPort = createToolsPort(gw)
+	listCache.invalidate()
+	return toolsPort
+}
 
 /** One-line label for table list. */
 export function formatToolLabel(t: Tool): string {

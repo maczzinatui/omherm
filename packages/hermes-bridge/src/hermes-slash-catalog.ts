@@ -28,6 +28,8 @@ export const HERMES_BUILTIN_SLASH: readonly HermesSlashEntry[] = [
   { name: "kanban", description: "Kanban (CLI / settings port)", source: "hermes-builtin" },
   { name: "cron", description: "Cron jobs", source: "hermes-builtin" },
   { name: "profile", description: "Profiles", source: "hermes-builtin" },
+  { name: "lean-profile", description: "Mesh lean profile (l0-arm / l1-head / oauth)", source: "hermes-builtin" },
+  { name: "library", description: "On-demand tools/skills library (browse)", source: "hermes-builtin" },
   { name: "goal", description: "Goal control", source: "hermes-builtin" },
   { name: "browser", description: "Browser CDP", source: "hermes-builtin" },
   { name: "compress", description: "Compress context", source: "hermes-builtin" },
