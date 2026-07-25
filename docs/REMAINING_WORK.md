@@ -1,9 +1,9 @@
 # Remaining work — omherm M1′ (concrete)
 
 **Stamp:** 2026-07-24 ~16:20 America/Toronto · tip **`196c954`** (pushed) ·
-**Updated:** 2026-07-24 ~21:30 (Friday closeout) tip **`5557769`** +
-hero wire (image hyperlink) + restoreQueuedMessagesToEditor peel
-**Next-session brief:** [`docs/HANDOFF_PERF_WAVE_B.md`](./HANDOFF_PERF_WAVE_B.md) · perf: [`docs/PERF_SWEEP.md`](./PERF_SWEEP.md)
+**Updated:** 2026-07-24 ~22:35 (MiniMax 429 death closeout) tip **`f71c64b`** clean ·
+hero wire + interrupt peel shipped · `/reasoning` footer three-bug ****shipped f71c64b****
+**Next-session brief:** [`docs/HANDOFF_PERF_WAVE_B.md`](./HANDOFF_PERF_WAVE_B.md) §MiniMax death · perf: [`docs/PERF_SWEEP.md`](./PERF_SWEEP.md)
 **Bar:** `docs/CADILLAC.md`
 **Parallel:** mesh Config A3 / OCI cutover lives in `~/meshina/plans/HANDOFF.md` — **do not thrash** from a TUI-only session.
 
@@ -34,7 +34,7 @@ hero wire (image hyperlink) + restoreQueuedMessagesToEditor peel
 | P2 ports / P1 cron-kanban-profile | prior |
 | Image attachment through CockpitSession → brain → gateway | `6603ed6` |
 | `restoreQueuedMessagesToEditor` abort via cockpit helper | `5557769` |
-| `[Attached image: <path>]` rendered as clickable OSC 8 hyperlink | (hero wire, in flight) |
+| `[Attached image: <path>]` rendered as clickable OSC 8 hyperlink | `f905dc0` |
 
 ---
 
@@ -42,6 +42,7 @@ hero wire (image hyperlink) + restoreQueuedMessagesToEditor peel
 
 | # | Item | Status |
 |---|------|--------|
+| 0 | `/reasoning` picker + footer effort paint (3 bugs — MiniMax session death) | **shipped `f71c64b`** · **re-dogfood after relaunch** |
 | 1 | Approvals + clarify ask-dialog | wired · **dogfood open** |
 | 2 | Slash.exec + pager + dead-gateway | wired · **dogfood open** |
 | 3 | Port CLI death banners | warning fg · **dogfood open** |

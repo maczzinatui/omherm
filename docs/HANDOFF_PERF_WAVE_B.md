@@ -1,9 +1,8 @@
 # Session handoff — omherm (perf + model hub + coat identity)
 
 **Written:** 2026-07-24 ~16:20 America/Toronto (Fri, work hours) ·
-**Updated:** 2026-07-24 ~21:30 America/Toronto (Friday closeout — image wire + restoreQueuedMessagesToEditor peel)
-**Repo:** `~/omherm` · branch `main` · tip **`5557769`** (pushed) +
-folllow-up hero wire (in flight) + dogfood stamp doc-update (this file)
+**Updated:** 2026-07-24 ~22:50 America/Toronto (shipped `/reasoning` + footer effort paint)
+**Repo:** `~/omherm` · branch `main` · tip **`f71c64b`** (pushed)
 **Role lock:** L1/L2 brain for **omherm coat + Hermes brain plug only**.
 **Product:** Hermes brain · OMP InteractiveMode coat · launch `omh` / `omherm` (`MESHINA_TUI_BRAND=hermes`). Escape `MESHINA_TUI_OMP_BRAIN=1`. **No HMR** — quit + relaunch after coat/bridge edits.
 **Binary:** `/home/nixos/.bun/bin/omherm`
@@ -36,6 +35,8 @@ If the task is mesh cutover / LiteLLM / systemd slots → use **meshina HANDOFF 
 
 | Commit | What |
 |--------|------|
+| `f71c64b` | **/reasoning + footer effort**: catalog entry, setIdentity effort, post-slash coat sync |
+| `f905dc0` | **image-references**: Hermes `[Attached image: path]` → clickable OSC 8 hyperlink (+ dogfood stamp docs) |
 | `5557769` | **input-controller**: route `restoreQueuedMessagesToEditor` abort through cockpit helper (brain-installed sessions don't double-fire) |
 | `6603ed6` | **hermes-bridge**: image attachment through `CockpitSession` → `brain` → `gateway` (`MessageImage` flows end-to-end) |
 | `44c253b` | plan-mode Hermes transport + cockpit peel pilot |
@@ -91,9 +92,38 @@ If the task is mesh cutover / LiteLLM / systemd slots → use **meshina HANDOFF 
 
 ---
 
+## MiniMax death closeout (session `20260724_205036_c3d70e`)
+
+**When:** 2026-07-24 20:53–22:29 America/Toronto · model MiniMax-M3 · end `tui_shutdown` after **HTTP 429 Token Plan usage limit** (request dump `max_retries_exhausted` @ 22:27:19).  
+**Hermes title:** `MiniMax death — omherm /reasoning footer diagnosis`  
+**Receipt:** `~/meshina/raw/research/2026-07-25-minimax-session-closeout-c3d70e.md`
+
+### Landed before death (do not re-do)
+
+| Commit | What |
+|--------|------|
+| meshina `4c0fcf70` | docs sweep v0.5.259-beta (LEG 1 state-snapshot/mesh-swap-check) — pushed |
+| omherm `6603ed6` | image attachment through CockpitSession → brain → gateway |
+| omherm `5557769` | restoreQueuedMessagesToEditor abort → cockpit helper |
+| omherm `f905dc0` | hero wire: `[Attached image: path]` → OSC 8 hyperlink + dogfood doc stamp |
+
+Working trees at closeout probe: **omherm clean @ origin/main**; **meshina** only untracked research note (this Grok session).
+
+### Shipped after MiniMax death — tip **`f71c64b`**
+
+All three bugs landed (no mesh arms; cloud session only):
+
+1. **Slash catalog** — `HERMES_BUILTIN_SLASH` includes `reasoning` (autocomplete on product path).
+2. **`setIdentity(model, provider, reasoningEffort?)`** — `session-event-map` + `hermes-brain` + `hermes-session-event-source` keep effort; unit test locks it.
+3. **Post-`slash.exec`** — after `/reasoning` or `/model`, `#tryHermesSlash` calls `syncCoatFromHermesBrain` (same as keyboard cycle).
+
+**Operator dogfood still required:** relaunch `omh` (no HMR) · `/reasoning high` · confirm footer chip · keyboard cycle still works.
+
+---
+
 ## Next session — start here (omherm only)
 
-1. **Dogfood (relaunch `omh`):** model hub + footer + image hyperlink + interrupt peel all green. Verify paste-an-image flow on a Hermes turn → user-bubble renders the clickable path.
+1. **Dogfood (relaunch `omh`):** model hub + footer + **reasoning effort** + image hyperlink + interrupt peel all green.
 2. **P0 product dogfood** still open: approvals+clarify · slash.exec · port death banners (`docs/DOGFOOD_CHECKLIST.md`).
 3. **P1 cron rich-field form** (skills/toolsets/script multi-line — Hermes parity) — bridge-to-hub work.
 4. **P1 kanban assign/comment + board switch + status columns** — bridge-to-hub work.
