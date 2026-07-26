@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/run/current-system/sw/bin/bash
 # mtui / omh — Hermes product cockpit (restored known-good launch path)
 set -euo pipefail
 ROOT="${MESHINA_TUI_ROOT:-${OMHERM_ROOT:-}}"
