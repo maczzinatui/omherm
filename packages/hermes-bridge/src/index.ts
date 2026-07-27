@@ -12,9 +12,11 @@ export { formatPipelineStage } from "./session-event-map.ts"
 export { mapGatewayToUi, asGatewayEvent } from "./types.ts"
 export {
   GatewayTurnMapper,
+  parsePersistedToolResult,
   type MappedAgentSessionEvent,
   type MappedAssistantMessage,
   type MappedAssistantMessageEvent,
+  type PersistedToolResult,
 } from "./session-event-map.ts"
 export {
   createProfilePort,

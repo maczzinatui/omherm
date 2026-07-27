@@ -305,6 +305,134 @@ function extractOutputText(raw: unknown): string {
 	}
 }
 
+/** Hermes stock Layer-2 persist wrapper (tools/tool_result_storage.py). */
+const PERSISTED_OUTPUT_OPEN = "<persisted-output>"
+const PERSISTED_OUTPUT_CLOSE = "</persisted-output>"
+/** Coat display cap for the inline preview body (full body lives on disk). */
+const PERSISTED_PREVIEW_DISPLAY_CHARS = 900
+
+export type PersistedToolResult = {
+	/** Compact one-line badge for the tool card */
+	badge: string
+	/** Short preview shown under the badge */
+	preview: string
+	path?: string
+	originalChars?: number
+	sizeLabel?: string
+	/** True when Hermes wrote a sandbox file the model can read_file */
+	hasPath: boolean
+}
+
+/**
+ * Detect Hermes pass-by-ref tool results (preview + path, or inline truncate).
+ * Coat paints a badge instead of dumping the whole stdout wall.
+ */
+export function parsePersistedToolResult(text: string): PersistedToolResult | null {
+	const raw = (text || "").trim()
+	if (!raw) return null
+
+	const open = raw.indexOf(PERSISTED_OUTPUT_OPEN)
+	if (open >= 0) {
+		const afterOpen = raw.slice(open + PERSISTED_OUTPUT_OPEN.length)
+		const close = afterOpen.indexOf(PERSISTED_OUTPUT_CLOSE)
+		const body = (close >= 0 ? afterOpen.slice(0, close) : afterOpen).trim()
+
+		const sizeMatch = body.match(
+			/too large\s*\(([\d,]+)\s*characters(?:,\s*([^)]+))?\)/i,
+		)
+		const pathMatch = body.match(/Full output saved to:\s*(.+)$/im)
+		const previewMatch = body.match(
+			/Preview\s*\([^)]*\):\s*\n([\s\S]*)$/i,
+		)
+
+		const originalChars = sizeMatch
+			? Number(sizeMatch[1].replace(/,/g, ""))
+			: undefined
+		const sizeLabel = sizeMatch?.[2]?.trim()
+		const path = pathMatch?.[1]?.trim()
+		let preview = (previewMatch?.[1] || "").trim()
+		if (preview.endsWith("...")) preview = preview.slice(0, -3).trimEnd()
+		if (preview.length > PERSISTED_PREVIEW_DISPLAY_CHARS) {
+			preview = `${preview.slice(0, PERSISTED_PREVIEW_DISPLAY_CHARS)}\n…`
+		}
+
+		const parts = ["truncated"]
+		if (sizeLabel) parts.push(sizeLabel)
+		else if (originalChars != null && Number.isFinite(originalChars)) {
+			parts.push(
+				originalChars >= 1024 * 1024
+					? `${(originalChars / (1024 * 1024)).toFixed(1)} MB`
+					: `${(originalChars / 1024).toFixed(1)} KB`,
+			)
+		}
+		if (path) {
+			const short =
+				path.length > 48 ? `…${path.slice(-46)}` : path
+			parts.push(short)
+		}
+		return {
+			badge: parts.join(" · "),
+			preview:
+				preview ||
+				"(preview empty — use read_file on the saved path for full output)",
+			path,
+			originalChars,
+			sizeLabel,
+			hasPath: Boolean(path),
+		}
+	}
+
+	// Inline truncate fallback when sandbox write failed
+	const trunc = raw.match(
+		/\[Truncated:\s*tool response was\s*([\d,]+)\s*chars\.([^\]]*)\]/i,
+	)
+	if (trunc) {
+		const originalChars = Number(trunc[1].replace(/,/g, ""))
+		const head = raw.slice(0, raw.indexOf(trunc[0])).trimEnd()
+		let preview = head
+		if (preview.length > PERSISTED_PREVIEW_DISPLAY_CHARS) {
+			preview = `${preview.slice(0, PERSISTED_PREVIEW_DISPLAY_CHARS)}\n…`
+		}
+		const sizeLabel =
+			originalChars >= 1024 * 1024
+				? `${(originalChars / (1024 * 1024)).toFixed(1)} MB`
+				: `${(originalChars / 1024).toFixed(1)} KB`
+		return {
+			badge: `truncated · ${sizeLabel} · (not saved to disk)`,
+			preview: preview || "(no preview)",
+			originalChars,
+			sizeLabel,
+			hasPath: false,
+		}
+	}
+
+	return null
+}
+
+function paintPersisted(
+	parsed: PersistedToolResult,
+	extra?: Record<string, unknown>,
+): {
+	content: Array<{ type: "text"; text: string }>
+	details?: unknown
+} {
+	const hint = parsed.hasPath
+		? "Full output on disk — model: read_file(path, offset, limit)."
+		: "Full output not on disk — only this preview is available."
+	const text = `📎 ${parsed.badge}\n${hint}\n\n${parsed.preview}`
+	const details: Record<string, unknown> = {
+		persisted: {
+			path: parsed.path,
+			originalChars: parsed.originalChars,
+			sizeLabel: parsed.sizeLabel,
+			hasPath: parsed.hasPath,
+			badge: parsed.badge,
+		},
+		...(extra || {}),
+	}
+	return { content: [{ type: "text", text }], details }
+}
+
 /**
  * Strip already-sealed assistant text prefixes from a new stream segment.
  * Gateway/models often re-emit the pre-tool preamble + new prose after tools
@@ -512,6 +640,19 @@ function paintToolResult(
 } {
 	if (error) {
 		return { content: [{ type: "text", text: error }] }
+	}
+	// Layer-2 pass-by-ref: compact badge + short preview (full body on disk).
+	const rawText =
+		(typeof rawResult === "string" ? rawResult : "") ||
+		extractOutputText(rawResult) ||
+		(summary || "").trim()
+	const persisted = parsePersistedToolResult(rawText)
+	if (persisted) {
+		const exitCode = extractExitCode(rawResult)
+		return paintPersisted(
+			persisted,
+			exitCode !== undefined ? { exitCode } : undefined,
+		)
 	}
 	const hits = name === "web_search" || name === "web_extract" ? extractWebHits(rawResult) : []
 	if (name === "web_search") {

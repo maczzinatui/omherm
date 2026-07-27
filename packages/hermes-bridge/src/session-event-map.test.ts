@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { GatewayTurnMapper } from "./session-event-map.ts";
+import { GatewayTurnMapper, parsePersistedToolResult } from "./session-event-map.ts";
 import { mapGatewayToUi, type GatewayEvent } from "./types.ts";
 
 describe("GatewayTurnMapper", () => {
@@ -246,6 +246,61 @@ describe("GatewayTurnMapper", () => {
 			expect(r.content[0]?.text).toContain("Fri Jul 24");
 			expect(r.details?.exitCode).toBe(0);
 		}
+	});
+
+	test("persisted-output tool result paints compact badge not full dump", () => {
+		const fat = "line\n".repeat(200);
+		const hermes = [
+			"<persisted-output>",
+			"This tool result was too large (50,000 characters, 48.8 KB).",
+			"Full output saved to: /tmp/hermes-results/call_abc123.txt",
+			"Use the read_file tool with offset and limit to access specific sections of this output.",
+			"",
+			"Preview (first 1500 chars):",
+			fat.slice(0, 400),
+			"...",
+			"</persisted-output>",
+		].join("\n");
+		const parsed = parsePersistedToolResult(hermes);
+		expect(parsed).not.toBeNull();
+		expect(parsed!.hasPath).toBe(true);
+		expect(parsed!.badge).toContain("truncated");
+		expect(parsed!.badge).toMatch(/KB|MB/);
+		expect(parsed!.path).toContain("hermes-results");
+		expect(parsed!.preview.length).toBeLessThan(hermes.length);
+
+		const m = new GatewayTurnMapper();
+		const end = m.feedUi({
+			kind: "tool_end",
+			id: "t-persist",
+			name: "terminal",
+			summary: hermes,
+			result: { output: hermes, exit_code: 0 },
+		});
+		const te = end.find((e) => e.type === "tool_execution_end");
+		expect(te && te.type === "tool_execution_end").toBe(true);
+		if (te && te.type === "tool_execution_end") {
+			const r = te.result as {
+				content: Array<{ text: string }>;
+				details?: { persisted?: { hasPath?: boolean; path?: string }; exitCode?: number };
+			};
+			expect(r.content[0]?.text).toContain("truncated");
+			expect(r.content[0]?.text).toContain("read_file");
+			expect(r.content[0]?.text.length).toBeLessThan(hermes.length);
+			expect(r.details?.persisted?.hasPath).toBe(true);
+			expect(r.details?.persisted?.path).toContain("call_abc123");
+			expect(r.details?.exitCode).toBe(0);
+		}
+	});
+
+	test("inline truncate fallback paints badge without path", () => {
+		const text =
+			"preview head here\n\n[Truncated: tool response was 12,345 chars. Full output could not be saved to sandbox.]";
+		const parsed = parsePersistedToolResult(text);
+		expect(parsed).not.toBeNull();
+		expect(parsed!.hasPath).toBe(false);
+		expect(parsed!.badge).toContain("truncated");
+		expect(parsed!.badge).toContain("not saved");
 	});
 
 	test("browser_navigate normalizes to open+url", () => {
