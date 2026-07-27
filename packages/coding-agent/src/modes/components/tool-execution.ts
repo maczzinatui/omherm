@@ -14,6 +14,7 @@ import {
 	Text,
 	type TUI,
 } from "@oh-my-pi/pi-tui";
+import { loadPersistedToolOutputForUi } from "@omherm/hermes-bridge";
 import { getProjectDir, logger, sanitizeText } from "@oh-my-pi/pi-utils";
 import { EDIT_MODE_STRATEGIES, type EditMode, type PerFileDiffPreview } from "../../edit";
 import type { Theme } from "../../modes/theme/theme";
@@ -867,6 +868,8 @@ export class ToolExecutionComponent extends Container implements NativeScrollbac
 
 	setExpanded(expanded: boolean): void {
 		this.#expanded = expanded;
+		// Drop UI expand body when collapsed — do not pin multi-MB logs in scrollback memory.
+		if (!expanded) this.#persistedUiExpand = undefined;
 		this.#updateDisplay();
 	}
 
@@ -1265,6 +1268,11 @@ export class ToolExecutionComponent extends Container implements NativeScrollbac
 	/**
 	 * Build render context for tools that need extra state (bash, python, edit)
 	 */
+	/** Operator expand cache for Hermes persisted-on-disk tool results (UI only). */
+	#persistedUiExpand:
+		| { path: string; text: string }
+		| undefined;
+
 	#buildRenderContext(): Record<string, unknown> {
 		const context: Record<string, unknown> = {
 			toolName: this.#toolName,
@@ -1337,6 +1345,33 @@ export class ToolExecutionComponent extends Container implements NativeScrollbac
 
 	#getTextOutput(): string {
 		if (!this.#result) return "";
+
+		// Operator expand of Hermes Layer-2 persisted results: load from disk for
+		// display only. Never rewrites model history (token win preserved).
+		const details = this.#result.details as
+			| { persisted?: { hasPath?: boolean; path?: string } }
+			| undefined;
+		const p = details?.persisted;
+		if (this.#expanded && p?.hasPath && p.path) {
+			if (this.#persistedUiExpand?.path === p.path) {
+				return this.#persistedUiExpand.text;
+			}
+			try {
+				const loaded = loadPersistedToolOutputForUi(p.path);
+				const body = loaded.error
+					? `📎 expand failed: ${loaded.error}\n(path: ${loaded.path})`
+					: loaded.text;
+				const header =
+					"📎 UI expand (operator view only — not sent to the model)\n" +
+					(loaded.capped ? "(display capped)\n" : "") +
+					"\n";
+				const text = sanitizeWithOptionalSixelPassthrough(header + body, sanitizeText);
+				this.#persistedUiExpand = { path: p.path, text };
+				return text;
+			} catch {
+				// fall through to compact painted content
+			}
+		}
 
 		const textBlocks = this.#result.content?.filter((c: any) => c.type === "text") || [];
 		const imageBlocks = this.#getAllImageBlocks();

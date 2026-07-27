@@ -417,7 +417,7 @@ function paintPersisted(
 	details?: unknown
 } {
 	const hint = parsed.hasPath
-		? "Full output on disk — model: read_file(path, offset, limit)."
+		? "Full output on disk — model: read_file(path, offset, limit). Operator: ctrl+o expands a UI-capped view (not re-injected into model context)."
 		: "Full output not on disk — only this preview is available."
 	const text = `📎 ${parsed.badge}\n${hint}\n\n${parsed.preview}`
 	const details: Record<string, unknown> = {

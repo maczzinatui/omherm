@@ -19,6 +19,13 @@ export {
   type PersistedToolResult,
 } from "./session-event-map.ts"
 export {
+  loadPersistedToolOutputForUi,
+  isSafePersistedResultPath,
+  UI_EXPAND_MAX_BYTES,
+  UI_EXPAND_MAX_LINES,
+  type UiExpandLoad,
+} from "./persisted-tool-ui.ts"
+export {
   createProfilePort,
   profilePort,
   type ProfilePort,
