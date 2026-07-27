@@ -56,3 +56,15 @@ git -C /tmp/oh-my-pi-src rev-list --count ${SHA}..origin/main
 ---
 
 *Scan: Grok · 2026-07-27 · CADILLAC / ADR-0114 · coat not gut*
+
+
+## Landed selective ports (2026-07-27 H4.1 coat)
+
+| Upstream | Port |
+|----------|------|
+| #6788 / `23ec7e725` | PTY disconnect: best-effort raw-mode restore + guarded disconnect handler |
+| #6782 / `6460ba042` | Editor word/line delete + yank via keybindings registry; WT 0x08 → ctrl+backspace |
+| tests | editor word-delete + keys WT disambiguation + terminal disconnect raw-mode throw |
+
+**Skipped:** bulk vendor, scrollback command-controller (#6768 — conflicts), title FFI, catalog/MCP.
+
