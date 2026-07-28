@@ -534,6 +534,20 @@ export class AssistantMessageComponent extends Container {
 				settled += child.render(width).length;
 				continue;
 			}
+			// Thinking expand/collapse headers sit above a thinking Markdown body
+			// (Hermes paints thinking first, then answer). They are chrome for the
+			// completed/in-progress thinking block and stay byte-stable for the
+			// duration of a stream tick — operator toggle rebuilds via
+			// updateContent. Without skipping them, the walk stops at row 0 and
+			// a multi-paragraph answer's head never reaches native scrollback
+			// (dogfood 2026-07-28: "Biological, no contest." lost off the top).
+			if (
+				child instanceof Text &&
+				(child as Text & { __thinkingContentIndex?: number }).__thinkingContentIndex !== undefined
+			) {
+				settled += child.render(width).length;
+				continue;
+			}
 			// Not declared byte-stable: the boundary stops here.
 			return settled;
 		}
