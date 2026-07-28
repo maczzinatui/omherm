@@ -157,10 +157,25 @@ export class SelectorController {
 	 * @param create Factory that receives a `done` callback and returns the component and focus target
 	 */
 	showSelector(create: (done: () => void) => { component: Component; focus: Component }): void {
+		// Dismiss any previous inline selector first (re-entrant double-escape
+		// used to stack trees with nowhere for Esc to land).
+		this.ctx.dismissInlineSelector?.();
+		let closed = false;
 		const done = () => {
+			if (closed) return;
+			closed = true;
+			if (this.ctx.dismissInlineSelector) this.ctx.dismissInlineSelector = undefined;
 			this.ctx.editorContainer.clear();
 			this.ctx.editorContainer.addChild(this.ctx.editor);
 			this.ctx.ui.setFocus(this.ctx.editor);
+			this.ctx.ui.requestRender();
+		};
+		// Esc from the editor path (focus slipped, or interrupt routing) must
+		// close session tree / branch pickers — not arm another double-escape.
+		this.ctx.dismissInlineSelector = () => {
+			if (closed) return false;
+			done();
+			return true;
 		};
 		const { component, focus } = create(done);
 		this.ctx.editorContainer.clear();

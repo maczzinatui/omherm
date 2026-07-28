@@ -310,6 +310,12 @@ export class InputController {
 			if (this.ctx.hasActiveOmfg() && this.ctx.handleOmfgEscape()) {
 				return;
 			}
+			// Session tree / branch pickers replace the editor container. If focus
+			// slipped back to the editor (or Esc routed here first), close them
+			// instead of arming another double-escape that re-opens the tree.
+			if (this.ctx.dismissInlineSelector?.()) {
+				return;
+			}
 
 			if (!this.ctx.focusedAgentId) {
 				const viewSession = this.ctx.viewSession;

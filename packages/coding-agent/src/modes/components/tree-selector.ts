@@ -13,7 +13,12 @@ import {
 } from "@oh-my-pi/pi-tui";
 import type { TreeFilterMode } from "../../config/settings-schema";
 import { theme } from "../../modes/theme/theme";
-import { matchesAppInterrupt, matchesSelectDown, matchesSelectUp } from "../../modes/utils/keybinding-matchers";
+import {
+	matchesAppInterrupt,
+	matchesSelectCancel,
+	matchesSelectDown,
+	matchesSelectUp,
+} from "../../modes/utils/keybinding-matchers";
 import type { SessionTreeNode } from "../../session/session-entries";
 import { toPathList } from "../../tools/path-utils";
 import { shortenPath } from "../../tools/render-utils";
@@ -803,14 +808,17 @@ class TreeList implements Component {
 			if (selected && this.onSelect) {
 				this.onSelect(selected.node.entry.id, { summarize: false });
 			}
-		} else if (matchesAppInterrupt(keyData)) {
+		} else if (matchesAppInterrupt(keyData) || matchesSelectCancel(keyData)) {
+			// Prefer clear-search first when filtering; second cancel exits.
+			// Also accept tui.select.cancel (Escape/Ctrl+C default) — app.interrupt
+			// alone left some remaps / focus slips unable to leave the tree.
 			if (this.#searchQuery) {
 				this.#searchQuery = "";
 				this.#applyFilter();
 			} else {
 				this.onCancel?.();
 			}
-		} else if (matchesKey(keyData, "ctrl+c")) {
+		} else if (matchesKey(keyData, "ctrl+c") || keyData === "q" || keyData === "Q") {
 			this.onCancel?.();
 		} else if (matchesKey(keyData, "shift+ctrl+o") || matchesKey(keyData, "ctrl+shift+o")) {
 			// Cycle filter backwards

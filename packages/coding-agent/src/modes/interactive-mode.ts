@@ -5045,11 +5045,6 @@ export class InteractiveMode implements InteractiveModeContext {
 			return { consume: true };
 		}
 
-		// History browser open → it owns wheel/click (only when no product modal).
-		if (this.#chatScrollOverlay && this.#chatScrollHandle && !this.#chatScrollHandle.isHidden()) {
-			if (this.#chatScrollOverlay.handleMouseData(data)) return { consume: true };
-		}
-
 		// Modal / selector focused (settings hub, …) without being top product.
 		const focused = this.ui.getFocused();
 		if (
@@ -5063,7 +5058,9 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		let consumed = false;
 		routeSgrMouseInput(data, event => {
-			// Sticky quick-access: always at viewport row 0..hitRowCount.
+			// Sticky quick-access FIRST — always viewport row 0..hitRowCount.
+			// History browser used to swallow ALL SGR (including the top tab bar),
+			// so settings/model chips were dead while scrolled up (QoL dogfood).
 			const width = this.ui.terminal.columns;
 			const barHit = this.quickAccessBar.hitRowCount();
 			const barStart = 0;
@@ -5076,6 +5073,14 @@ export class InteractiveMode implements InteractiveModeContext {
 				return true;
 			}
 			if (event.motion) this.quickAccessBar.clearHover();
+
+			// History browser owns wheel/click only below the sticky bar.
+			if (this.#chatScrollOverlay && this.#chatScrollHandle && !this.#chatScrollHandle.isHidden()) {
+				if (this.#chatScrollOverlay.handleMouseData(data)) {
+					consumed = true;
+					return true;
+				}
+			}
 
 			// Wheel over chat → app history browser (SGR steals host scrollback).
 			if (event.wheel !== null) {
