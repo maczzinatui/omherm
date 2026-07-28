@@ -1216,6 +1216,9 @@ export class EventController {
 			this.ctx.statusContainer.disposeChildren();
 		}
 		if (this.ctx.streamingComponent) {
+			// Stop timers (thinking pulse, etc.) before detach — removeChild does
+			// not dispose, so an orphaned pulse keeps rewriting the terminal forever.
+			this.ctx.streamingComponent.dispose?.();
 			this.ctx.chatContainer.removeChild(this.ctx.streamingComponent);
 			this.ctx.streamingComponent = undefined;
 			this.ctx.streamingMessage = undefined;

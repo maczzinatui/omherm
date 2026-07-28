@@ -5148,18 +5148,22 @@ export class InteractiveMode implements InteractiveModeContext {
 			if (this.#toggleThinkingOrTool(hit.component, hit.localLine + delta, width)) return true;
 		}
 
-		// Collapsed thinking: whole assistant block is a hit target (header is
-		// one dim line; operators often click the body area of the collapsed row).
-		const collapsed = hit.component as {
+		// Whole assistant block is a thinking hit target when the precise row map
+		// missed (wrap/strip drift) but this message has thinking chrome at all.
+		// Covers both expand (collapsed header only) and collapse (body click
+		// that landed a row off the map by 1–2 lines after reflow).
+		const thinkingHost = hit.component as {
 			hasCollapsedThinking?: () => boolean;
-			toggleThinkingCollapsed?: () => boolean;
+			toggleThinkingCollapsed?: (index?: number) => boolean;
+			handleThinkingHeaderClick?: (n: number) => boolean;
 		};
-		if (
-			typeof collapsed.hasCollapsedThinking === "function" &&
-			collapsed.hasCollapsedThinking() &&
-			typeof collapsed.toggleThinkingCollapsed === "function"
-		) {
-			return collapsed.toggleThinkingCollapsed();
+		if (typeof thinkingHost.toggleThinkingCollapsed === "function") {
+			if (
+				typeof thinkingHost.hasCollapsedThinking === "function" &&
+				thinkingHost.hasCollapsedThinking()
+			) {
+				return thinkingHost.toggleThinkingCollapsed();
+			}
 		}
 		return false;
 	}
