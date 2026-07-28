@@ -326,9 +326,12 @@ export class AssistantMessageComponent extends Container {
 		for (const child of this.#markerSlot.children) {
 			row += child.render(width).length;
 		}
+		// Map every visual row of a thinking block (header + body), not only the
+		// one-line ▸/▾ chrome — operators scroll into the CoT body and expect a
+		// click anywhere there to expand/collapse (dogfood).
 		for (const child of this.#contentContainer.children) {
 			const h = child.render(width).length;
-			const idx = (child as Text & { __thinkingContentIndex?: number }).__thinkingContentIndex;
+			const idx = (child as { __thinkingContentIndex?: number }).__thinkingContentIndex;
 			if (typeof idx === "number") {
 				for (let r = 0; r < Math.max(1, h); r++) {
 					this.#thinkingHeaderHits.set(row + r, idx);
@@ -376,7 +379,8 @@ export class AssistantMessageComponent extends Container {
 
 	/**
 	 * Hit-test a 0-based line within this component's last render. Returns true
-	 * when the line was a thinking header and the compact state was toggled.
+	 * when the line belongs to a thinking/reasoning block (header or body) and
+	 * the compact state was toggled.
 	 */
 	handleThinkingHeaderClick(localLine: number): boolean {
 		const contentIndex = this.#thinkingHeaderHits.get(localLine);
@@ -481,6 +485,16 @@ export class AssistantMessageComponent extends Container {
 			this.#thinkingDotsTimer = undefined;
 		}
 		this.#thinkingDotsFrame = 0;
+		// Clear the pulse node so a late timer/frame cannot revive the glyph after
+		// finalize (or after this component was detached without a full rebuild).
+		if (this.#thinkingDots) {
+			try {
+				this.#contentContainer.removeChild(this.#thinkingDots);
+			} catch {
+				/* not mounted */
+			}
+			this.#thinkingDots = undefined;
+		}
 	}
 
 	/**
@@ -966,6 +980,9 @@ export class AssistantMessageComponent extends Container {
 						italic: true,
 					});
 					md.transientRenderCache = this.#lastUpdateTransient;
+					// Same hit tag as the header so a click anywhere in the CoT body
+					// expands/collapses (not only the one-line ▾ chrome).
+					(md as Markdown & { __thinkingContentIndex?: number }).__thinkingContentIndex = i;
 					this.#contentContainer.addChild(md);
 					captureItems?.push({ md, contentIndex: i, blockType: "thinking", lastText: thinkingText });
 				}

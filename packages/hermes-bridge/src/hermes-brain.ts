@@ -341,14 +341,17 @@ export class HermesBrain {
 
     const mapped = this.mapper.feedUi(ev)
     for (const e of mapped) {
-      this.#emit(e)
+      // Update streaming flag BEFORE emit so coat listeners see the true state.
+      // agent_end used to clear the flag after emit; EventController then saw
+      // isStreaming===true and skipped teardown (title spinner / Working forever).
+      if (e.type === "agent_start") {
+        this.#streaming = true
+      }
       if (e.type === "agent_end") {
         this.#streaming = false
         this.#settleTurnWaiters()
       }
-      if (e.type === "agent_start") {
-        this.#streaming = true
-      }
+      this.#emit(e)
     }
   }
 

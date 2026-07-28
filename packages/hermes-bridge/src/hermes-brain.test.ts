@@ -2,6 +2,23 @@ import { describe, expect, test } from "bun:test"
 import { HermesBrain, isHermesBrainEnabled } from "./hermes-brain.ts"
 
 describe("HermesBrain mapper path", () => {
+  test("isStreaming is false when agent_end listeners run", () => {
+    // Regression: flag was cleared after emit → coat skipped agent_end teardown
+    // (title spinner / Working never stopped).
+    const brain = new HermesBrain()
+    let streamingAtAgentEnd: boolean | undefined
+    brain.subscribe((e) => {
+      if (e.type === "agent_end") {
+        streamingAtAgentEnd = brain.streaming
+      }
+    })
+    brain.feedUiForTest({ kind: "text", text: "hi" })
+    brain.feedUiForTest({ kind: "text", text: "hi", done: true })
+    brain.feedUiForTest({ kind: "turn_end", usage: { output_tokens: 1 } })
+    expect(streamingAtAgentEnd).toBe(false)
+    expect(brain.streaming).toBe(false)
+  })
+
   test("streams a full turn into agent_end and clears streaming", () => {
     const brain = new HermesBrain({ turnTimeoutMs: 5_000 })
     const types: string[] = []
