@@ -202,6 +202,12 @@ export interface InteractiveModeContext {
 	lastSigintTime: number;
 	lastEscapeTime: number;
 	lastLeftTapTime: number;
+	/**
+	 * Close an inline selector mounted in editorContainer (session tree, branch
+	 * picker). Returns true when something was dismissed. Wired by showSelector;
+	 * Esc from the editor path calls this so double-escape cannot trap the user.
+	 */
+	dismissInlineSelector?: () => boolean;
 	shutdownRequested: boolean;
 	/** True once `shutdown()` has started. Read-only from the context;
 	 *  controllers use this to skip work that races with teardown. */

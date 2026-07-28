@@ -313,6 +313,15 @@ export async function installHermesBrain(session: AgentSession): Promise<HermesB
   const unsubInfo = brain.subscribe((ev: HermesBrainEvent) => {
     if (ev.type === "turn_end" || ev.type === "agent_end") {
       void syncCoatFromHermesBrain(session, brain).catch(() => {})
+      // Drop Hermes working_status chrome when the turn closes so "Working…" /
+      // pipeline footer cannot keep animating after the agent is idle.
+      try {
+        const h = getHermesBrainHandle(session)
+        h?.setWorkingMessage?.(undefined)
+        h?.setPipelineFooter?.(undefined)
+      } catch {
+        /* coat optional */
+      }
     }
   })
   // Initial async refresh (gateway config may lag session.create info)

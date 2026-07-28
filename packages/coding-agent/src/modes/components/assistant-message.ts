@@ -809,8 +809,23 @@ export class AssistantMessageComponent extends Container {
 				item.lastText = newText;
 			}
 		}
+		// Fast path only mutates Markdown text — it used to leave the animated
+		// "Thinking" pulse running after the model moved on to answer prose
+		// (or after finalize), so the TUI kept spinning after Hermes finished.
 		if (this.#thinkingDots) {
-			if (this.#thinkingDots.setText(this.#thinkingDotsLabel())) {
+			if (this.#shouldAnimateThinking(message)) {
+				if (this.#thinkingDots.setText(this.#thinkingDotsLabel())) {
+					this.onImageUpdate?.();
+				}
+			} else {
+				this.#stopThinkingAnimation();
+				// Drop the pulse row so it does not linger under the answer.
+				try {
+					this.#contentContainer.removeChild(this.#thinkingDots);
+				} catch {
+					/* already gone */
+				}
+				this.#thinkingDots = undefined;
 				this.onImageUpdate?.();
 			}
 		}
